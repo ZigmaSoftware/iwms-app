@@ -1,97 +1,198 @@
 import 'dart:convert';
-import 'dart:math';
+import 'dart:math' as math;
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:iwms_citizen_app/core/api_config.dart';
 
 class ORSService {
-  // IMPORTANT: Replace with your real ORS key
-  static const String apiKey = String.fromEnvironment(
-    'ORS_API_KEY',
-    defaultValue:
-        'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjU3MzI5ZTM0NjM3YTQ2N2ZhZDYwMDM0ZmQ3ZDk0NTc3IiwiaCI6Im11cm11cjY0In0=',
-  );
+  static String get _key => ApiConfig.orsApiKey;
 
   // ---------------------------------------------------------------------------
-  // ROUTE FETCH
+  // 1) Fetch Route (Single Origin → Destination)
   // ---------------------------------------------------------------------------
   static Future<List<LatLng>> fetchRoute(
-      LatLng origin, LatLng destination) async {
+    LatLng origin,
+    LatLng destination,
+  ) async {
+    if (!_isValid(origin) || !_isValid(destination)) {
+      print("ORS ERROR → Invalid LatLng");
+      return [];
+    }
+
+    final url = Uri.parse(
+      "https://api.openrouteservice.org/v2/directions/driving-car",
+    );
+
+    final body = jsonEncode({
+      "coordinates": [
+        [origin.longitude, origin.latitude],
+        [destination.longitude, destination.latitude],
+      ],
+      "instructions": false,
+      "preference": "fastest",
+      "units": "m",
+      "geometry": true,
+      "geometry_simplify": false,
+      "geometry_format": "geojson",
+    });
+
     try {
-      if (origin == null || destination == null) {
-        print("ORS ERROR: origin/destination is null");
-        return [];
-      }
-
-      final url = Uri.parse(
-        "https://api.openrouteservice.org/v2/directions/driving-car"
-        "?api_key=$apiKey"
-        "&start=${origin.longitude},${origin.latitude}"
-        "&end=${destination.longitude},${destination.latitude}",
-      );
-
-      final response =
-          await http.get(url).timeout(const Duration(seconds: 15));
+      final response = await http
+          .post(
+            url,
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": _key,
+            },
+            body: body,
+          )
+          .timeout(const Duration(seconds: 15));
 
       if (response.statusCode != 200) {
-        print("ORS ERROR: HTTP ${response.statusCode}");
+        print("ORS HTTP ERROR: ${response.statusCode}");
         print(response.body);
         return [];
       }
 
-      final decoded = jsonDecode(response.body);
+      final json = jsonDecode(response.body);
 
-      if (decoded == null ||
-          decoded["features"] == null ||
-          decoded["features"].isEmpty ||
-          decoded["features"][0]["geometry"] == null) {
-        print("ORS ERROR: geometry missing");
-        return [];
-      }
-
-      final coords =
-          decoded["features"][0]["geometry"]["coordinates"] as List<dynamic>;
-
-      final List<LatLng> points = [];
-
-      for (final c in coords) {
-        if (c is List && c.length == 2) {
-          final lat = (c[1] is num) ? c[1].toDouble() : null;
-          final lon = (c[0] is num) ? c[0].toDouble() : null;
-
-          if (lat != null && lon != null) {
-            points.add(LatLng(lat, lon));
-          }
-        }
-      }
-
-      return points;
-    } catch (e, st) {
+      final coordsList = _extractCoords(json);
+      return coordsList;
+    } catch (e, s) {
       print("ORS EXCEPTION: $e");
-      print(st);
+      print("STACK: $s");
       return [];
     }
   }
 
   // ---------------------------------------------------------------------------
-  // BEARING CALCULATION
+  // 2) Fetch Optimized Multi-Stop Route
+  // ---------------------------------------------------------------------------
+  static Future<List<LatLng>> fetchMultiRoute(List<List<double>> coords) async {
+    if (coords.length < 2) {
+      print("ORS MULTI ERROR → need minimum 2 coords");
+      return [];
+    }
+
+    final url = Uri.parse(
+      "https://api.openrouteservice.org/v2/directions/driving-car/optimized",
+    );
+
+    final body = jsonEncode({
+      "coordinates": coords,
+      "instructions": false,
+      "units": "m",
+      "geometry": true,
+      "geometry_format": "geojson",
+      "geometry_simplify": false,
+    });
+
+    try {
+      final response = await http.post(
+        url,
+        headers: {"Content-Type": "application/json", "Authorization": _key},
+        body: body,
+      );
+
+      if (response.statusCode != 200) {
+        print("ORS MULTI HTTP ERROR: ${response.statusCode}");
+        print(response.body);
+        return [];
+      }
+
+      final json = jsonDecode(response.body);
+
+      final coordsList = _extractCoords(json);
+      return coordsList;
+    } catch (e, s) {
+      print("ORS MULTI EXCEPTION: $e");
+      print("STACK: $s");
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Extract coordinates safely — Shared logic
+  // ---------------------------------------------------------------------------
+  static List<LatLng> _extractCoords(dynamic json) {
+    try {
+      List<dynamic>? raw;
+
+      // Optimized routes → json["routes"][0]["geometry"]["coordinates"]
+      if (json is Map &&
+          json["routes"] is List &&
+          json["routes"].isNotEmpty &&
+          json["routes"][0]["geometry"] != null &&
+          json["routes"][0]["geometry"]["coordinates"] != null) {
+        raw = json["routes"][0]["geometry"]["coordinates"] as List<dynamic>;
+      }
+
+      // Normal route → json["features"][0]["geometry"]["coordinates"]
+      if (raw == null &&
+          json is Map &&
+          json["features"] is List &&
+          json["features"].isNotEmpty &&
+          json["features"][0]["geometry"] != null &&
+          json["features"][0]["geometry"]["coordinates"] != null) {
+        raw = json["features"][0]["geometry"]["coordinates"] as List<dynamic>;
+      }
+
+      if (raw == null) {
+        print("ORS ERROR → geometry missing");
+        return [];
+      }
+
+      final List<LatLng> out = [];
+
+      for (final item in raw) {
+        if (item is List && item.length >= 2) {
+          final lon = item[0];
+          final lat = item[1];
+          if (lon is num && lat is num) {
+            out.add(LatLng(lat.toDouble(), lon.toDouble()));
+          }
+        }
+      }
+
+      return out;
+    } catch (e) {
+      print("ORS COORD PARSE ERROR: $e");
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Bearing Calculation
   // ---------------------------------------------------------------------------
   static double calculateBearing(LatLng from, LatLng to) {
     try {
-      final lat1 = from.latitude * (pi / 180);
-      final lat2 = to.latitude * (pi / 180);
-      final dLon = (to.longitude - from.longitude) * (pi / 180);
+      final lat1 = _degToRad(from.latitude);
+      final lat2 = _degToRad(to.latitude);
+      final dLon = _degToRad(to.longitude - from.longitude);
 
-      final y = sin(dLon) * cos(lat2);
+      final y = math.sin(dLon) * math.cos(lat2);
       final x =
-          cos(lat1) * sin(lat2) - sin(lat1) * cos(lat2) * cos(dLon);
+          math.cos(lat1) * math.sin(lat2) -
+          math.sin(lat1) * math.cos(lat2) * math.cos(dLon);
 
-      double brng = atan2(y, x);
-      brng = brng * 180 / pi;
-      brng = (brng + 360) % 360;
-
-      return brng;
+      double bearing = math.atan2(y, x);
+      bearing = _radToDeg(bearing);
+      return (bearing + 360) % 360;
     } catch (_) {
       return 0.0;
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Helpers
+  // ---------------------------------------------------------------------------
+  static bool _isValid(LatLng? p) {
+    if (p == null) return false;
+    return !(p.latitude.isNaN ||
+        p.longitude.isNaN ||
+        (p.latitude == 0.0 && p.longitude == 0.0));
+  }
+
+  static double _degToRad(double deg) => deg * math.pi / 180;
+  static double _radToDeg(double rad) => rad * 180 / math.pi;
 }

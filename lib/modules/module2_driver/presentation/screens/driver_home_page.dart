@@ -183,7 +183,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _centerOnDriver(GammaGeofenceConfig.center));
+      (_) => _centerOnDriver(GammaGeofenceConfig.center),
+    );
     _loadCustomers();
   }
 
@@ -226,7 +227,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
           builder: (context, state) {
             final selectedVehicle = _selectedVehicleFrom(state);
             final driverLocation = _resolveDriverLocation(selectedVehicle);
-            final origin = driverLocation;
+
             return Scaffold(
               backgroundColor: const Color(0xFFF7FBF8),
               body: SafeArea(
@@ -294,10 +295,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
       _loadingCustomers = true;
       _customerError = null;
     });
+
     try {
+      // 1) Try assignments API
       final assignmentsUri = Uri.parse(ApiConfig.assignments);
       final resp =
           await http.get(assignmentsUri).timeout(const Duration(seconds: 12));
+
       if (resp.statusCode == 200) {
         final decodedAssignments =
             _decodeCustomerList(resp.body, fromAssignments: true);
@@ -310,13 +314,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
         }
       }
 
-      // Fallback to raw customer list when no assignments are present
+      // 2) Fallback to raw customer list
       final customersResp = await http
           .get(Uri.parse(ApiConfig.customerList))
           .timeout(const Duration(seconds: 12));
+
       if (customersResp.statusCode == 200) {
-        final data = customersResp.body;
-        final decoded = _decodeCustomerList(data);
+        final decoded = _decodeCustomerList(customersResp.body);
         setState(() {
           _customers = decoded;
           _loadingCustomers = false;
@@ -328,7 +332,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
               'Failed to load customers (${customersResp.statusCode})';
         });
       }
-    } catch (e) {
+    } catch (_) {
       setState(() {
         _loadingCustomers = false;
         _customerError = 'Unable to load customers';
@@ -336,19 +340,18 @@ class _DriverHomePageState extends State<DriverHomePage> {
     }
   }
 
-  double? _parseCoordinate(dynamic value) {
-    if (value == null) return null;
-    final raw = value.toString();
-    final match = RegExp(r'-?\d+(?:\.\d+)?').firstMatch(raw);
-    if (match != null) {
-      return double.tryParse(match.group(0)!);
-    }
-    return double.tryParse(raw);
+  LatLng? _safeLatLng(dynamic latRaw, dynamic lonRaw) {
+    if (latRaw == null || lonRaw == null) return null;
+    final lat = double.tryParse(latRaw.toString());
+    final lon = double.tryParse(lonRaw.toString());
+    if (lat == null || lon == null) return null;
+    return LatLng(lat, lon);
   }
 
   List<_DriverCustomerStop> _decodeCustomerList(String body,
       {bool fromAssignments = false}) {
     final List<_DriverCustomerStop> out = [];
+
     try {
       final decoded = jsonDecode(body);
       final list = decoded is List
@@ -356,44 +359,48 @@ class _DriverHomePageState extends State<DriverHomePage> {
           : (decoded is Map && decoded['results'] is List
               ? decoded['results']
               : []);
-      if (list is List) {
-        for (final entry in list) {
-          if (entry is! Map<String, dynamic>) continue;
-          final map = Map<String, dynamic>.from(entry);
-          final id = map['unique_id']?.toString() ??
-              map['customer_id']?.toString() ??
-              '';
-          final name = map['customer_name']?.toString() ??
-              map['ward_name']?.toString() ??
-              map['driver_name']?.toString() ??
-              'Unknown';
 
-          final latRaw =
-              fromAssignments ? map['customer_latitude'] : map['latitude'];
-          final lonRaw =
-              fromAssignments ? map['customer_longitude'] : map['longitude'];
-          final lat = _parseCoordinate(latRaw);
-          final lon = _parseCoordinate(lonRaw);
-          if (id.isEmpty || lat == null || lon == null) continue;
+      if (list is! List) return out;
 
-          final addressParts = [
-            map['building_no'],
-            map['street'],
-            map['area'],
-            map['pincode']
-          ].whereType<String>().where((p) => p.trim().isNotEmpty).toList();
+      for (final entry in list) {
+        if (entry is! Map) continue;
+        final map = Map<String, dynamic>.from(entry as Map);
 
-          out.add(
-            _DriverCustomerStop(
-              id: id,
-              name: name,
-              address: addressParts.join(', '),
-              location: LatLng(lat, lon),
-            ),
-          );
-        }
+        final id = (map['unique_id'] ?? map['customer_id'] ?? '').toString();
+        if (id.trim().isEmpty) continue;
+
+        final latRaw =
+            fromAssignments ? map['customer_latitude'] : map['latitude'];
+        final lonRaw =
+            fromAssignments ? map['customer_longitude'] : map['longitude'];
+
+        final position = _safeLatLng(latRaw, lonRaw);
+        if (position == null) continue;
+
+        final name = (map['customer_name'] ??
+                map['ward_name'] ??
+                map['driver_name'] ??
+                'Unknown')
+            .toString();
+
+        final addressParts = [
+          map['building_no'],
+          map['street'],
+          map['area'],
+          map['pincode'],
+        ].whereType<String>().where((v) => v.trim().isNotEmpty).toList();
+
+        out.add(
+          _DriverCustomerStop(
+            id: id,
+            name: name,
+            address: addressParts.join(', '),
+            location: position,
+          ),
+        );
       }
     } catch (_) {}
+
     return out;
   }
 
@@ -419,29 +426,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
         );
       case _DriverTab.profile:
         return _ProfileTab(onLogout: () => _logout(context));
-    }
-  }
-
-  String _tabLabel(_DriverTab tab) {
-    switch (tab) {
-      case _DriverTab.home:
-        return 'Home';
-      case _DriverTab.history:
-        return 'History';
-      case _DriverTab.profile:
-        return 'Profile';
-    }
-  }
-
-  _DriverTab _tabFromLabel(String label) {
-    switch (label) {
-      case 'History':
-        return _DriverTab.history;
-      case 'Profile':
-        return _DriverTab.profile;
-      case 'Home':
-      default:
-        return _DriverTab.home;
     }
   }
 
@@ -910,7 +894,6 @@ class _DriverCustomerStop {
 class _HomeTabState extends State<_HomeTab> {
   List<LatLng> _orsRoute = [];
   double _driverBearing = 0.0;
-
   List<_DriverCustomerStop> _customers = [];
 
   @override
@@ -920,37 +903,49 @@ class _HomeTabState extends State<_HomeTab> {
     _computeRoute();
   }
 
+  @override
+  void didUpdateWidget(covariant _HomeTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.customers != widget.customers ||
+        oldWidget.driverLocation != widget.driverLocation) {
+      _customers = List<_DriverCustomerStop>.from(widget.customers);
+      _computeRoute();
+    }
+  }
+
   Future<void> _computeRoute() async {
     if (_customers.isEmpty) {
-      print("No customers → skipping ORS");
+      setState(() {
+        _orsRoute = [];
+        _driverBearing = 0.0;
+      });
       return;
     }
 
-    final nextStop = _customers.first.location;
+    // Build ORS coordinates list
+    final coords = [
+      [widget.driverLocation.longitude, widget.driverLocation.latitude],
+      ..._customers.map((c) => [c.location.longitude, c.location.latitude]),
+    ];
 
-    final result = await ORSService.fetchRoute(
-      widget.driverLocation,
-      nextStop,
-    );
+    // Fetch optimized ORS route
+    final route = await ORSService.fetchMultiRoute(coords);
 
     if (!mounted) return;
 
     setState(() {
-      _orsRoute = result;
-      _driverBearing = ORSService.calculateBearing(
-        widget.driverLocation,
-        nextStop,
-      );
-    });
-  }
+      _orsRoute = route;
 
-  @override
-  void didUpdateWidget(covariant _HomeTab oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (oldWidget.customers != widget.customers) {
-      _customers = List<_DriverCustomerStop>.from(widget.customers);
-      _computeRoute();
-    }
+      // Bearing toward first ORS segment OR toward first customer
+      if (route.length > 1) {
+        _driverBearing = ORSService.calculateBearing(route.first, route[1]);
+      } else {
+        _driverBearing = ORSService.calculateBearing(
+          widget.driverLocation,
+          _customers.first.location,
+        );
+      }
+    });
   }
 
   Color _statusColor(_CustomerStatus status) {
@@ -967,11 +962,6 @@ class _HomeTabState extends State<_HomeTab> {
 
   @override
   Widget build(BuildContext context) {
-    final routeLinePoints = <LatLng>[
-      widget.driverLocation,
-      ..._customers.map((c) => c.location),
-    ];
-
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
       child: LayoutBuilder(
@@ -1008,11 +998,11 @@ class _HomeTabState extends State<_HomeTab> {
                             color: Colors.blueAccent,
                             strokeWidth: 4.5,
                           )
-                        else
+                        else if (_customers.isNotEmpty)
                           Polyline(
                             points: [
                               widget.driverLocation,
-                              ..._customers.map((c) => c.location)
+                              ..._customers.map((c) => c.location),
                             ],
                             color: _driverPrimary.withOpacity(0.6),
                             strokeWidth: 3.5,
@@ -1028,8 +1018,7 @@ class _HomeTabState extends State<_HomeTab> {
                             point: widget.driverLocation,
                             child: _DriverMarker(
                               isActive: true,
-                              rotation:
-                                  _driverBearing, // arrow rotates toward next stop
+                              rotation: _driverBearing,
                             ),
                           ),
                           ..._customers.map(
@@ -1060,7 +1049,10 @@ class _HomeTabState extends State<_HomeTab> {
                     const SizedBox(height: 10),
                     _CircleIconButton(
                       icon: Icons.refresh_rounded,
-                      onPressed: () => widget.onRefresh(),
+                      onPressed: () async {
+                        await widget.onRefresh();
+                        await _computeRoute();
+                      },
                     ),
                   ],
                 ),
@@ -1157,8 +1149,9 @@ class _HomeTabState extends State<_HomeTab> {
                                                   Container(
                                                     padding: const EdgeInsets
                                                         .symmetric(
-                                                        horizontal: 8,
-                                                        vertical: 4),
+                                                      horizontal: 8,
+                                                      vertical: 4,
+                                                    ),
                                                     decoration: BoxDecoration(
                                                       color: color
                                                           .withOpacity(0.12),
@@ -1192,7 +1185,8 @@ class _HomeTabState extends State<_HomeTab> {
                                                         padding:
                                                             const EdgeInsets
                                                                 .symmetric(
-                                                                vertical: 8),
+                                                          vertical: 8,
+                                                        ),
                                                       ),
                                                       onPressed: () {
                                                         setState(() {
@@ -1201,9 +1195,10 @@ class _HomeTabState extends State<_HomeTab> {
                                                                   .collected;
                                                         });
                                                         widget.onStatusChanged(
-                                                            customer.id,
-                                                            _CustomerStatus
-                                                                .collected);
+                                                          customer.id,
+                                                          _CustomerStatus
+                                                              .collected,
+                                                        );
                                                       },
                                                       child: const Text(
                                                           'Complete'),
@@ -1217,7 +1212,8 @@ class _HomeTabState extends State<_HomeTab> {
                                                         padding:
                                                             const EdgeInsets
                                                                 .symmetric(
-                                                                vertical: 8),
+                                                          vertical: 8,
+                                                        ),
                                                       ),
                                                       onPressed: () {
                                                         setState(() {
@@ -1226,9 +1222,10 @@ class _HomeTabState extends State<_HomeTab> {
                                                                   .skipped;
                                                         });
                                                         widget.onStatusChanged(
-                                                            customer.id,
-                                                            _CustomerStatus
-                                                                .skipped);
+                                                          customer.id,
+                                                          _CustomerStatus
+                                                              .skipped,
+                                                        );
                                                       },
                                                       child: const Text('Skip'),
                                                     ),
@@ -1371,8 +1368,6 @@ class _MapCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final routeLinePoints = <LatLng>[driverLocation, ...routePoints];
-
     return Container(
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(20),
@@ -1389,118 +1384,103 @@ class _MapCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         child: Container(
           color: Colors.white,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+          child: Stack(
             children: [
-              Stack(
-                children: [
-                  SizedBox(
-                    height: 260,
-                    child: FlutterMap(
-                      mapController: mapController,
-                      options: MapOptions(
-                        initialCenter: driverLocation,
-                        initialZoom: 14.5,
-                        minZoom: 10,
-                        maxZoom: 18,
-                        interactionOptions: const InteractionOptions(
-                          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+              SizedBox(
+                height: 260,
+                child: FlutterMap(
+                  mapController: mapController,
+                  options: MapOptions(
+                    initialCenter: driverLocation,
+                    initialZoom: 14.5,
+                    minZoom: 10,
+                    maxZoom: 18,
+                    interactionOptions: const InteractionOptions(
+                      flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+                    ),
+                  ),
+                  children: [
+                    TileLayer(
+                      urlTemplate:
+                          'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                      subdomains: const ['a', 'b', 'c'],
+                    ),
+                    PolylineLayer(
+                      polylines: [
+                        if (orsRoute.isNotEmpty)
+                          Polyline(
+                            points: orsRoute,
+                            color: Colors.blueAccent,
+                            strokeWidth: 4.5,
+                          )
+                        else if (routePoints.isNotEmpty)
+                          Polyline(
+                            points: [driverLocation, ...routePoints],
+                            color: _driverPrimary.withOpacity(0.6),
+                            strokeWidth: 3.5,
+                          ),
+                      ],
+                    ),
+                    MarkerLayer(
+                      markers: [
+                        Marker(
+                          width: 42,
+                          height: 42,
+                          point: driverLocation,
+                          child: _DriverMarker(
+                            isActive: true,
+                            rotation: driverBearing,
+                          ),
                         ),
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate:
-                              'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          subdomains: const ['a', 'b', 'c'],
-                          userAgentPackageName: 'com.iwms.citizen.app',
-                        ),
-
-                        // Correct polyline logic
-                        PolylineLayer(
-                          polylines: [
-                            if (orsRoute.isNotEmpty)
-                              Polyline(
-                                points: orsRoute,
-                                color: Colors.blueAccent,
-                                strokeWidth: 4.5,
-                              )
-                            else
-                              Polyline(
-                                points: routeLinePoints,
-                                color: _driverPrimary.withOpacity(0.6),
-                                strokeWidth: 3.5,
-                              ),
-                          ],
-                        ),
-
-                        // Markers
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              width: 42,
-                              height: 42,
-                              point: driverLocation,
-                              child: _DriverMarker(
-                                isActive: true,
-                                rotation: driverBearing,
-                              ),
+                        ...stops.asMap().entries.map((entry) {
+                          final idx = entry.key;
+                          final stop = entry.value;
+                          return Marker(
+                            width: _kStopMarkerDiameter,
+                            height: _kStopMarkerDiameter,
+                            point: stop.location,
+                            child: _StopMarker(
+                              index: idx + 1,
+                              label: stop.label,
+                              isDestination: idx == stops.length - 1,
                             ),
-                            ...stops.asMap().entries.map((entry) {
-                              final idx = entry.key;
-                              final stop = entry.value;
-                              return Marker(
-                                width: _kStopMarkerDiameter,
-                                height: _kStopMarkerDiameter,
-                                point: stop.location,
-                                child: _StopMarker(
-                                  index: idx + 1,
-                                  label: stop.label,
-                                  isDestination: idx == stops.length - 1,
-                                ),
-                              );
-                            }),
-                          ],
-                        ),
+                          );
+                        }),
                       ],
                     ),
-                  ),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Column(
-                      children: [
-                        _CircleIconButton(
-                          icon: Icons.gps_fixed_rounded,
-                          onPressed: onCenter,
-                        ),
-                        const SizedBox(height: 10),
-                        _CircleIconButton(
-                          icon: Icons.zoom_in_rounded,
-                          onPressed: () {
-                            final zoom = mapController.camera.zoom + 0.6;
-                            mapController.move(
-                                mapController.camera.center, zoom);
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        _CircleIconButton(
-                          icon: Icons.zoom_out_rounded,
-                          onPressed: () {
-                            final zoom = mapController.camera.zoom - 0.6;
-                            mapController.move(
-                                mapController.camera.center, zoom);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: _NextStopSummary(
-                  stop: stops.isNotEmpty ? stops.first : null,
-                  remainingStops: stops.isNotEmpty ? stops.length - 1 : 0,
+              Positioned(
+                top: 12,
+                right: 12,
+                child: Column(
+                  children: [
+                    _CircleIconButton(
+                      icon: Icons.gps_fixed_rounded,
+                      onPressed: onCenter,
+                    ),
+                    const SizedBox(height: 10),
+                    _CircleIconButton(
+                      icon: Icons.zoom_in_rounded,
+                      onPressed: () {
+                        mapController.move(
+                          mapController.camera.center,
+                          mapController.camera.zoom + 0.6,
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _CircleIconButton(
+                      icon: Icons.zoom_out_rounded,
+                      onPressed: () {
+                        mapController.move(
+                          mapController.camera.center,
+                          mapController.camera.zoom - 0.6,
+                        );
+                      },
+                    ),
+                  ],
                 ),
               ),
             ],
@@ -1834,15 +1814,52 @@ class _FullMapPage extends StatefulWidget {
 class _FullMapPageState extends State<_FullMapPage> {
   final MapController _mapController = MapController();
   _DriverMapThemeOption _selectedTheme = _DriverMapThemeOption.light;
+  List<LatLng> _orsRoute = [];
+  double _driverBearing = 0.0;
+
+  @override
+  void initState() {
+    super.initState();
+    _computeFullRoute();
+  }
 
   void _setTheme(_DriverMapThemeOption option) {
     if (_selectedTheme == option) return;
     setState(() => _selectedTheme = option);
   }
 
+  Future<void> _computeFullRoute() async {
+    if (widget.routePoints.isEmpty) {
+      setState(() {
+        _orsRoute = [];
+        _driverBearing = 0.0;
+      });
+      return;
+    }
+
+    final dest = widget.routePoints.last;
+    final route = await ORSService.fetchRoute(widget.origin, dest);
+
+    if (!mounted) return;
+
+    setState(() {
+      _orsRoute = route;
+      if (route.isNotEmpty) {
+        _driverBearing =
+            ORSService.calculateBearing(widget.origin, route.first);
+      } else if (widget.stops.isNotEmpty) {
+        _driverBearing = ORSService.calculateBearing(
+          widget.origin,
+          widget.stops.first.location,
+        );
+      } else {
+        _driverBearing = 0.0;
+      }
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final routeLinePoints = <LatLng>[widget.origin, ...widget.routePoints];
     final liveVehicle = widget.vehicle;
     final nextStop = widget.stops.isNotEmpty ? widget.stops.first : null;
     final remainingStops =
@@ -1876,7 +1893,8 @@ class _FullMapPageState extends State<_FullMapPage> {
                 statusSecondary: statusSecondary,
                 statusContent: headerStatusContent,
                 onBack: () => Navigator.of(context).maybePop(),
-                onRefresh: () => _mapController.move(widget.origin, 15),
+                onRefresh: () =>
+                    _mapController.move(widget.origin, 15), // recenter
               ),
             ),
             const SizedBox(height: 4),
@@ -1918,16 +1936,26 @@ class _FullMapPageState extends State<_FullMapPage> {
                                 subdomains: themeConfig.subdomains,
                                 userAgentPackageName: 'com.iwms.citizen.app',
                               ),
-                              if (widget.routePoints.isNotEmpty)
+                              if (_orsRoute.isNotEmpty)
+                                PolylineLayer(
+                                  polylines: [
+                                    Polyline(
+                                      points: _orsRoute,
+                                      color: Colors.blueAccent,
+                                      strokeWidth: 4.5,
+                                    ),
+                                  ],
+                                )
+                              else if (widget.routePoints.isNotEmpty)
                                 PolylineLayer(
                                   polylines: [
                                     Polyline(
                                       points: [
                                         widget.origin,
-                                        ...widget.routePoints
+                                        ...widget.routePoints,
                                       ],
-                                      color: Colors.blueAccent,
-                                      strokeWidth: 4.5,
+                                      color: _driverPrimary.withOpacity(0.6),
+                                      strokeWidth: 3.5,
                                     ),
                                   ],
                                 ),
@@ -1937,9 +1965,9 @@ class _FullMapPageState extends State<_FullMapPage> {
                                     width: 44,
                                     height: 44,
                                     point: widget.origin,
-                                    child: const _DriverMarker(
+                                    child: _DriverMarker(
                                       isActive: true,
-                                      rotation: 0,
+                                      rotation: _driverBearing,
                                     ),
                                   ),
                                   ...widget.stops.asMap().entries.map((entry) {
@@ -2483,18 +2511,18 @@ class _HistoryCard extends StatelessWidget {
               ),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text(
+                children: const [
+                  Text(
                     'Total Collected :',
                     style: TextStyle(
                       color: Colors.black54,
                       fontSize: 12.5,
                     ),
                   ),
-                  const SizedBox(height: 4),
+                  SizedBox(height: 4),
                   Text(
                     ' Kg',
-                    style: const TextStyle(
+                    style: TextStyle(
                       color: _driverPrimary,
                       fontWeight: FontWeight.w800,
                       fontSize: 15,
@@ -2517,10 +2545,10 @@ class _HistoryCard extends StatelessWidget {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
+                    children: const [
                       Text(
                         ' Kg',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2528,7 +2556,7 @@ class _HistoryCard extends StatelessWidget {
                       Text(
                         'Dry',
                         style: TextStyle(
-                          color: Colors.black.withOpacity(0.65),
+                          color: Colors.black54,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
@@ -2543,10 +2571,10 @@ class _HistoryCard extends StatelessWidget {
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
+                    children: const [
                       Text(
                         ' Kg',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 20,
                           fontWeight: FontWeight.w800,
                         ),
@@ -2554,7 +2582,7 @@ class _HistoryCard extends StatelessWidget {
                       Text(
                         'Wet',
                         style: TextStyle(
-                          color: Colors.black.withOpacity(0.65),
+                          color: Colors.black54,
                           fontWeight: FontWeight.w600,
                         ),
                       ),

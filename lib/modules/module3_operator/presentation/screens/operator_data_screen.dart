@@ -282,7 +282,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       final response = await http.post(uri, body: {
         'screen_unique_id': screenUniqueId,
         'customer_id': widget.customerId,
-        'waste_type': _wasteData[type]!['waste_type_id'].toString(),
+        'waste_type_id': _wasteData[type]!['waste_type_id'].toString(),
       });
 
       final data = json.decode(response.body);
@@ -357,7 +357,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       final request = http.MultipartRequest('POST', uri)
         ..fields['screen_unique_id'] = screenUniqueId
         ..fields['customer_id'] = widget.customerId
-        ..fields['waste_type'] = data['waste_type_id'].toString()
+        ..fields['waste_type_id'] = data['waste_type_id'].toString()
         ..fields['weight'] = weight
         ..fields['latitude'] = widget.latitude
         ..fields['longitude'] = widget.longitude;
@@ -516,11 +516,11 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     try {
       debugPrint('🔎 total waste before submit: $totalWeight');
 
-      if (totalWeight <= 0) {
-        _showDialog('Warning',
-            'Please add at least one waste entry before submitting.');
-        return;
-      }
+      // if (totalWeight <= 0) {
+      //   _showDialog('Warning',
+      //       'Please add at least one waste entry before submitting.');
+      //   return;
+      // }
 
       final uri = Uri.parse(
           'http://192.168.5.92:8000/api/mobile/waste/finalize-waste/');
@@ -621,9 +621,11 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
   Map<String, double> _buildSummarySnapshot() {
     final Map<String, double> totals = {'wet': 0, 'dry': 0, 'mixed': 0};
+
     _wasteData.forEach((key, value) {
       final weight = _weightFromEntry(value);
-      if (weight <= 0) return;
+
+      // Always include the weight, even if it's 0
       if (key.contains('wet')) {
         totals['wet'] = (totals['wet'] ?? 0) + weight;
       } else if (key.contains('dry')) {
@@ -632,6 +634,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         totals['mixed'] = (totals['mixed'] ?? 0) + weight;
       }
     });
+
     return totals;
   }
 
