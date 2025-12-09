@@ -1,5 +1,4 @@
 import 'dart:convert';
-
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:iwms_citizen_app/core/api_config.dart';
@@ -33,6 +32,11 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
   bool loading = true;
   String? error;
 
+  // Correct backend endpoints
+  String get wardsUrl => "${ApiConfig.desktopBase}wards/";
+
+  String get usersUrl => "${ApiConfig.desktopBase}users-creation/";
+
   @override
   void initState() {
     super.initState();
@@ -44,16 +48,14 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
       loading = true;
       error = null;
     });
+
     try {
-      final fetchedWards = await _fetchList('${ApiConfig.desktopBase}wards/');
-      final fetchedDrivers = await _fetchList(
-        '${ApiConfig.desktopBase}user/?user_type=driver',
-        staffRoleFilter: 'driver',
-      );
-      final fetchedOperators = await _fetchList(
-        '${ApiConfig.desktopBase}user/?user_type=operator',
-        staffRoleFilter: 'operator',
-      );
+      final fetchedWards = await _fetchList(wardsUrl);
+
+      // Fetch drivers and operators separately using correct filtering
+      final fetchedDrivers = await _filterUserListByRole("driver");
+      final fetchedOperators = await _filterUserListByRole("operator");
+
       setState(() {
         wards = fetchedWards;
         drivers = fetchedDrivers;
@@ -68,172 +70,176 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
     }
   }
 
-  List<_IdName> _decodeIdNames(
-    dynamic decoded, {
-    List<String> idKeys = const [
-      'unique_id',
-      'id',
-      'pk',
-      'customer_id',
-      'staff_id'
-    ],
-    List<String> nameKeys = const [
-      'staff_name',
-      'employee_name',
-      'name',
-      'customer_name',
-      'customer_id',
-      'unique_id',
-      'ward_name',
-      'zone_name',
-      'user_type_name',
-      'property_name',
-      'sub_property_name',
-      'city_name',
-      'district_name'
-    ],
-  }) {
+  // Extract items from JSON
+  List<Map<String, dynamic>> _extractItems(dynamic decoded) {
+    if (decoded is List) {
+      return decoded
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+    }
+
+    if (decoded is Map) {
+      if (decoded["results"] is List) {
+        return (decoded["results"] as List)
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+      if (decoded["data"] is List) {
+        return (decoded["data"] as List)
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+      }
+    }
+
+    return [];
+  }
+
+  List<_IdName> _decodeIdNames(dynamic decoded) {
     final items = _extractItems(decoded);
 
     String pick(Map<String, dynamic> map, List<String> keys) {
       for (final key in keys) {
-        final val = map[key];
-        if (val != null && val.toString().trim().isNotEmpty)
-          return val.toString();
+        if (map[key] != null && map[key].toString().trim().isNotEmpty) {
+          return map[key].toString();
+        }
       }
-      return '';
+      return "";
     }
 
     return items
         .map((m) => _IdName(
-              pick(m, idKeys),
-              pick(m, nameKeys),
+              pick(m, ["unique_id", "id", "pk", "staff_id", "customer_id"]),
+              pick(
+                m,
+                [
+                  "staff_name",
+                  "employee_name",
+                  "name",
+                  "customer_name",
+                  "ward_name",
+                ],
+              ),
             ))
         .where((e) => e.id.isNotEmpty && e.name.isNotEmpty)
         .toList();
   }
 
-  List<Map<String, dynamic>> _extractItems(dynamic decoded) {
-    final items = <Map<String, dynamic>>[];
-    if (decoded is List) {
-      items.addAll(
-          decoded.whereType<Map>().map((e) => Map<String, dynamic>.from(e)));
-    } else if (decoded is Map) {
-      if (decoded['results'] is List) {
-        items.addAll((decoded['results'] as List)
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e)));
-      } else if (decoded['data'] is List) {
-        items.addAll((decoded['data'] as List)
-            .whereType<Map>()
-            .map((e) => Map<String, dynamic>.from(e)));
-      }
+  // ===========================
+  // FETCH LIST FROM API
+  // ===========================
+  Future<List<_IdName>> _fetchList(String url) async {
+    print("FETCH → $url");
+
+    final resp =
+        await http.get(Uri.parse(url)).timeout(const Duration(seconds: 12));
+
+    if (resp.statusCode != 200) {
+      print("API ERROR → ${resp.statusCode}, BODY: ${resp.body}");
+      return [];
     }
-    return items;
+
+    final decoded = jsonDecode(resp.body);
+    return _decodeIdNames(decoded);
   }
 
-  Future<List<_IdName>> _fetchList(
-    String url, {
-    String? staffRoleFilter,
-  }) async {
-    final resp =
-        await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+  // ===========================
+  // FILTER USERS BY ROLE
+  // ===========================
+
+  // Improved version: re-fetch raw items to inspect staffusertype
+  Future<List<_IdName>> _filterUserListByRole(String targetRole) async {
+    print("=== FILTER ROLE START → $targetRole ===");
+
+    final resp = await http
+        .get(Uri.parse(usersUrl))
+        .timeout(const Duration(seconds: 12));
+
+    print("RAW USERS → ${resp.body}");
+
     if (resp.statusCode != 200) return [];
+
     final decoded = jsonDecode(resp.body);
     final rawItems = _extractItems(decoded);
-    final items = _decodeIdNames(decoded);
-    if (staffRoleFilter == null) return items;
-    final role = staffRoleFilter.toLowerCase();
-    final filteredIds = rawItems
-        .where((m) =>
-            (m['staffusertype_name'] ?? m['staffusertype'] ?? '')
-                .toString()
-                .toLowerCase() ==
-            role)
-        .map((m) => (m['unique_id'] ?? m['id'] ?? '').toString())
-        .where((id) => id.isNotEmpty)
-        .toSet();
-    if (filteredIds.isEmpty) return items;
-    return items.where((e) => filteredIds.contains(e.id)).toList();
+    final displayList = _decodeIdNames(decoded);
+
+    final normalizedTarget = targetRole.toLowerCase();
+    final validIds = <String>{};
+
+    for (final m in rawItems) {
+      final rawRole = m["staffusertype_name"]; // <-- THE REAL FIELD IN YOUR API
+
+      print("CHECK ROLE → $rawRole");
+
+      if (rawRole != null &&
+          rawRole.toString().toLowerCase() == normalizedTarget) {
+        validIds.add(m["unique_id"].toString());
+        print("MATCH FOUND → ${m["unique_id"]}");
+      }
+    }
+
+    print("MATCHED IDS → $validIds");
+    print("=== FILTER ROLE END ===");
+
+    return displayList.where((e) => validIds.contains(e.id)).toList();
   }
 
   Future<void> _loadCustomersForWard(String ward) async {
     setState(() {
       customerId = null;
       customers = [];
-      loading = true;
     });
-    try {
-      final resp = await http
-          .get(Uri.parse(
-              '${ApiConfig.desktopBase}customercreations/?ward=$ward'))
-          .timeout(const Duration(seconds: 10));
-      if (resp.statusCode == 200) {
-        final decoded = jsonDecode(resp.body);
-        final list = _decodeIdNames(
-          decoded,
-          idKeys: const ['unique_id', 'id', 'pk'],
-          nameKeys: const ['customer_name', 'name', 'unique_id'],
-        );
-        setState(() {
-          customers = list;
-          loading = false;
-        });
-      } else {
-        setState(() {
-          loading = false;
-        });
-      }
-    } catch (_) {
-      setState(() {
-        loading = false;
-      });
+
+    final url =
+        "${ApiConfig.desktopBase}customers/customercreations/?ward=$ward";
+
+    final resp = await http.get(Uri.parse(url));
+    if (resp.statusCode == 200) {
+      final decoded = jsonDecode(resp.body);
+      final list = _decodeIdNames(decoded);
+      setState(() => customers = list);
     }
   }
 
   Future<bool> _postAssignment() async {
     final payload = {
-      'ward': wardId,
-      'customer': customerId,
-      'driver': driverId,
-      'operator': operatorId,
+      "ward": wardId,
+      "customer": customerId,
+      "driver": driverId,
+      "operator": operatorId,
     };
 
-    try {
-      final resp = await http
-          .post(
-            Uri.parse(ApiConfig.assignments),
-            headers: {'Content-Type': 'application/json'},
-            body: jsonEncode(payload),
-          )
-          .timeout(const Duration(seconds: 12));
+    final resp = await http.post(
+      Uri.parse(ApiConfig.assignments),
+      headers: {"Content-Type": "application/json"},
+      body: jsonEncode(payload),
+    );
 
-      print("POST PAYLOAD: $payload");
-      print("RESPONSE: ${resp.statusCode} ${resp.body}");
+    print("POST → $payload");
+    print("RESP → ${resp.statusCode} ${resp.body}");
 
-      return resp.statusCode >= 200 && resp.statusCode < 300;
-    } catch (e) {
-      print("ASSIGNMENT POST FAILED: $e");
-      return false;
-    }
+    return resp.statusCode >= 200 && resp.statusCode < 300;
   }
 
   InputDecoration _inputDecoration(String label) {
     return InputDecoration(
       labelText: label,
-      labelStyle:
-          const TextStyle(color: _primaryGreen, fontWeight: FontWeight.w600),
       filled: true,
       fillColor: Colors.white,
+      labelStyle: const TextStyle(
+        color: _primaryGreen,
+        fontWeight: FontWeight.bold,
+      ),
       enabledBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: _primaryGreen.withOpacity(0.28)),
+        borderSide: BorderSide(color: _primaryGreen.withOpacity(0.3)),
         borderRadius: BorderRadius.circular(12),
       ),
       focusedBorder: OutlineInputBorder(
         borderSide: const BorderSide(color: _primaryGreen, width: 1.4),
         borderRadius: BorderRadius.circular(12),
       ),
-      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
     );
   }
 
@@ -247,10 +253,7 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
         bottom: 12 + MediaQuery.of(context).viewInsets.bottom,
       ),
       child: loading
-          ? const SizedBox(
-              height: 160,
-              child: Center(child: CircularProgressIndicator()),
-            )
+          ? const Center(child: CircularProgressIndicator())
           : Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -258,132 +261,92 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
                 Row(
                   children: [
                     const Text(
-                      'Assign Driver & Operator',
+                      "Assign Driver & Operator",
                       style:
                           TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
                     ),
                     const Spacer(),
                     IconButton(
-                      onPressed: () => Navigator.of(context).maybePop(),
+                      onPressed: () => Navigator.pop(context),
                       icon: const Icon(Icons.close),
                     ),
                   ],
                 ),
-                if (error != null)
-                  Padding(
-                    padding: const EdgeInsets.only(bottom: 8.0),
-                    child: Text(
-                      error!,
-                      style: const TextStyle(color: Colors.red),
-                    ),
-                  ),
+
+                // --------------------------
+                // Ward
+                // --------------------------
                 DropdownButtonFormField<String>(
-                  dropdownColor: Colors.white,
-                  decoration: _inputDecoration('Select Ward'),
-                  items: wards
-                      .map((w) => DropdownMenuItem(
-                            value: w.id,
-                            child: Text(
-                              w.name,
-                              style: const TextStyle(color: _primaryGreen),
-                            ),
-                          ))
-                      .toList(),
+                  decoration: _inputDecoration("Select Ward"),
                   value: wardId,
+                  items: wards
+                      .map((w) =>
+                          DropdownMenuItem(value: w.id, child: Text(w.name)))
+                      .toList(),
                   onChanged: (val) {
-                    setState(() {
-                      wardId = val;
-                    });
-                    if (val != null) {
-                      _loadCustomersForWard(val);
-                    }
+                    setState(() => wardId = val);
+                    if (val != null) _loadCustomersForWard(val);
                   },
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
+
+                // --------------------------
+                // Customer
+                // --------------------------
                 DropdownButtonFormField<String>(
-                  dropdownColor: Colors.white,
-                  decoration: _inputDecoration('Select Citizen (optional)'),
-                  items: customers
-                      .map((c) => DropdownMenuItem(
-                            value: c.id,
-                            child: Text(
-                              c.name,
-                              style: const TextStyle(color: _primaryGreen),
-                            ),
-                          ))
-                      .toList(),
+                  decoration: _inputDecoration("Select Citizen (optional)"),
                   value: customerId,
-                  onChanged: customers.isEmpty
-                      ? null
-                      : (val) => setState(() => customerId = val),
-                ),
-                const SizedBox(height: 8),
-                DropdownButtonFormField<String>(
-                  dropdownColor: Colors.white,
-                  decoration: _inputDecoration('Select Driver'),
-                  items: drivers
-                      .map((d) => DropdownMenuItem(
-                            value: d.id,
-                            child: Text(
-                              d.name,
-                              style: const TextStyle(color: _primaryGreen),
-                            ),
-                          ))
+                  items: customers
+                      .map((c) =>
+                          DropdownMenuItem(value: c.id, child: Text(c.name)))
                       .toList(),
+                  onChanged: (val) => setState(() => customerId = val),
+                ),
+                const SizedBox(height: 10),
+
+                // --------------------------
+                // Driver
+                // --------------------------
+                DropdownButtonFormField<String>(
+                  decoration: _inputDecoration("Select Driver"),
                   value: driverId,
+                  items: drivers
+                      .map((d) =>
+                          DropdownMenuItem(value: d.id, child: Text(d.name)))
+                      .toList(),
                   onChanged: (val) => setState(() => driverId = val),
                 ),
-                const SizedBox(height: 8),
+                const SizedBox(height: 10),
+
+                // --------------------------
+                // Operator
+                // --------------------------
                 DropdownButtonFormField<String>(
-                  dropdownColor: Colors.white,
-                  decoration: _inputDecoration('Select Operator'),
-                  items: operators
-                      .map((o) => DropdownMenuItem(
-                            value: o.id,
-                            child: Text(
-                              o.name,
-                              style: const TextStyle(color: _primaryGreen),
-                            ),
-                          ))
-                      .toList(),
+                  decoration: _inputDecoration("Select Operator"),
                   value: operatorId,
+                  items: operators
+                      .map((o) =>
+                          DropdownMenuItem(value: o.id, child: Text(o.name)))
+                      .toList(),
                   onChanged: (val) => setState(() => operatorId = val),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
+
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed: (wardId != null &&
-                            driverId != null &&
-                            operatorId != null)
-                        ? () async {
-                            final success = await _postAssignment();
-                            if (!mounted) return;
-                            if (success) {
-                              Navigator.of(context).maybePop();
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                      'Assignment saved and shared with driver/operator'),
-                                  backgroundColor: _primaryGreen,
-                                ),
-                              );
-                            } else {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content:
-                                      Text('Failed to assign. Please retry.'),
-                                  backgroundColor: Colors.redAccent,
-                                ),
-                              );
-                            }
-                          }
-                        : null,
+                    onPressed:
+                        wardId != null && driverId != null && operatorId != null
+                            ? () async {
+                                final ok = await _postAssignment();
+                                if (ok) Navigator.pop(context);
+                              }
+                            : null,
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _primaryGreen,
                       foregroundColor: Colors.white,
                     ),
-                    child: const Text('Assign'),
+                    child: const Text("Assign"),
                   ),
                 ),
               ],

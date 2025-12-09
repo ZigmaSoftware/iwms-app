@@ -31,18 +31,18 @@ const _iconGray = Color(0xFF9E9E9E);
 const _borderGray = Color(0xFFE0E0E0);
 
 List<BoxShadow> _softCardShadow() => [
-  BoxShadow(
-    color: Colors.black.withValues(alpha: 0.07),
-    blurRadius: 16,
-    offset: const Offset(0, 6),
-  ),
-];
+      BoxShadow(
+        color: Colors.black.withValues(alpha: 0.07),
+        blurRadius: 16,
+        offset: const Offset(0, 6),
+      ),
+    ];
 
 BoxDecoration _cardDecoration({Color color = _cardBackground}) => BoxDecoration(
-  color: color,
-  borderRadius: BorderRadius.circular(18),
-  boxShadow: _softCardShadow(),
-);
+      color: color,
+      borderRadius: BorderRadius.circular(18),
+      boxShadow: _softCardShadow(),
+    );
 
 class DashboardScreen extends StatelessWidget {
   const DashboardScreen({super.key});
@@ -389,8 +389,8 @@ class _DailyWasteCard extends StatelessWidget {
                     Text(
                       'Daily Waste Collection',
                       style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -418,9 +418,9 @@ class _DailyWasteCard extends StatelessWidget {
                     Text(
                       'Live',
                       style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                        color: _primaryGreen,
-                        fontWeight: FontWeight.w700,
-                      ),
+                            color: _primaryGreen,
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                   ],
                 ),
@@ -446,7 +446,9 @@ class _DailyWasteCard extends StatelessWidget {
                       children: [
                         Text(
                           total.toStringAsFixed(1),
-                          style: Theme.of(context).textTheme.headlineSmall
+                          style: Theme.of(context)
+                              .textTheme
+                              .headlineSmall
                               ?.copyWith(fontWeight: FontWeight.w700),
                         ),
                         const SizedBox(height: 4),
@@ -886,9 +888,8 @@ class _WeighbridgeInsights extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final NumberFormat weightFormat = NumberFormat.decimalPattern();
-    final totalsSource = rangeSummaries.isNotEmpty
-        ? rangeSummaries
-        : monthSeries;
+    final totalsSource =
+        rangeSummaries.isNotEmpty ? rangeSummaries : monthSeries;
     final double mtdNet = totalsSource.fold<double>(
       0,
       (sum, item) => sum + item.totalNetWeight,
@@ -952,9 +953,7 @@ class _WeighbridgeInsights extends StatelessWidget {
               ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
-            ...topVehicles
-                .take(3)
-                .map(
+            ...topVehicles.take(3).map(
                   (v) => _insightRow(
                     icon: Icons.local_shipping,
                     leading: v.vehicleNo,
@@ -1181,9 +1180,8 @@ class _VehicleStatusCard extends StatelessWidget {
       ),
     ];
 
-    final highlighted = vehicles.isNotEmpty
-        ? vehicles.firstWhere((_) => true)
-        : null;
+    final highlighted =
+        vehicles.isNotEmpty ? vehicles.firstWhere((_) => true) : null;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(18),
@@ -1396,54 +1394,56 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
         child: _loading
             ? const Center(child: CircularProgressIndicator())
             : _error != null
-            ? ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                children: const [
-                  Text(
-                    'Unable to load vehicle list.',
-                    style: TextStyle(color: _iconGray),
-                  ),
-                ],
-              )
-            : ListView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
-                children: [
-                  const _SectionHeader(
-                    title: 'Vehicles',
-                    subtitle: 'Live feed from vehicle tracking API',
-                  ),
-                  const SizedBox(height: 12),
-                  _VehicleStatusCard(
-                    vehicles: _vehicles,
-                    statusCounts: _DashboardData.countByStatus(_vehicles),
-                  ),
-                  const SizedBox(height: 12),
-                  Align(
-                    alignment: Alignment.centerLeft,
-                    child: ElevatedButton.icon(
-                      icon: Icon(
-                        _showList ? Icons.list_alt : Icons.directions_bus,
+                ? ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+                    children: const [
+                      Text(
+                        'Unable to load vehicle list.',
+                        style: TextStyle(color: _iconGray),
                       ),
-                      label: Text(_showList ? 'Hide vehicles' : 'All vehicles'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _primaryGreen,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                    ],
+                  )
+                : ListView(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
+                    children: [
+                      const _SectionHeader(
+                        title: 'Vehicles',
+                        subtitle: 'Live feed from vehicle tracking API',
+                      ),
+                      const SizedBox(height: 12),
+                      _VehicleStatusCard(
+                        vehicles: _vehicles,
+                        statusCounts: _DashboardData.countByStatus(_vehicles),
+                      ),
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ElevatedButton.icon(
+                          icon: Icon(
+                            _showList ? Icons.list_alt : Icons.directions_bus,
+                          ),
+                          label: Text(
+                              _showList ? 'Hide vehicles' : 'All vehicles'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _primaryGreen,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          onPressed: () =>
+                              setState(() => _showList = !_showList),
                         ),
                       ),
-                      onPressed: () => setState(() => _showList = !_showList),
-                    ),
+                      const SizedBox(height: 8),
+                      if (_showList)
+                        ..._vehicles.map(
+                          (vehicle) => _VehicleTile(vehicle: vehicle),
+                        ),
+                    ],
                   ),
-                  const SizedBox(height: 8),
-                  if (_showList)
-                    ..._vehicles.map(
-                      (vehicle) => _VehicleTile(vehicle: vehicle),
-                    ),
-                ],
-              ),
       ),
     );
   }
@@ -1707,8 +1707,8 @@ class _ApprovalGridTile extends StatelessWidget {
                 Text(
                   title,
                   style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                  ),
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
                 const SizedBox(height: 4),
                 Text(

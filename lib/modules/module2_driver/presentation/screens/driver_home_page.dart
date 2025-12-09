@@ -274,15 +274,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
                   ],
                 ),
               ),
-              floatingActionButton: _activeTab == _DriverTab.home
-                  ? FloatingActionButton.extended(
-                      onPressed: () => openDriverRoute(context),
-                      icon: const Icon(Icons.navigation_rounded),
-                      label: const Text('Start route'),
-                      backgroundColor: _driverPrimary,
-                      foregroundColor: Colors.white,
-                    )
-                  : null,
             );
           },
         ),
