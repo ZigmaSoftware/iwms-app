@@ -415,12 +415,14 @@ class _DailyWasteCard extends StatelessWidget {
                   children: [
                     const Icon(Icons.autorenew, size: 16, color: _primaryGreen),
                     const SizedBox(width: 6),
-                    Text(
-                      'Live',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: _primaryGreen,
-                            fontWeight: FontWeight.w700,
-                          ),
+                    Container(
+                      child: Text(
+                        'Live',
+                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                              color: _primaryGreen,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
                     ),
                   ],
                 ),
@@ -471,7 +473,7 @@ class _DailyWasteCard extends StatelessWidget {
                         child: Row(
                           children: [
                             Container(
-                              width: 12,
+                              width: 17,
                               height: 12,
                               decoration: BoxDecoration(
                                 color: slice.color,
@@ -732,6 +734,7 @@ class _AttendanceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final running = statusCounts[_VehicleState.running] ?? 0;
     final idle = statusCounts[_VehicleState.idle] ?? 0;
+
     final present = running + idle;
     final onLeave = statusCounts[_VehicleState.parked] ?? 0;
     final absent = statusCounts[_VehicleState.nodata] ?? 0;
@@ -739,38 +742,38 @@ class _AttendanceRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: _AttendanceTile(
-            label: 'Total',
+          child: _Tile(
+            label: "Total",
             count: totalVehicles,
-            background: const Color(0xFFE8F5E9),
+            background: const Color.fromARGB(255, 241, 255, 221),
+            textColor: Colors.black87,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _Tile(
+            label: "Present",
+            count: present,
+            background: const Color(0xFFE8F5E9), // light green
             textColor: _primaryGreen,
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
-          child: _AttendanceTile(
-            label: 'Present',
-            count: present,
-            background: const Color(0xFFFFEBEE),
+          child: _Tile(
+            label: "Absent",
+            count: absent,
+            background: const Color(0xFFFFEBEE), // light red
             textColor: const Color(0xFFB71C1C),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
-          child: _AttendanceTile(
-            label: 'Absent',
-            count: absent,
-            background: const Color(0xFFFFF3E0),
-            textColor: const Color(0xFFE65100),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _AttendanceTile(
-            label: 'Leave',
+          child: _Tile(
+            label: "Leave",
             count: onLeave,
-            background: const Color(0xFFE3F2FD),
-            textColor: const Color(0xFF1565C0),
+            background: const Color(0xFFFFF9C4), // light yellow
+            textColor: const Color(0xFFF57F17),
           ),
         ),
       ],
@@ -778,8 +781,8 @@ class _AttendanceRow extends StatelessWidget {
   }
 }
 
-class _AttendanceTile extends StatelessWidget {
-  const _AttendanceTile({
+class _Tile extends StatelessWidget {
+  const _Tile({
     required this.label,
     required this.count,
     required this.background,
@@ -794,27 +797,35 @@ class _AttendanceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 70,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 20),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: textColor,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "$count",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: textColor,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 12)),
-        ],
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
