@@ -1,6 +1,11 @@
 // lib/data/repositories/auth_repository.dart
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_login.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iwms_citizen_app/core/api_config.dart';
@@ -126,6 +131,9 @@ Future<UserModel> loginCitizen({
   }
 
   try {
+    // ----------------------------------------------------
+    // ONLINE LOGIN ATTEMPT
+    // ----------------------------------------------------
     final response = await _dio.post(
       ApiConfig.citizenLogin,
       data: {
@@ -134,10 +142,6 @@ Future<UserModel> loginCitizen({
       },
     );
 
-    debugPrint("API Login Response: ${response.data}");
-
-    // The server returns SUCCESS always with no "status" flag.
-    // Validate essential fields manually.
     final data = response.data;
 
     if (data["unique_id"] == null ||
@@ -147,14 +151,40 @@ Future<UserModel> loginCitizen({
       throw AuthRepositoryException("Invalid login response from server.");
     }
 
-    // Convert to model
     final user = UserModel.fromApi(data);
 
-    // Save user to SharedPreferences
+    // Save to SQLite for offline login
+    await saveOperatorToDB(data, password);
+
+    // Save to shared prefs
     await saveUser(user);
 
     return user;
+
+  } on SocketException catch (_) {
+    // ----------------------------------------------------
+    // OFFLINE LOGIN FALLBACK
+    // ----------------------------------------------------
+    final local = await getOperatorFromDB(username);
+
+    if (local == null) {
+      throw AuthRepositoryException(
+        "No offline data found for this user.",
+      );
+    }
+
+    // Validate password hash
+    final hash = sha256.convert(utf8.encode(password)).toString();
+
+    if (hash != local["password_hash"]) {
+      throw AuthRepositoryException("Incorrect password (offline mode).");
+    }
+
+    // UserModel.fromJson() should handle DB model properly
+    return UserModel.fromJson(local);
+
   } catch (e) {
+    // Any other error
     throw AuthRepositoryException("Login failed. Please try again.");
   }
 }
