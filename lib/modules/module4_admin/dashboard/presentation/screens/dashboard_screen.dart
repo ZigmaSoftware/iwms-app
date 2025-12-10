@@ -418,10 +418,11 @@ class _DailyWasteCard extends StatelessWidget {
                     Container(
                       child: Text(
                         'Live',
-                        style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                              color: _primaryGreen,
-                              fontWeight: FontWeight.w700,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: _primaryGreen,
+                                  fontWeight: FontWeight.w700,
+                                ),
                       ),
                     ),
                   ],
@@ -745,7 +746,7 @@ class _AttendanceRow extends StatelessWidget {
           child: _Tile(
             label: "Total",
             count: totalVehicles,
-            background: const Color.fromARGB(255, 241, 255, 221),
+            background: Colors.white,
             textColor: Colors.black87,
           ),
         ),
@@ -797,7 +798,7 @@ class _Tile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 20),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: background,
         borderRadius: BorderRadius.circular(14),
@@ -830,6 +831,116 @@ class _Tile extends StatelessWidget {
     );
   }
 }
+
+// class _AttendanceRow extends StatelessWidget {
+//   const _AttendanceRow({
+//     required this.statusCounts,
+//     required this.totalVehicles,
+//   });
+
+//   final Map<_VehicleState, int> statusCounts;
+//   final int totalVehicles;
+
+//   @override
+//   Widget build(BuildContext context) {
+//     final running = statusCounts[_VehicleState.running] ?? 0;
+//     final idle = statusCounts[_VehicleState.idle] ?? 0;
+
+//     final present = running + idle;
+//     final onLeave = statusCounts[_VehicleState.parked] ?? 0;
+//     final absent = statusCounts[_VehicleState.nodata] ?? 0;
+
+//     return Row(
+//       children: [
+//         Expanded(
+//           child: _Tile(
+//             label: "Total",
+//             count: totalVehicles,
+//             background: const Color.fromARGB(255, 241, 255, 221),
+//             textColor: Colors.black87,
+//           ),
+//         ),
+//         const SizedBox(width: 8),
+//         Expanded(
+//           child: _Tile(
+//             label: "Present",
+//             count: present,
+//             background: const Color(0xFFE8F5E9), // light green
+//             textColor: _primaryGreen,
+//           ),
+//         ),
+//         const SizedBox(width: 8),
+//         Expanded(
+//           child: _Tile(
+//             label: "Absent",
+//             count: absent,
+//             background: const Color(0xFFFFEBEE), // light red
+//             textColor: const Color(0xFFB71C1C),
+//           ),
+//         ),
+//         const SizedBox(width: 8),
+//         Expanded(
+//           child: _Tile(
+//             label: "Leave",
+//             count: onLeave,
+//             background: const Color(0xFFFFF9C4), // light yellow
+//             textColor: const Color(0xFFF57F17),
+//           ),
+//         ),
+//       ],
+//     );
+//   }
+// }
+
+// class _Tile extends StatelessWidget {
+//   const _Tile({
+//     required this.label,
+//     required this.count,
+//     required this.background,
+//     required this.textColor,
+//   });
+
+//   final String label;
+//   final int count;
+//   final Color background;
+//   final Color textColor;
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return Container(
+//       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 20),
+//       decoration: BoxDecoration(
+//         color: background,
+//         borderRadius: BorderRadius.circular(14),
+//       ),
+//       child: FittedBox(
+//         fit: BoxFit.scaleDown,
+//         alignment: Alignment.centerLeft,
+//         child: Column(
+//           crossAxisAlignment: CrossAxisAlignment.start,
+//           children: [
+//             Text(
+//               "$count",
+//               style: TextStyle(
+//                 fontSize: 22,
+//                 fontWeight: FontWeight.w800,
+//                 color: textColor,
+//               ),
+//             ),
+//             const SizedBox(height: 3),
+//             Text(
+//               label,
+//               style: const TextStyle(
+//                 fontSize: 12,
+//                 color: Colors.black87,
+//               ),
+//             ),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+// }
 
 class _ActivityAndVehicleRow extends StatelessWidget {
   const _ActivityAndVehicleRow({
