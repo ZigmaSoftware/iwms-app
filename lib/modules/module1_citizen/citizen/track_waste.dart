@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/controllers/track_controller.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/widgets/track_tab.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/services/track_service.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 class TrackWasteScreen extends StatefulWidget {
   const TrackWasteScreen({super.key});
@@ -30,11 +31,12 @@ class _TrackWasteScreenState extends State<TrackWasteScreen> {
     final theme = Theme.of(context);
     final highlightColor = theme.colorScheme.primary;
     final textColor = theme.colorScheme.onSurface;
+    final localizations = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Track My Waste',
+          localizations.trackWaste,
           style: theme.textTheme.titleLarge?.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.w600,
@@ -56,7 +58,7 @@ class _TrackWasteScreenState extends State<TrackWasteScreen> {
                 initialDate: _controller.selectedDate,
                 firstDate: DateTime(now.year - 1),
                 lastDate: DateTime(now.year + 1),
-                helpText: 'Choose a date to view collection data',
+                helpText: localizations.trackDatePickerHelp,
                 builder: (context, child) {
                   return Theme(
                     data: theme.copyWith(

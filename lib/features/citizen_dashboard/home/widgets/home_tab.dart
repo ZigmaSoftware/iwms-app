@@ -12,6 +12,7 @@ import 'package:iwms_citizen_app/features/citizen_dashboard/track/models/waste_s
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/widgets/radial_chart.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/notifications/controllers/notification_controller.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/notifications/widgets/notification_tile.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 class HomeTab extends StatelessWidget {
   const HomeTab({
@@ -51,6 +52,7 @@ class HomeTab extends StatelessWidget {
     final responsive = MediaQuery.of(context).size;
     final double headerHeight = (responsive.height * 0.32).clamp(260, 360);
     final double bannerHeight = (headerHeight * 0.55).clamp(140, 190);
+    final localizations = AppLocalizations.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -63,6 +65,7 @@ class HomeTab extends StatelessWidget {
           textColor: textColor,
           secondaryTextColor: secondaryTextColor,
           notificationController: notificationController,
+          localizations: localizations,
         ),
         const SizedBox(height: DashboardThemeTokens.spacing12),
         AnimatedBuilder(
@@ -86,8 +89,11 @@ class HomeTab extends StatelessWidget {
         AnimatedBuilder(
           animation: trackController,
           builder: (context, _) {
-            final stats =
-                _Stats.fromSummary(trackController, trackController.currentSummary);
+              final stats = _Stats.fromSummary(
+                trackController,
+                trackController.currentSummary,
+                localizations,
+              );
             return Padding(
               padding: const EdgeInsets.symmetric(
                 horizontal: DashboardThemeTokens.spacing16,
@@ -122,7 +128,7 @@ class HomeTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Quick Actions',
+                  localizations.quickActions,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: textColor,
@@ -153,6 +159,7 @@ class _Header extends StatelessWidget {
     required this.textColor,
     required this.secondaryTextColor,
     required this.notificationController,
+    required this.localizations,
   });
 
   final String userName;
@@ -162,6 +169,7 @@ class _Header extends StatelessWidget {
   final Color textColor;
   final Color secondaryTextColor;
   final NotificationController notificationController;
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context) {
@@ -198,14 +206,14 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(width: DashboardThemeTokens.spacing12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Home',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: textColor,
-                    fontSize: 20,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    localizations.homeTitle,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: textColor,
+                      fontSize: 20,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.4,
                   ),
@@ -230,6 +238,7 @@ class _Header extends StatelessWidget {
                 isDarkMode ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.05),
             borderColor:
                 isDarkMode ? Colors.white.withValues(alpha: 0.25) : Colors.black.withValues(alpha: 0.1),
+            localizations: localizations,
           ),
         ],
       ),
@@ -252,13 +261,15 @@ class _Stats {
   factory _Stats.fromSummary(
     TrackController controller,
     WasteSummary? summary,
+    AppLocalizations localizations,
   ) {
     final weightFormatter = controller.weightFormatter;
     final data = summary ?? WasteSummary.zero(controller.selectedDate);
     final hasData = data.totalNetWeight > 0;
+    final String periodLabel = controller.periodLabel(controller.selectedPeriod);
     final String primaryLabel = hasData
-        ? '${controller.periodLabel(controller.selectedPeriod)} waste collected'
-        : 'No waste recorded yet for this period';
+        ? localizations.wasteCollectedLabel(periodLabel)
+        : localizations.noWasteRecorded;
 
     return _Stats(
       primaryValue: data.totalNetWeight,
@@ -404,11 +415,13 @@ class _NotificationBell extends StatelessWidget {
     required this.iconColor,
     required this.backgroundColor,
     required this.borderColor,
+    required this.localizations,
   });
   final NotificationController controller;
   final Color iconColor;
   final Color backgroundColor;
   final Color borderColor;
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context) {
@@ -435,7 +448,7 @@ class _NotificationBell extends StatelessWidget {
                       : Icons.notifications_none_rounded,
                 ),
                 color: iconColor,
-                tooltip: 'Notifications',
+                tooltip: localizations.notificationsLabel,
                 padding: EdgeInsets.zero,
                 constraints: BoxConstraints.tightFor(
                   width: bellButtonSize,
@@ -473,30 +486,29 @@ class _NotificationBell extends StatelessWidget {
       await showModalBottomSheet<void>(
         context: context,
         showDragHandle: true,
-        builder: (sheetContext) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.notifications_none_rounded,
-                color: theme.colorScheme.primary,
-                size: 48,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.notifications_none_rounded,
+              color: theme.colorScheme.primary,
+              size: 48,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              localizations.notificationsCaughtUp,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
-              const SizedBox(height: 16),
-              Text(
-                'You are all caught up!',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'We will alert you as soon as a collection vehicle enters '
-                'your geofence.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              localizations.notificationsWaiting,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -527,7 +539,7 @@ class _NotificationBell extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Notifications',
+                  localizations.notificationsLabel,
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),

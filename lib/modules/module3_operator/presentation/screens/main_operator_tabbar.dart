@@ -17,6 +17,7 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/a
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'package:go_router/go_router.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 enum OperatorNavTab { home, overview, attendance, profile }
 
@@ -86,6 +87,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         bloc.state is AuthStateAuthenticated
             ? (bloc.state as AuthStateAuthenticated).userName
             : null);
+    final localizations = AppLocalizations.of(context);
     final session = (_sessionDetails ??
             OperatorSessionDetails(
               displayName: nameFromState ?? "Operator",
@@ -124,22 +126,22 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
             showUnselectedLabels: true,
             selectedFontSize: 11,
             unselectedFontSize: 11,
-            items: const [
+            items: [
               BottomNavigationBarItem(
-                icon: Icon(Icons.home_rounded),
-                label: "Home",
+                icon: const Icon(Icons.home_rounded),
+                label: localizations.operatorNavHome,
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.dashboard_customize_outlined),
-                label: "Overview",
+                icon: const Icon(Icons.dashboard_customize_outlined),
+                label: localizations.operatorNavOverview,
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.fact_check_outlined),
-                label: "Attendance",
+                icon: const Icon(Icons.fact_check_outlined),
+                label: localizations.operatorNavAttendance,
               ),
               BottomNavigationBarItem(
-                icon: Icon(Icons.person_outline_rounded),
-                label: "Profile",
+                icon: const Icon(Icons.person_outline_rounded),
+                label: localizations.operatorNavProfile,
               ),
             ],
           ),

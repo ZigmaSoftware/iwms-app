@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../models/citizen_alert.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 class NotificationTile extends StatelessWidget {
   const NotificationTile({
@@ -22,6 +23,7 @@ class NotificationTile extends StatelessWidget {
     final background = isDark
         ? baseSurface.withValues(alpha: 0.28)
         : baseSurface.withValues(alpha: 0.7);
+    final localizations = AppLocalizations.of(context);
 
     return Container(
       decoration: BoxDecoration(
@@ -55,7 +57,7 @@ class NotificationTile extends StatelessWidget {
             child: FilledButton.tonalIcon(
               onPressed: onTrack,
               icon: const Icon(Icons.route_outlined),
-              label: const Text('Track'),
+              label: Text(localizations.trackButtonLabel),
             ),
           ),
         ],

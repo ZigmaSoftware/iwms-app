@@ -4,6 +4,7 @@ import 'package:geolocator/geolocator.dart';
 import 'package:go_router/go_router.dart';
 import 'package:motion_tab_bar/MotionTabBar.dart';
 import 'package:permission_handler/permission_handler.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 
 import 'attendancehistory.dart';
@@ -74,80 +75,66 @@ class _HomePage1State extends State<HomePage1> {
     context.push("/login");
   }
 
-  /// Convert index → label for MotionTabBar
-  String _tabLabel(int index) {
-    switch (index) {
-      case 0:
-        return "Home";
-      case 1:
-        return "Mark Attendance";
-      case 2:
-        return "Summary";
-      default:
-        return "Mark Attendance";
-    }
-  }
-
-  /// Convert label → index
-  int _indexFromLabel(String label) {
-    switch (label) {
-      case "Home":
-        return 0;
-      case "Mark Attendance":
-        return 1;
-      case "Summary":
-        return 2;
-      default:
-        return 1;
-    }
-  }
-
   @override
   Widget build(BuildContext context) {
+    final localizations = AppLocalizations.of(context);
+    final tabLabels = [
+      localizations.attendanceTabHome,
+      localizations.attendanceTabMarkAttendance,
+      localizations.attendanceTabSummary,
+    ];
     return Scaffold(
       body: _pages[_activeTab],
 
       bottomNavigationBar: SafeArea(
-        child: MotionTabBar(
-          labels: const ["Home", "Mark Attendance", "Summary"],
-          icons: const [
-            Icons.home_outlined,
-            Icons.face_2_outlined,
-            Icons.summarize,
-          ],
+        child: KeyedSubtree(
+          key: ValueKey(tabLabels.join('-')),
+          child: MotionTabBar(
+            labels: tabLabels,
+            icons: const [
+              Icons.home_outlined,
+              Icons.face_2_outlined,
+              Icons.summarize,
+            ],
 
-          initialSelectedTab: _tabLabel(_activeTab),
+            initialSelectedTab: tabLabels[_activeTab],
 
-          tabBarColor: Colors.white,
-          tabSelectedColor: const Color(0xFF1B5E20), // Strong operator green
-          tabIconColor: Colors.black54,
+            tabBarColor: Colors.white,
+            tabSelectedColor: const Color(0xFF1B5E20), // Strong operator green
+            tabIconColor: Colors.black54,
 
-          tabBarHeight: 64,
-          tabSize: 52,
-          tabIconSize: 22,
-          tabIconSelectedSize: 26,
+            tabBarHeight: 64,
+            tabSize: 52,
+            tabIconSize: 22,
+            tabIconSelectedSize: 26,
 
-          onTabItemSelected: (dynamic value) {
-            final index = value is String
-                ? _indexFromLabel(value)
-                : value is int
-                    ? value
-                    : 1;
+            onTabItemSelected: (dynamic value) {
+              int? index;
+              if (value is int) {
+                index = value;
+              } else if (value is String) {
+                index = tabLabels.indexOf(value);
+              }
+              if (index == null || index < 0 || index >= tabLabels.length) {
+                return;
+              }
 
-            if (index == 0) {
-              context.go("/operator-home");
-            } else if (index == 2) {
-              // Dedicated navigation to history/summary
-              Navigator.of(context).push(
-                MaterialPageRoute(
-                  builder: (_) => AttendanceHistory(empId: widget.empid),
-                ),
-              );
-              setState(() => _activeTab = 2);
-            } else {
-              setState(() => _activeTab = index);
-            }
-          },
+              final resolvedIndex = index;
+              if (resolvedIndex == 0) {
+                context.go("/operator-home");
+              } else if (resolvedIndex == 2) {
+                // Dedicated navigation to history/summary
+                Navigator.of(context).push(
+                  MaterialPageRoute(
+                    builder: (_) => AttendanceHistory(empId: widget.empid),
+                  ),
+                );
+                setState(() => _activeTab = 2);
+              } else {
+                setState(() => _activeTab = resolvedIndex);
+              }
+            },
+          ),
         ),
       ),
     );

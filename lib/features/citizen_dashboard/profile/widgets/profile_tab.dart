@@ -4,8 +4,26 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../logic/auth/auth_bloc.dart';
 import '../../../../logic/auth/auth_event.dart';
+import '../../../../logic/locale/locale_cubit.dart';
 import '../../../../logic/theme/theme_cubit.dart';
+import '../../../../localization/app_localizations.dart';
 import '../../../../router/app_router.dart';
+
+class _LanguageOption {
+  const _LanguageOption({
+    required this.code,
+    required this.label,
+  });
+
+  final String code;
+  final String label;
+}
+
+const List<_LanguageOption> _languageSwitchOptions = [
+  _LanguageOption(code: 'en', label: 'English'),
+  _LanguageOption(code: 'hi', label: 'Hindi'),
+  _LanguageOption(code: 'ta', label: 'Tamil'),
+];
 
 class ProfileTab extends StatelessWidget {
   const ProfileTab({
@@ -29,6 +47,7 @@ class ProfileTab extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final authBloc = context.read<AuthBloc>();
+    final localizations = AppLocalizations.of(context);
 
     return Column(
       children: [
@@ -60,7 +79,7 @@ class ProfileTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Profile',
+                  localizations.profileTitle,
                   style: theme.textTheme.headlineSmall?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w800,
@@ -68,7 +87,7 @@ class ProfileTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  'Hi, $normalizedName',
+                  localizations.greeting(normalizedName),
                   style: theme.textTheme.titleMedium?.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w700,
@@ -76,7 +95,7 @@ class ProfileTab extends StatelessWidget {
                 ),
                 const SizedBox(height: 4),
                 Text(
-                  'Manage your account and collection preferences.',
+                  localizations.profileSubtitle,
                   style: theme.textTheme.bodyMedium?.copyWith(
                     color: Colors.white.withValues(alpha: 0.85),
                   ),
@@ -91,33 +110,39 @@ class ProfileTab extends StatelessWidget {
             children: [
               _ProfileTile(
                 icon: Icons.description_outlined,
-                label: 'Collection Details',
+                label: localizations.collectionDetails,
                 onTap: () => context.push(AppRoutePaths.citizenDriverDetails),
                 textColor: textColor,
                 highlightColor: highlightColor,
               ),
               _ProfileTile(
                 icon: Icons.history,
-                label: 'Collection History & Weighment',
+                label: localizations.collectionHistory,
                 onTap: () => context.push(AppRoutePaths.citizenHistory),
                 textColor: textColor,
                 highlightColor: highlightColor,
               ),
               _ProfileTile(
                 icon: Icons.location_on_outlined,
-                label: 'Track My Waste',
+                label: localizations.trackWaste,
                 onTap: () => context.push(AppRoutePaths.citizenMap),
                 textColor: textColor,
                 highlightColor: highlightColor,
               ),
               _ProfileTile(
                 icon: Icons.feedback_outlined,
-                label: 'Raise Grievance (Help Desk)',
+                label: localizations.raiseGrievance,
                 onTap: () => context.push(AppRoutePaths.citizenGrievanceChat),
                 textColor: textColor,
                 highlightColor: highlightColor,
               ),
               _themeToggleTile(context, highlightColor, secondaryTextColor),
+              const SizedBox(height: 12),
+              _LanguageSelectionCard(
+                highlightColor: highlightColor,
+                textColor: textColor,
+                secondaryTextColor: secondaryTextColor,
+              ),
               const SizedBox(height: 12),
               Card(
                 elevation: theme.brightness == Brightness.dark ? 0 : 2,
@@ -127,7 +152,7 @@ class ProfileTab extends StatelessWidget {
                 child: ListTile(
                   leading: const Icon(Icons.logout, color: Colors.red),
                   title: Text(
-                    'Logout',
+                    localizations.logout,
                     style: theme.textTheme.bodyMedium?.copyWith(
                       color: Colors.red,
                       fontWeight: FontWeight.w600,
@@ -149,6 +174,7 @@ class ProfileTab extends StatelessWidget {
     Color secondaryText,
   ) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     final bool isDarkMode = theme.brightness == Brightness.dark;
 
     return Card(
@@ -160,14 +186,14 @@ class ProfileTab extends StatelessWidget {
         onChanged: (_) => context.read<ThemeCubit>().toggleTheme(),
         secondary: Icon(Icons.dark_mode_outlined, color: highlightColor),
         title: Text(
-          'Dark Mode',
+          localizations.darkMode,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.textTheme.bodyMedium?.color,
             fontWeight: FontWeight.w600,
           ),
         ),
         subtitle: Text(
-          'Switch between light and dark experiences',
+          localizations.darkModeSubtitle,
           style: theme.textTheme.bodySmall?.copyWith(
             color: secondaryText,
           ),
@@ -179,6 +205,96 @@ class ProfileTab extends StatelessWidget {
           (states) => states.contains(WidgetState.selected)
               ? highlightColor.withValues(alpha: 0.5)
               : highlightColor.withValues(alpha: 0.2),
+        ),
+      ),
+    );
+  }
+}
+
+class _LanguageSelectionCard extends StatelessWidget {
+  const _LanguageSelectionCard({
+    required this.highlightColor,
+    required this.textColor,
+    required this.secondaryTextColor,
+  });
+
+  final Color highlightColor;
+  final Color textColor;
+  final Color secondaryTextColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
+    final bool isDarkMode = theme.brightness == Brightness.dark;
+
+    return Card(
+      margin: const EdgeInsets.symmetric(vertical: 6),
+      elevation: isDarkMode ? 0 : 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        leading: Icon(Icons.language, color: highlightColor),
+        title: Text(
+          localizations.changeLanguage,
+          style: theme.textTheme.bodyMedium?.copyWith(
+            color: textColor,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        subtitle: Text(
+          localizations.changeLanguageSubtitle,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: secondaryTextColor,
+          ),
+        ),
+        trailing: BlocBuilder<LocaleCubit, Locale>(
+          builder: (context, locale) {
+            return DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                value: locale.languageCode,
+                dropdownColor: theme.cardColor,
+                items: _languageSwitchOptions
+                    .map(
+                      (option) => DropdownMenuItem<String>(
+                        value: option.code,
+                        child: Text(
+                          option.label,
+                          style: theme.textTheme.bodyMedium?.copyWith(
+                            color: textColor,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    )
+                    .toList(),
+                onChanged: (code) async {
+                  if (code == null || code == locale.languageCode) return;
+                  final selectedOption = _languageSwitchOptions.firstWhere(
+                    (option) => option.code == code,
+                    orElse: () => _languageSwitchOptions.first,
+                  );
+                  await context
+                      .read<LocaleCubit>()
+                      .setLocale(Locale(selectedOption.code));
+                  final messenger = ScaffoldMessenger.of(context);
+                  messenger
+                    ..hideCurrentSnackBar()
+                    ..showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          localizations.languageSaved(selectedOption.label),
+                        ),
+                        duration: const Duration(seconds: 2),
+                      ),
+                    );
+                },
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: textColor,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            );
+          },
         ),
       ),
     );

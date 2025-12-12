@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/locale/locale_cubit.dart';
 import 'package:iwms_citizen_app/logic/theme/theme_cubit.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'package:iwms_citizen_app/router/go_router_refresh_stream.dart';
@@ -42,16 +45,29 @@ class MyApp extends StatelessWidget {
       providers: [
         BlocProvider.value(value: authBloc),
         BlocProvider<ThemeCubit>(create: (_) => ThemeCubit()),
+        BlocProvider<LocaleCubit>(create: (_) => LocaleCubit()),
       ],
       child: BlocBuilder<ThemeCubit, ThemeMode>(
         builder: (context, themeMode) {
-          return MaterialApp.router(
-            debugShowCheckedModeBanner: false,
-            title: 'IWMS',
-            theme: AppTheme.lightTheme,
-            darkTheme: AppTheme.darkTheme,
-            themeMode: themeMode,
-            routerConfig: appRouter,
+          return BlocBuilder<LocaleCubit, Locale>(
+            builder: (context, locale) {
+              return MaterialApp.router(
+                debugShowCheckedModeBanner: false,
+                title: 'IWMS',
+                theme: AppTheme.lightTheme,
+                darkTheme: AppTheme.darkTheme,
+                themeMode: themeMode,
+                routerConfig: appRouter,
+                locale: locale,
+                supportedLocales: AppLocalizations.supportedLocales,
+                localizationsDelegates: const [
+                  AppLocalizations.delegate,
+                  GlobalMaterialLocalizations.delegate,
+                  GlobalWidgetsLocalizations.delegate,
+                  GlobalCupertinoLocalizations.delegate,
+                ],
+              );
+            },
           );
         },
       ),

@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 import '../../../core/di.dart';
 import '../../../core/geofence_config.dart';
@@ -346,18 +347,21 @@ class _CitizenAllotedVehicleMapScreenState
               // ---------------------------------------------------------------
 
               final size = MediaQuery.of(context).size;
+              final localizations = AppLocalizations.of(context);
               final headerHeight = size.height * 0.15;
 
               final headline = hasAssigned
-                  ? 'Your collector is en route'
-                  : 'Awaiting assigned vehicle';
+                  ? localizations.mapCollectorEnRoute
+                  : localizations.mapAwaitingAssignedVehicle;
 
               final statusPrimary = hasAssigned
-                  ? (assignedVehicle.lastUpdated ?? 'Live telemetry')
-                  : 'No location yet';
+                  ? (assignedVehicle.lastUpdated ?? localizations.mapLiveTelemetry)
+                  : localizations.mapNoLocationYet;
 
-              final statusSecondary =
-                  '${assignedVehicles.length} allocated • ${allVehicles.length} total';
+              final statusSecondary = localizations.mapVehicleCounts(
+                assignedVehicles.length,
+                allVehicles.length,
+              );
 
               // ---------------------------------------------------------------
               // MAIN UI LAYOUT
@@ -370,7 +374,7 @@ class _CitizenAllotedVehicleMapScreenState
                     height: headerHeight,
                     width: double.infinity,
                     child: TrackingHeroHeader(
-                      contextLabel: 'Assigned vehicle',
+                      contextLabel: localizations.mapAssignedVehicle,
                       headline: headline,
                       statusPrimary: statusPrimary,
                       statusSecondary: statusSecondary,
@@ -414,6 +418,7 @@ class _CitizenAllotedVehicleMapScreenState
                               _buildMapStyleSelector(
                                 state,
                                 hasAssigned,
+                                localizations,
                               ),
 
                               _buildZoomControls(
@@ -438,7 +443,9 @@ class _CitizenAllotedVehicleMapScreenState
                                       horizontal: 28,
                                     ),
                                     child: Text(
-                                      'Waiting for your allocated collector to enter ${GammaGeofenceConfig.name}.',
+                                      localizations.mapWaitingForCollector(
+                                        GammaGeofenceConfig.name,
+                                      ),
                                       textAlign: TextAlign.center,
                                       style: Theme.of(context)
                                           .textTheme
@@ -605,7 +612,11 @@ class _CitizenAllotedVehicleMapScreenState
   // MAP STYLE SELECTOR
   // ---------------------------------------------------------------------------
 
-  Widget _buildMapStyleSelector(VehicleState state, bool hasVehicle) {
+  Widget _buildMapStyleSelector(
+    VehicleState state,
+    bool hasVehicle,
+    AppLocalizations localizations,
+  ) {
     final theme = Theme.of(context);
     final double safeBottom = MediaQuery.of(context).padding.bottom;
     final double bottomOffset = 16.0 + safeBottom;
@@ -637,7 +648,7 @@ class _CitizenAllotedVehicleMapScreenState
               final isSelected = _selectedTheme == option;
 
               return ChoiceChip(
-                label: Text(config.label),
+                label: Text(_mapThemeLabel(option, localizations)),
                 selected: isSelected,
                 onSelected: (selected) {
                   if (selected) {
@@ -662,6 +673,18 @@ class _CitizenAllotedVehicleMapScreenState
         ),
       ),
     );
+  }
+
+  String _mapThemeLabel(
+    _MapThemeOption option,
+    AppLocalizations localizations,
+  ) {
+    switch (option) {
+      case _MapThemeOption.standard:
+        return localizations.mapThemeStandard;
+      case _MapThemeOption.light:
+        return localizations.mapThemeLight;
+    }
   }
 
   // ---------------------------------------------------------------------------

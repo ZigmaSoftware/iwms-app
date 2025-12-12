@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
+
 import '../../common/theme_tokens.dart';
 import '../controllers/track_controller.dart';
 import '../models/waste_period.dart';
@@ -31,6 +33,7 @@ class _TrackTabState extends State<TrackTab> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     final screenWidth = MediaQuery.sizeOf(context).width;
 
     return AnimatedBuilder(
@@ -52,12 +55,17 @@ class _TrackTabState extends State<TrackTab> {
               DashboardThemeTokens.spacing32,
             ),
             children: [
-              _buildTrackHeader(theme),
+              _buildTrackHeader(theme, localizations),
               const SizedBox(height: 16),
-              _buildTrackSummarySection(theme, summary, periodLabel),
+              _buildTrackSummarySection(
+                theme,
+                summary,
+                periodLabel,
+                localizations,
+              ),
               const SizedBox(height: 20),
               Text(
-                'Showing $periodLabel data',
+                localizations.trackShowingPeriod(periodLabel),
                 style: theme.textTheme.bodySmall?.copyWith(
                   color: theme.colorScheme.onSurfaceVariant,
                   fontSize: screenWidth * 0.032,
@@ -70,7 +78,7 @@ class _TrackTabState extends State<TrackTab> {
     );
   }
 
-  Widget _buildTrackHeader(ThemeData theme) {
+  Widget _buildTrackHeader(ThemeData theme, AppLocalizations localizations) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final titleStyle = theme.textTheme.headlineSmall?.copyWith(
       fontWeight: FontWeight.w900,
@@ -81,12 +89,12 @@ class _TrackTabState extends State<TrackTab> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Track Your Waste',
+          localizations.trackHeaderTitle,
           style: titleStyle,
         ),
         const SizedBox(height: 8),
         Text(
-          'Live weighment figures from operator uploads. Data resets monthly.',
+          localizations.trackLiveDescription,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             fontSize: screenWidth * 0.035,
@@ -94,7 +102,7 @@ class _TrackTabState extends State<TrackTab> {
         ),
         const SizedBox(height: 12),
         Text(
-          'Choose a period to view wet, dry and mixed totals.',
+          localizations.trackChoosePeriod,
           style: theme.textTheme.bodySmall?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             fontWeight: FontWeight.w700,
@@ -120,7 +128,7 @@ class _TrackTabState extends State<TrackTab> {
                         .map(
                           (p) => DropdownMenuItem(
                             value: p,
-                            child: Text(widget.controller.periodLabel(p)),
+                            child: Text(_periodLabel(p, localizations)),
                           ),
                         )
                         .toList(),
@@ -138,7 +146,7 @@ class _TrackTabState extends State<TrackTab> {
             const SizedBox(width: 12),
             _CalendarChip(
               highlightColor: widget.highlightColor,
-              label: _calendarLabel(),
+              label: _calendarLabel(localizations),
               enabled: widget.controller.selectedPeriod != WastePeriod.total,
               onTap: widget.onPickDate,
             ),
@@ -148,7 +156,7 @@ class _TrackTabState extends State<TrackTab> {
     );
   }
 
-  String _calendarLabel() {
+  String _calendarLabel(AppLocalizations localizations) {
     switch (widget.controller.selectedPeriod) {
       case WastePeriod.daily:
         return widget.controller.shortDisplayFormat
@@ -157,7 +165,7 @@ class _TrackTabState extends State<TrackTab> {
         return widget.controller.monthFormat
             .format(widget.controller.selectedDate);
       case WastePeriod.total:
-        return 'All time';
+        return localizations.allTime;
     }
   }
 
@@ -165,10 +173,11 @@ class _TrackTabState extends State<TrackTab> {
     ThemeData theme,
     WasteSummary summary,
     String periodLabel,
+    AppLocalizations localizations,
   ) {
     if (widget.controller.loading) {
       return _buildTrackStatusCard(
-        message: 'Pulling live collection figures...',
+        message: localizations.trackLoading,
         accentColor: widget.highlightColor,
         showLoading: true,
       );
@@ -178,7 +187,7 @@ class _TrackTabState extends State<TrackTab> {
       return _buildTrackStatusCard(
         message: widget.controller.error!,
         accentColor: widget.highlightColor,
-        actionLabel: 'Retry now',
+        actionLabel: localizations.trackRetry,
         onAction: () => widget.controller.refresh(force: true),
       );
     }
@@ -192,21 +201,21 @@ class _TrackTabState extends State<TrackTab> {
     })>[
       (
         asset: 'assets/cards/wetwaste.png',
-        label: 'Wet Waste',
+        label: localizations.wetWaste,
         weight: summary.wetWeight,
         color: const Color(0xFF1976D2),
         metric: WasteMetric.wet
       ),
       (
         asset: 'assets/cards/drywaste.png',
-        label: 'Dry Waste',
+        label: localizations.dryWaste,
         weight: summary.dryWeight,
         color: const Color(0xFF2E7D32),
         metric: WasteMetric.dry
       ),
       (
         asset: 'assets/cards/mixedwaste.png',
-        label: 'Mixed Waste',
+        label: localizations.mixedWaste,
         weight: summary.mixWeight,
         color: const Color(0xFFF57F17),
         metric: WasteMetric.mixed
@@ -221,17 +230,16 @@ class _TrackTabState extends State<TrackTab> {
         if (!hasData)
           Padding(
             padding: const EdgeInsets.only(bottom: 12),
-            child: _buildTrackStatusCard(
-              message:
-                  'No waste is recorded for this period yet. We will show new weights as soon as operators upload them.',
-              accentColor: widget.highlightColor,
-            ),
+        child: _buildTrackStatusCard(
+          message: localizations.trackNoData,
+          accentColor: widget.highlightColor,
+        ),
           ),
         LayoutBuilder(
           builder: (context, constraints) {
             final available = constraints.maxWidth;
             final itemWidth = available > 0 ? (available - 24) / 3 : available;
-            return Wrap(
+        return Wrap(
               spacing: 12,
               runSpacing: 12,
               children: cards
@@ -254,7 +262,7 @@ class _TrackTabState extends State<TrackTab> {
           },
         ),
         const SizedBox(height: 16),
-        _buildMetricDetailCard(theme, summary),
+        _buildMetricDetailCard(theme, summary, localizations),
         const SizedBox(height: 16),
         _buildTrendSection(theme),
       ],
@@ -264,6 +272,7 @@ class _TrackTabState extends State<TrackTab> {
   Widget _buildMetricDetailCard(
     ThemeData theme,
     WasteSummary summary,
+    AppLocalizations localizations,
   ) {
     final metric = _activeMetric;
     final double weight = _metricWeight(summary, metric);
@@ -288,7 +297,7 @@ class _TrackTabState extends State<TrackTab> {
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             child: Text(
-              _metricHeader(metric),
+              _metricHeader(metric, localizations),
               key: ValueKey<String>('metric-header-${metric.name}'),
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: widget.textColor.withValues(alpha: 0.8),
@@ -313,8 +322,8 @@ class _TrackTabState extends State<TrackTab> {
           const SizedBox(height: DashboardThemeTokens.spacing8),
           Text(
             metric == WasteMetric.total
-                ? 'Tap a card above to view detailed breakdown.'
-                : 'Tap again to switch back to total waste.',
+                ? localizations.metricTapCard
+                : localizations.metricTapBack,
             style: theme.textTheme.bodySmall?.copyWith(
               color: widget.textColor.withValues(alpha: 0.6),
             ),
@@ -422,27 +431,27 @@ class _TrackTabState extends State<TrackTab> {
     }
   }
 
-  String _metricHeader(WasteMetric metric) {
+  String _metricHeader(WasteMetric metric, AppLocalizations localizations) {
     switch (metric) {
       case WasteMetric.wet:
-        return 'Wet waste collected';
+        return localizations.metricWet;
       case WasteMetric.dry:
-        return 'Dry waste collected';
+        return localizations.metricDry;
       case WasteMetric.mixed:
-        return 'Mixed waste collected';
+        return localizations.metricMixed;
       case WasteMetric.total:
-        return 'Total waste collected';
+        return localizations.metricTotal;
     }
   }
 
-  String _labelForPeriod(WastePeriod period) {
+  String _periodLabel(WastePeriod period, AppLocalizations localizations) {
     switch (period) {
       case WastePeriod.daily:
-        return 'Daily';
+        return localizations.periodDaily;
       case WastePeriod.monthly:
-        return 'Monthly';
+        return localizations.periodMonthly;
       case WastePeriod.total:
-        return 'Total';
+        return localizations.periodTotal;
     }
   }
 
@@ -478,6 +487,7 @@ class _CalendarChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -513,7 +523,7 @@ class _CalendarChip extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Calendar',
+                    localizations.calendarLabel,
                     style: theme.textTheme.bodySmall?.copyWith(
                       color:
                           enabled ? highlightColor : theme.disabledColor,

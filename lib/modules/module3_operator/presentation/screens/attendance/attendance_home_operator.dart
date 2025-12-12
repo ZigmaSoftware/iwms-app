@@ -1,20 +1,883 @@
+// import 'dart:async';
+// import 'dart:convert';
+// import 'dart:io';
+// import 'package:auto_size_text/auto_size_text.dart';
+// import 'package:flutter/material.dart';
+// import 'package:intl/intl.dart';
+// import 'package:connectivity_plus/connectivity_plus.dart';
+// import 'package:animated_neumorphic/animated_neumorphic.dart';
+// import 'package:provider/provider.dart';
+// import 'package:geolocator/geolocator.dart'; // Import geolocator package
+// import 'package:http/http.dart' as http;
+// import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
+// import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+// import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
+// // import 'package:zigma_payroll/attendance/userimage.dart';
+
+// // import '../provider/username.dart';
+// import 'camerapage.dart';
+
+// const Color _operatorPrimary = AppColors.primary;
+// const Color _operatorAccent = AppColors.primaryVariant;
+
+// class AttendancePage extends StatefulWidget {
+//   const AttendancePage({
+//     super.key,
+//     this.operatorName = '',
+//     this.operatorCode = '',
+//   });
+
+//   final String operatorName;
+//   final String operatorCode;
+
+//   @override
+//   State<AttendancePage> createState() => _AttendancePageState();
+// }
+
+// class _AttendancePageState extends State<AttendancePage> {
+//   final bool _isElevated = false;
+//   bool _punchPressed = false;
+
+//   String greetingMessage = "";
+//   late String buttonText = "Mark for Today";
+//   final bool _isActive = false;
+//   String _latitude = '--';
+//   String _longitude = '--';
+//   DateTime? _checkInTime;
+//   DateTime? _checkOutTime;
+//   late String _time;
+//   late String _date;
+//   Timer? _timer; // Declare a Timer variable
+//   Timer? _clockTimer;
+//   StreamSubscription<ConnectivityResult>? _connectivitySub;
+//   bool _isOnline = true;
+
+//   Duration _totalWorkingHours = Duration.zero;
+//   String? imageName;
+//   bool isLoading = true;
+//   List<Map<String, dynamic>> _pendingSync = [];
+
+//   // Helper method to format duration
+//   String _formatDuration(Duration duration) {
+//     int hours = duration.inHours;
+//     int minutes = duration.inMinutes % 60;
+//     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
+//   }
+
+//   void updateGreeting() {
+//     setState(() {
+//       greetingMessage = getDynamicGreeting();
+//     });
+//   }
+//   // Future<void> fetchAndSetImage() async {
+//   //   try {
+//   //     final userProvider = Provider.of<UserProvider>(context, listen: false);
+//   //     String empId = userProvider.empid; // Get the empid
+//   //     print("Fetching image for empId: $empId");
+
+//   //     final fetchedImageName = await fetchImageName(empId); // Fetch the image name
+//   //     print("Fetched image name from API: $fetchedImageName");
+
+//   //     setState(() {
+//   //       imageName = fetchedImageName;
+//   //       isLoading = false;
+//   //     });
+//   //   } catch (e) {
+//   //     setState(() {
+//   //       isLoading = false;
+//   //     });
+//   //     // print("Error occurred: $e");
+//   //     // ScaffoldMessenger.of(context).showSnackBar(
+//   //     //   SnackBar(content: Text("Error fetching image: $e")),
+//   //     // );
+//   //   }
+//   // }
+//   String getDynamicGreeting() {
+//     var hour = DateTime.now().hour;
+//     var weekday = DateTime.now().weekday; // 1 = Monday, 7 = Sunday
+
+//     // Define messages for each day of the week
+//     Map<int, List<String>> dailyMessages = {
+//       1: [
+//         // Monday
+//         "Start the week strong!",
+//         "New week, new opportunities!",
+//         "Set goals and take action!"
+//       ],
+//       2: [
+//         // Tuesday
+//         "Keep up the momentum!",
+//         "Small steps lead to big success!",
+//         "Stay focused and productive!"
+//       ],
+//       3: [
+//         // Wednesday
+//         "Halfway through—keep going!",
+//         "Every challenge is an opportunity!",
+//         "Success comes with persistence!"
+//       ],
+//       4: [
+//         // Thursday
+//         "You're almost there!",
+//         "Stay determined, results are near!",
+//         "Refine your efforts, success is close!"
+//       ],
+//       5: [
+//         // Friday
+//         "Finish strong, weekend ahead!",
+//         "Keep going, success follows effort!",
+//         "Push through and celebrate progress!"
+//       ],
+//       6: [
+//         // Saturday
+//         "Relax and recharge!",
+//         "Balance is key—enjoy today!",
+//         "Learn and grow every day!"
+//       ],
+//       7: [
+//         // Sunday
+//         "Reflect and reset for success!",
+//         "Take time for yourself!",
+//         "Recharge for a productive week!"
+//       ]
+//     };
+
+//     // Get a random message from today's set
+//     String dailyMessage = (dailyMessages[weekday]!..shuffle()).first;
+
+//     // Time-based Greetings
+//     if (hour >= 5 && hour < 12) {
+//       return "Good Morning! $dailyMessage";
+//     } else if (hour >= 12 && hour < 17) {
+//       return "Good Afternoon! $dailyMessage";
+//     } else if (hour >= 17 && hour < 21) {
+//       return "Good Evening! $dailyMessage";
+//     } else {
+//       return "Good Night! $dailyMessage";
+//     }
+//   }
+
+//   @override
+//   void initState() {
+//     super.initState();
+//     _fetchLocation();
+
+//     _checkInternetInitial();
+
+//     _connectivitySub = Connectivity()
+//         .onConnectivityChanged
+//         .listen((ConnectivityResult result) async {
+//       final hasInternet = await _hasInternet();
+//       if (!mounted) return;
+//       setState(() => _isOnline = hasInternet);
+//     });
+//     _clockTimer =
+//         Timer.periodic(const Duration(seconds: 1), (Timer t) => _getTime());
+//     _updateTimeAndDate();
+//     // fetchAndSetImage();
+//     // _fetchAttendanceData();
+//     _timer = Timer.periodic(const Duration(minutes: 1), (Timer timer) {
+//       // _fetchAttendanceData();
+//     });
+//     greetingMessage = getDynamicGreeting();
+//     _pendingSync = [
+//       {
+//         "type": "Check In",
+//         "timestamp": "2025-01-20 09:15 AM",
+//         "lat": "11.0205",
+//         "long": "76.9760",
+//       },
+//       {
+//         "type": "Check Out",
+//         "timestamp": "2025-01-20 05:45 PM",
+//         "lat": "11.0210",
+//         "long": "76.9781",
+//       },
+//     ];
+//   }
+
+//   void _checkInternetInitial() async {
+//     final hasNet = await _hasInternet();
+//     if (!mounted) return;
+//     setState(() {
+//       _isOnline = hasNet;
+//     });
+//   }
+
+//   @override
+//   void dispose() {
+//     _clockTimer?.cancel();
+//     _timer?.cancel();
+//     _connectivitySub?.cancel();
+//     super.dispose();
+//   }
+
+//   Future<bool> _hasInternet() async {
+//     try {
+//       final result = await InternetAddress.lookup('one.one.one.one')
+//           .timeout(Duration(seconds: 2));
+
+//       return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
+//     } catch (_) {
+//       return false;
+//     }
+//   }
+
+//   void _updateTimeAndDate() {
+//     final now = DateTime.now();
+//     _time = DateFormat('hh:mm a').format(now); // Format time as 09:00 AM
+//     _date = DateFormat('MMMM dd, yyyy - EEEE')
+//         .format(now); // Format date as Jan 13, 2025 - Monday
+//     if (!mounted) return;
+//     setState(() {}); // Update the UI
+//   }
+
+//   void _getTime() {
+//     final DateTime now = DateTime.now();
+//     final String formattedDateTime = _formatDateTime(now);
+//     if (!mounted) return;
+//     setState(() {
+//       _time = formattedDateTime;
+//     });
+//   }
+
+//   String _formatDateTime(DateTime dateTime) {
+//     return DateFormat('hh:mm a').format(dateTime);
+//   }
+
+//   Future<void> _fetchLocation() async {
+//     bool serviceEnabled;
+//     LocationPermission permission;
+
+//     // Check if location services are enabled
+//     serviceEnabled = await Geolocator.isLocationServiceEnabled();
+//     if (!serviceEnabled) {
+//       // Location services are not enabled
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         SnackBar(content: Text("Please enable location services.")),
+//       );
+//       return;
+//     }
+
+//     // Check for location permissions
+//     permission = await Geolocator.checkPermission();
+//     if (permission == LocationPermission.denied) {
+//       permission = await Geolocator.requestPermission();
+//       if (permission == LocationPermission.denied) {
+//         // Permissions are denied
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           SnackBar(content: Text("Location permission is required.")),
+//         );
+//         return;
+//       }
+//     }
+
+//     if (permission == LocationPermission.deniedForever) {
+//       // Permissions are permanently denied
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         SnackBar(content: Text("Location permissions are permanently denied.")),
+//       );
+//       return;
+//     }
+
+//     // Get the current location
+//     Position position = await Geolocator.getCurrentPosition(
+//       desiredAccuracy: LocationAccuracy.high,
+//     );
+
+//     if (!mounted) return;
+//     setState(() {
+//       _latitude = position.latitude.toString();
+//       _longitude = position.longitude.toString();
+//     });
+//     print(_latitude);
+//   }
+
+//   Future<bool> _onWillPop() async {
+//     return (await showDialog(
+//           context: context,
+//           builder: (context) => AlertDialog(
+//             title: const Text('Are you sure?'),
+//             content: const Text('Do you want to exit the app?'),
+//             actions: <Widget>[
+//               TextButton(
+//                 onPressed: () => Navigator.of(context).pop(false),
+//                 child: const Text('No'),
+//               ),
+//               TextButton(
+//                 onPressed: () => exit(0),
+//                 child: const Text('Yes'),
+//               ),
+//             ],
+//           ),
+//         )) ??
+//         false;
+//   }
+
+//   Widget _networkStatusChip() {
+//     final bool online = _isOnline;
+
+//     return Container(
+//       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+//       decoration: BoxDecoration(
+//         color: online ? Colors.green.shade500 : Colors.red.shade600,
+//         borderRadius: BorderRadius.circular(20),
+//       ),
+//       child: Row(
+//         children: [
+//           Icon(Icons.circle, color: Colors.white, size: 10),
+//           const SizedBox(width: 6),
+//           Text(
+//             online ? "Online" : "Offline",
+//             style: const TextStyle(
+//               color: Colors.white,
+//               fontSize: 14,
+//               fontWeight: FontWeight.w600,
+//             ),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _pendingSyncTile(Map<String, dynamic> item) {
+//     return GestureDetector(
+//       onTap: () => _syncItem(item),
+//       child: Container(
+//         margin: EdgeInsets.only(bottom: 10),
+//         padding: EdgeInsets.all(12),
+//         decoration: BoxDecoration(
+//           color: Colors.orange.shade50,
+//           borderRadius: BorderRadius.circular(12),
+//           border: Border.all(color: Colors.orange.shade200),
+//         ),
+//         child: Row(
+//           mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//           children: [
+//             Column(
+//               crossAxisAlignment: CrossAxisAlignment.start,
+//               children: [
+//                 Text(item["type"],
+//                     style:
+//                         TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+//                 Text(item["timestamp"],
+//                     style: TextStyle(fontSize: 13, color: Colors.grey)),
+//               ],
+//             ),
+//             Icon(Icons.sync, color: Colors.orange),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+
+//   @override
+//   Widget build(BuildContext context) {
+//     final userName =
+//         widget.operatorName.isNotEmpty ? widget.operatorName : "Operator";
+//     final empid = widget.operatorCode;
+
+//     return SafeArea(
+//       child: Scaffold(
+//         backgroundColor: AppColors.background,
+//         body: SingleChildScrollView(
+//           physics: const BouncingScrollPhysics(),
+//           child: Column(
+//             children: [
+//               // ===========================
+//               //        HEADER CARD
+//               // ===========================
+//               Container(
+//                 width: double.infinity,
+//                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 26),
+//                 decoration: BoxDecoration(
+//                   gradient: LinearGradient(
+//                     begin: Alignment.topCenter,
+//                     end: Alignment.bottomCenter,
+//                     colors: [
+//                       _operatorPrimary,
+//                       _operatorAccent,
+//                     ],
+//                   ),
+//                   borderRadius: const BorderRadius.vertical(
+//                     bottom: Radius.circular(35),
+//                   ),
+//                 ),
+//                 child: Column(
+//                   crossAxisAlignment: CrossAxisAlignment.start,
+//                   children: [
+//                     Text(
+//                       "Attendance",
+//                       style: AppTextStyles.heading2.copyWith(
+//                         color: Colors.white,
+//                         fontSize: 22,
+//                         fontWeight: FontWeight.w800,
+//                       ),
+//                     ),
+//                     const SizedBox(height: 6),
+//                     Text(
+//                       "Manage today's presence and history",
+//                       style: AppTextStyles.bodyMedium.copyWith(
+//                         color: Colors.white70,
+//                         fontWeight: FontWeight.w600,
+//                       ),
+//                     ),
+//                   ],
+//                 ),
+//               ),
+
+//               SizedBox(height: 15),
+
+//               // ===========================
+//               //           KPI ROW
+//               // ===========================
+//               // Container(
+//               //   margin: EdgeInsets.symmetric(horizontal: 20),
+//               //   padding: EdgeInsets.all(18),
+//               //   decoration: BoxDecoration(
+//               //     color: Colors.white,
+//               //     borderRadius: BorderRadius.circular(22),
+//               //     boxShadow: [
+//               //       BoxShadow(
+//               //         blurRadius: 8,
+//               //         color: Colors.black12,
+//               //         offset: Offset(0, 3),
+//               //       )
+//               //     ],
+//               //   ),
+
+//               //   child: Row(
+//               //     mainAxisAlignment: MainAxisAlignment.spaceAround,
+//               //     children: [
+//               //       _kpiItem("20 Days", "Presence"),
+//               //       _kpiItem("3 Times", "Leaves"),
+//               //       _kpiItem("2 Times", "Permission"),
+//               //     ],
+//               //   ),
+//               // ),
+//               Container(
+//                 margin: EdgeInsets.symmetric(horizontal: 20),
+//                 padding: EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+//                 decoration: BoxDecoration(
+//                   color: Colors.white,
+//                   borderRadius: BorderRadius.circular(24),
+//                   boxShadow: [
+//                     BoxShadow(
+//                       blurRadius: 12,
+//                       spreadRadius: 2,
+//                       color: Colors.black12.withOpacity(0.07),
+//                       offset: Offset(0, 4),
+//                     )
+//                   ],
+//                 ),
+//                 child: Row(
+//                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//                     children: [
+//                       _kpiItem(Icons.calendar_today, "20", "Presence"),
+//                       _kpiItem(Icons.timer_off_rounded, "3", "Leaves"),
+//                       _kpiItem(Icons.access_time_filled, "2", "Permission"),
+//                     ]),
+//               ),
+
+//               SizedBox(height: 20),
+
+//               // ===========================
+//               //     CHECK-IN OUT CARD
+//               // ===========================
+//               Container(
+//                 padding: EdgeInsets.all(22),
+//                 margin: EdgeInsets.symmetric(horizontal: 20),
+//                 decoration: BoxDecoration(
+//                   color: Colors.white,
+//                   borderRadius: BorderRadius.circular(22),
+//                   boxShadow: [
+//                     BoxShadow(
+//                       blurRadius: 8,
+//                       color: Colors.black12,
+//                       offset: Offset(0, 3),
+//                     )
+//                   ],
+//                 ),
+//                 child: Column(
+//                   crossAxisAlignment: CrossAxisAlignment.start,
+//                   children: [
+//                     Text(
+//                       DateFormat('dd MMMM yyyy').format(DateTime.now()),
+//                       style: AppTextStyles.heading2.copyWith(fontSize: 16),
+//                     ),
+//                     const SizedBox(height: 12),
+//                     Row(
+//                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//                       children: [
+//                         _checkBox(
+//                           title: "Check In",
+//                           time: _checkInTime != null
+//                               ? "${_checkInTime!.hour}:${_checkInTime!.minute.toString().padLeft(2, '0')}"
+//                               : "--:--",
+//                           color: Colors.green,
+//                         ),
+//                         _checkBox(
+//                           title: "Check Out",
+//                           time: _checkOutTime != null
+//                               ? "${_checkOutTime!.hour}:${_checkOutTime!.minute.toString().padLeft(2, '0')}"
+//                               : "--:--",
+//                           color: Colors.orange,
+//                         ),
+//                       ],
+//                     ),
+//                   ],
+//                 ),
+//               ),
+
+//               SizedBox(height: 20),
+
+//               Row(
+//                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+//                 children: [
+//                   _quickAction(Icons.logout, "Leave"),
+//                   _quickAction(Icons.place, "Visit"),
+//                   _quickAction(Icons.timer, "Overtime"),
+//                   _quickAction(Icons.history, "History", onTap: () {
+//                     Navigator.of(context).push(
+//                       MaterialPageRoute(
+//                         builder: (_) => AttendanceHistory(empId: empid),
+//                       ),
+//                     );
+//                   }),
+//                   _quickAction(Icons.summarize_rounded, "Summary", onTap: () {
+//                     Navigator.of(context).push(
+//                       MaterialPageRoute(
+//                         builder: (_) => AttendanceHistory(empId: empid),
+//                       ),
+//                     );
+//                   }),
+//                 ],
+//               ),
+
+//               SizedBox(height: 25),
+
+//               GestureDetector(
+//                 onTapDown: (_) => setState(() => _punchPressed = true),
+//                 onTapUp: (_) => setState(() => _punchPressed = false),
+//                 onTapCancel: () => setState(() => _punchPressed = false),
+//                 onTap: () async {
+//                   try {
+//                     await Navigator.of(context).push(
+//                       MaterialPageRoute(
+//                         builder: (_) => CameraScreen(
+//                           employeeName: userName,
+//                           employeeId: empid,
+//                         ),
+//                       ),
+//                     );
+//                   } catch (e) {
+//                     ScaffoldMessenger.of(context).showSnackBar(
+//                       SnackBar(content: Text('Unable to open camera: $e')),
+//                     );
+//                   }
+//                 },
+//                 child: AnimatedContainer(
+//                   duration: Duration(milliseconds: 150),
+//                   curve: Curves.easeOut,
+//                   padding: EdgeInsets.all(18),
+//                   margin: EdgeInsets.symmetric(horizontal: 24),
+//                   height: 90,
+//                   decoration: BoxDecoration(
+//                     color: Colors.white,
+//                     borderRadius: BorderRadius.circular(18),
+//                     border: Border.all(color: Colors.green.shade700, width: 2),
+//                     boxShadow: [
+//                       BoxShadow(
+//                         color: Colors.green.withOpacity(0.2),
+//                         blurRadius: 12,
+//                       ),
+//                     ],
+//                   ),
+//                   child: Row(
+//                     mainAxisAlignment: MainAxisAlignment.center,
+//                     children: [
+//                       Icon(Icons.fingerprint,
+//                           size: 40, color: Colors.green.shade800),
+//                       SizedBox(width: 12),
+//                       Text(
+//                         "Punch Attendance",
+//                         style: AppTextStyles.heading2.copyWith(
+//                           color: _operatorPrimary,
+//                         ),
+//                       ),
+//                     ],
+//                   ),
+//                 ),
+//               ),
+
+//               // ===========================
+//               //   PUNCH ATTENDANCE BUTTON
+// //           GestureDetector(
+// //   onTapDown: (_) => setState(() => _punchPressed = true),
+// //   onTapUp: (_) => setState(() => _punchPressed = false),
+// //   onTapCancel: () => setState(() => _punchPressed = false),
+// //   onTap: () async {
+// //     final result = await Navigator.push(
+// //       context,
+// //       MaterialPageRoute(
+// //         builder: (context) => CameraScreen(
+// //           employeeName: userName,
+// //           employeeId: empid,
+// //         ),
+// //       ),
+// //     );
+// //   },
+
+// //   child: AnimatedScale(
+// //     duration: Duration(milliseconds: 130),
+// //     scale: _punchPressed ? 0.93 : 1.0,
+// //     child: Container(
+// //       height: 150,
+// //       width: 150,
+// //       decoration: BoxDecoration(
+// //         shape: BoxShape.circle,
+// //         gradient: LinearGradient(
+// //           colors: [Color(0xFF1B5E20), Color(0xFF66BB6A)],
+// //           begin: Alignment.topLeft,
+// //           end: Alignment.bottomRight,
+// //         ),
+// //         boxShadow: [
+// //           BoxShadow(
+// //             color: Colors.green.withOpacity(0.3),
+// //             blurRadius: 16,
+// //             spreadRadius: 2,
+// //             offset: Offset(0, 6),
+// //           ),
+// //         ],
+// //       ),
+
+// //       child: Container(
+// //         margin: EdgeInsets.all(6),
+// //         decoration: BoxDecoration(
+// //           shape: BoxShape.circle,
+// //           color: Colors.white,
+// //         ),
+// //         child: Column(
+// //           mainAxisAlignment: MainAxisAlignment.center,
+// //           children: [
+// //             Icon(Icons.fingerprint,
+// //                 size: 55,
+// //                 color: Colors.green.shade700),
+// //             SizedBox(height: 8),
+// //             Text(
+// //               "Punch\nAttendance",
+// //               textAlign: TextAlign.center,
+// //               style: TextStyle(
+// //                 fontSize: 15,
+// //                 fontWeight: FontWeight.w800,
+// //                 color: Colors.green.shade900,
+// //               ),
+// //             ),
+// //           ],
+// //         ),
+// //       ),
+// //     ),
+// //   ),
+// // ),
+
+//               // SizedBox(height: 40),
+
+//               SizedBox(height: 25),
+
+//               if (_pendingSync.isNotEmpty)
+//                 Container(
+//                   width: double.infinity,
+//                   margin: EdgeInsets.symmetric(horizontal: 20),
+//                   padding: EdgeInsets.all(18),
+//                   decoration: BoxDecoration(
+//                     color: Colors.white,
+//                     borderRadius: BorderRadius.circular(20),
+//                     boxShadow: [
+//                       BoxShadow(
+//                         color: Colors.black12,
+//                         blurRadius: 6,
+//                         offset: Offset(0, 3),
+//                       )
+//                     ],
+//                   ),
+//                   child: Column(
+//                     crossAxisAlignment: CrossAxisAlignment.start,
+//                     children: [
+//                       Row(
+//                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
+//                         children: [
+//                           Text(
+//                             "Pending Sync",
+//                             style: TextStyle(
+//                               fontSize: 18,
+//                               fontWeight: FontWeight.w800,
+//                               color: Colors.deepOrange,
+//                             ),
+//                           ),
+//                           Icon(Icons.sync_problem, color: Colors.deepOrange),
+//                         ],
+//                       ),
+//                       SizedBox(height: 10),
+//                       ..._pendingSync
+//                           .map((item) => _pendingSyncTile(item))
+//                           ,
+//                     ],
+//                   ),
+//                 ),
+//             ],
+//           ),
+//         ),
+//       ),
+//     );
+//   }
+
+//   Future<void> _syncItem(Map<String, dynamic> item) async {
+//     if (!_isOnline) {
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         SnackBar(content: Text("No internet. Cannot sync.")),
+//       );
+//       return;
+//     }
+
+//     try {
+//       final response = await http.post(
+//         Uri.parse("https://zigma/api/attendance/sync.php"),
+//         body: {
+//           "timestamp": item["timestamp"],
+//           "lat": item["lat"],
+//           "long": item["long"],
+//           "type": item["type"],
+//         },
+//       );
+
+//       final data = jsonDecode(response.body);
+
+//       if (data["status"] == "success") {
+//         _pendingSync.remove(item);
+//         setState(() {});
+
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           SnackBar(content: Text("Synced successfully.")),
+//         );
+//       } else {
+//         ScaffoldMessenger.of(context).showSnackBar(
+//           SnackBar(content: Text("Sync failed.")),
+//         );
+//       }
+//     } catch (e) {
+//       ScaffoldMessenger.of(context).showSnackBar(
+//         SnackBar(content: Text("Error syncing.")),
+//       );
+//     }
+//   }
+
+//   /// CHECK IN / OUT BOX
+//   Widget _checkBox(
+//       {required String title, required String time, required Color color}) {
+//     return Container(
+//       width: 130,
+//       padding: EdgeInsets.all(16),
+//       decoration: BoxDecoration(
+//         color: color.withOpacity(0.15),
+//         borderRadius: BorderRadius.circular(18),
+//       ),
+//       child: Column(
+//         crossAxisAlignment: CrossAxisAlignment.start,
+//         children: [
+//           Text(time,
+//               style: TextStyle(
+//                   fontSize: 26, fontWeight: FontWeight.bold, color: color)),
+//           SizedBox(height: 6),
+//           Text(title,
+//               style: TextStyle(
+//                   fontSize: 16,
+//                   color: Colors.black87,
+//                   fontWeight: FontWeight.w600)),
+//         ],
+//       ),
+//     );
+//   }
+
+//   /// QUICK ACTION ICON
+//   Widget _quickAction(IconData icon, String title, {VoidCallback? onTap}) {
+//     return InkWell(
+//       onTap: onTap,
+//       borderRadius: BorderRadius.circular(16),
+//       child: Column(
+//         children: [
+//           Container(
+//             height: 52,
+//             width: 52,
+//             decoration: BoxDecoration(
+//               color: Colors.white,
+//               shape: BoxShape.circle,
+//               boxShadow: [
+//                 BoxShadow(
+//                   blurRadius: 8,
+//                   color: Colors.black12,
+//                 )
+//               ],
+//             ),
+//             child: Icon(icon, size: 24, color: Color(0xFF1B5E20)),
+//           ),
+//           SizedBox(height: 6),
+//           Text(
+//             title,
+//             style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+//           ),
+//         ],
+//       ),
+//     );
+//   }
+
+//   Widget _kpiItem(IconData icon, String value, String title) {
+//     return Column(
+//       children: [
+//         // Container(
+//         //   padding: EdgeInsets.all(10),
+//         //   decoration: BoxDecoration(
+//         //     color: color.withOpacity(0.12),
+//         //     shape: BoxShape.circle,
+//         //   ),
+//         //   child: Icon(icon, color: color, size: 22),
+//         // ),
+//         // SizedBox(height: 8),
+//         Text(
+//           value,
+//           style: TextStyle(
+//             fontSize: 16,
+//             fontWeight: FontWeight.w700,
+//             color: Colors.black87,
+//           ),
+//         ),
+//         SizedBox(height: 2),
+//         Text(
+//           title,
+//           style: TextStyle(
+//             fontSize: 12,
+//             color: Colors.black54,
+//             fontWeight: FontWeight.w500,
+//           ),
+//         ),
+//       ],
+//     );
+//   }
+// }
+
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:auto_size_text/auto_size_text.dart';
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:animated_neumorphic/animated_neumorphic.dart';
-import 'package:provider/provider.dart';
-import 'package:geolocator/geolocator.dart'; // Import geolocator package
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
-// import 'package:zigma_payroll/attendance/userimage.dart';
-
-// import '../provider/username.dart';
 import 'camerapage.dart';
 
 const Color _operatorPrimary = AppColors.primary;
@@ -35,151 +898,40 @@ class AttendancePage extends StatefulWidget {
 }
 
 class _AttendancePageState extends State<AttendancePage> {
-  final bool _isElevated = false;
   bool _punchPressed = false;
 
-  String greetingMessage = "";
-  late String buttonText = "Mark for Today";
-  final bool _isActive = false;
   String _latitude = '--';
   String _longitude = '--';
   DateTime? _checkInTime;
   DateTime? _checkOutTime;
+
   late String _time;
   late String _date;
-  Timer? _timer; // Declare a Timer variable
+
   Timer? _clockTimer;
   StreamSubscription<ConnectivityResult>? _connectivitySub;
+
   bool _isOnline = true;
 
-  Duration _totalWorkingHours = Duration.zero;
-  String? imageName;
-  bool isLoading = true;
   List<Map<String, dynamic>> _pendingSync = [];
-
-  // Helper method to format duration
-  String _formatDuration(Duration duration) {
-    int hours = duration.inHours;
-    int minutes = duration.inMinutes % 60;
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
-  }
-
-  void updateGreeting() {
-    setState(() {
-      greetingMessage = getDynamicGreeting();
-    });
-  }
-  // Future<void> fetchAndSetImage() async {
-  //   try {
-  //     final userProvider = Provider.of<UserProvider>(context, listen: false);
-  //     String empId = userProvider.empid; // Get the empid
-  //     print("Fetching image for empId: $empId");
-
-  //     final fetchedImageName = await fetchImageName(empId); // Fetch the image name
-  //     print("Fetched image name from API: $fetchedImageName");
-
-  //     setState(() {
-  //       imageName = fetchedImageName;
-  //       isLoading = false;
-  //     });
-  //   } catch (e) {
-  //     setState(() {
-  //       isLoading = false;
-  //     });
-  //     // print("Error occurred: $e");
-  //     // ScaffoldMessenger.of(context).showSnackBar(
-  //     //   SnackBar(content: Text("Error fetching image: $e")),
-  //     // );
-  //   }
-  // }
-  String getDynamicGreeting() {
-    var hour = DateTime.now().hour;
-    var weekday = DateTime.now().weekday; // 1 = Monday, 7 = Sunday
-
-    // Define messages for each day of the week
-    Map<int, List<String>> dailyMessages = {
-      1: [
-        // Monday
-        "Start the week strong!",
-        "New week, new opportunities!",
-        "Set goals and take action!"
-      ],
-      2: [
-        // Tuesday
-        "Keep up the momentum!",
-        "Small steps lead to big success!",
-        "Stay focused and productive!"
-      ],
-      3: [
-        // Wednesday
-        "Halfway through—keep going!",
-        "Every challenge is an opportunity!",
-        "Success comes with persistence!"
-      ],
-      4: [
-        // Thursday
-        "You're almost there!",
-        "Stay determined, results are near!",
-        "Refine your efforts, success is close!"
-      ],
-      5: [
-        // Friday
-        "Finish strong, weekend ahead!",
-        "Keep going, success follows effort!",
-        "Push through and celebrate progress!"
-      ],
-      6: [
-        // Saturday
-        "Relax and recharge!",
-        "Balance is key—enjoy today!",
-        "Learn and grow every day!"
-      ],
-      7: [
-        // Sunday
-        "Reflect and reset for success!",
-        "Take time for yourself!",
-        "Recharge for a productive week!"
-      ]
-    };
-
-    // Get a random message from today's set
-    String dailyMessage = (dailyMessages[weekday]!..shuffle()).first;
-
-    // Time-based Greetings
-    if (hour >= 5 && hour < 12) {
-      return "Good Morning! $dailyMessage";
-    } else if (hour >= 12 && hour < 17) {
-      return "Good Afternoon! $dailyMessage";
-    } else if (hour >= 17 && hour < 21) {
-      return "Good Evening! $dailyMessage";
-    } else {
-      return "Good Night! $dailyMessage";
-    }
-  }
 
   @override
   void initState() {
     super.initState();
-    _fetchLocation();
 
+    _fetchLocation();
     _checkInternetInitial();
 
-    _connectivitySub = Connectivity()
-        .onConnectivityChanged
-        .listen((ConnectivityResult result) async {
+    _connectivitySub =
+        Connectivity().onConnectivityChanged.listen((_) async {
       final hasInternet = await _hasInternet();
       if (!mounted) return;
       setState(() => _isOnline = hasInternet);
     });
+
     _clockTimer =
-        Timer.periodic(const Duration(seconds: 1), (Timer t) => _getTime());
-    _updateTimeAndDate();
-    // fetchAndSetImage();
-    // _fetchAttendanceData();
-    _timer = Timer.periodic(const Duration(minutes: 1), (Timer timer) {
-      // _fetchAttendanceData();
-    });
-    greetingMessage = getDynamicGreeting();
+        Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
+
     _pendingSync = [
       {
         "type": "Check In",
@@ -196,186 +948,80 @@ class _AttendancePageState extends State<AttendancePage> {
     ];
   }
 
-  void _checkInternetInitial() async {
-    final hasNet = await _hasInternet();
-    if (!mounted) return;
-    setState(() {
-      _isOnline = hasNet;
-    });
-  }
-
   @override
   void dispose() {
     _clockTimer?.cancel();
-    _timer?.cancel();
     _connectivitySub?.cancel();
     super.dispose();
+  }
+
+  void _updateClock() {
+    final now = DateTime.now();
+    _time = DateFormat('hh:mm a').format(now);
+    _date = DateFormat('MMMM dd, yyyy - EEEE').format(now);
+    if (mounted) setState(() {});
   }
 
   Future<bool> _hasInternet() async {
     try {
       final result = await InternetAddress.lookup('one.one.one.one')
-          .timeout(Duration(seconds: 2));
-
+          .timeout(const Duration(seconds: 2));
       return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
     } catch (_) {
       return false;
     }
   }
 
-  void _updateTimeAndDate() {
-    final now = DateTime.now();
-    _time = DateFormat('hh:mm a').format(now); // Format time as 09:00 AM
-    _date = DateFormat('MMMM dd, yyyy - EEEE')
-        .format(now); // Format date as Jan 13, 2025 - Monday
+  void _checkInternetInitial() async {
+    final hasNet = await _hasInternet();
     if (!mounted) return;
-    setState(() {}); // Update the UI
-  }
-
-  void _getTime() {
-    final DateTime now = DateTime.now();
-    final String formattedDateTime = _formatDateTime(now);
-    if (!mounted) return;
-    setState(() {
-      _time = formattedDateTime;
-    });
-  }
-
-  String _formatDateTime(DateTime dateTime) {
-    return DateFormat('hh:mm a').format(dateTime);
+    setState(() => _isOnline = hasNet);
   }
 
   Future<void> _fetchLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+    final t = AppLocalizations.of(context);
 
-    // Check if location services are enabled
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      // Location services are not enabled
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please enable location services.")),
-      );
+    if (!await Geolocator.isLocationServiceEnabled()) {
+      _toast(t.enableLocation);
       return;
     }
 
-    // Check for location permissions
-    permission = await Geolocator.checkPermission();
+    var permission = await Geolocator.checkPermission();
     if (permission == LocationPermission.denied) {
       permission = await Geolocator.requestPermission();
       if (permission == LocationPermission.denied) {
-        // Permissions are denied
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Location permission is required.")),
-        );
+        _toast(t.locationPermissionRequired);
         return;
       }
     }
 
     if (permission == LocationPermission.deniedForever) {
-      // Permissions are permanently denied
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Location permissions are permanently denied.")),
-      );
+      _toast(t.locationPermissionRequired);
       return;
     }
 
-    // Get the current location
-    Position position = await Geolocator.getCurrentPosition(
+    final pos = await Geolocator.getCurrentPosition(
       desiredAccuracy: LocationAccuracy.high,
     );
 
     if (!mounted) return;
     setState(() {
-      _latitude = position.latitude.toString();
-      _longitude = position.longitude.toString();
+      _latitude = pos.latitude.toString();
+      _longitude = pos.longitude.toString();
     });
-    print(_latitude);
   }
 
-  Future<bool> _onWillPop() async {
-    return (await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Are you sure?'),
-            content: const Text('Do you want to exit the app?'),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('No'),
-              ),
-              TextButton(
-                onPressed: () => exit(0),
-                child: const Text('Yes'),
-              ),
-            ],
-          ),
-        )) ??
-        false;
-  }
-
-  Widget _networkStatusChip() {
-    final bool online = _isOnline;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: online ? Colors.green.shade500 : Colors.red.shade600,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.circle, color: Colors.white, size: 10),
-          const SizedBox(width: 6),
-          Text(
-            online ? "Online" : "Offline",
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _pendingSyncTile(Map<String, dynamic> item) {
-    return GestureDetector(
-      onTap: () => _syncItem(item),
-      child: Container(
-        margin: EdgeInsets.only(bottom: 10),
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.orange.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.orange.shade200),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item["type"],
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Text(item["timestamp"],
-                    style: TextStyle(fontSize: 13, color: Colors.grey)),
-              ],
-            ),
-            Icon(Icons.sync, color: Colors.orange),
-          ],
-        ),
-      ),
-    );
+  void _toast(String msg) {
+    ScaffoldMessenger.of(context)
+        .showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
+    final t = AppLocalizations.of(context);
+    final empId = widget.operatorCode;
     final userName =
-        widget.operatorName.isNotEmpty ? widget.operatorName : "Operator";
-    final empid = widget.operatorCode;
+        widget.operatorName.isNotEmpty ? widget.operatorName : t.operatorLabel;
 
     return SafeArea(
       child: Scaffold(
@@ -384,9 +1030,7 @@ class _AttendancePageState extends State<AttendancePage> {
           physics: const BouncingScrollPhysics(),
           child: Column(
             children: [
-              // ===========================
-              //        HEADER CARD
-              // ===========================
+              // ================= HEADER =================
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.fromLTRB(20, 24, 20, 26),
@@ -394,20 +1038,16 @@ class _AttendancePageState extends State<AttendancePage> {
                   gradient: LinearGradient(
                     begin: Alignment.topCenter,
                     end: Alignment.bottomCenter,
-                    colors: [
-                      _operatorPrimary,
-                      _operatorAccent,
-                    ],
+                    colors: [_operatorPrimary, _operatorAccent],
                   ),
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(35),
-                  ),
+                  borderRadius:
+                      const BorderRadius.vertical(bottom: Radius.circular(35)),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Attendance",
+                      t.attendanceTitle,
                       style: AppTextStyles.heading2.copyWith(
                         color: Colors.white,
                         fontSize: 22,
@@ -416,7 +1056,7 @@ class _AttendancePageState extends State<AttendancePage> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      "Manage today's presence and history",
+                      t.attendanceSubtitle,
                       style: AppTextStyles.bodyMedium.copyWith(
                         color: Colors.white70,
                         fontWeight: FontWeight.w600,
@@ -426,304 +1066,30 @@ class _AttendancePageState extends State<AttendancePage> {
                 ),
               ),
 
-              SizedBox(height: 15),
+              const SizedBox(height: 20),
 
-              // ===========================
-              //           KPI ROW
-              // ===========================
-              // Container(
-              //   margin: EdgeInsets.symmetric(horizontal: 20),
-              //   padding: EdgeInsets.all(18),
-              //   decoration: BoxDecoration(
-              //     color: Colors.white,
-              //     borderRadius: BorderRadius.circular(22),
-              //     boxShadow: [
-              //       BoxShadow(
-              //         blurRadius: 8,
-              //         color: Colors.black12,
-              //         offset: Offset(0, 3),
-              //       )
-              //     ],
-              //   ),
+              // ================= KPI =================
+              _kpiRow(t),
 
-              //   child: Row(
-              //     mainAxisAlignment: MainAxisAlignment.spaceAround,
-              //     children: [
-              //       _kpiItem("20 Days", "Presence"),
-              //       _kpiItem("3 Times", "Leaves"),
-              //       _kpiItem("2 Times", "Permission"),
-              //     ],
-              //   ),
-              // ),
-              Container(
-                margin: EdgeInsets.symmetric(horizontal: 20),
-                padding: EdgeInsets.symmetric(vertical: 22, horizontal: 16),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: 12,
-                      spreadRadius: 2,
-                      color: Colors.black12.withOpacity(0.07),
-                      offset: Offset(0, 4),
-                    )
-                  ],
-                ),
-                child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _kpiItem(Icons.calendar_today, "20", "Presence"),
-                      _kpiItem(Icons.timer_off_rounded, "3", "Leaves"),
-                      _kpiItem(Icons.access_time_filled, "2", "Permission"),
-                    ]),
-              ),
+              const SizedBox(height: 20),
 
-              SizedBox(height: 20),
+              // ================= CHECK IN / OUT =================
+              _checkInOutCard(t),
 
-              // ===========================
-              //     CHECK-IN OUT CARD
-              // ===========================
-              Container(
-                padding: EdgeInsets.all(22),
-                margin: EdgeInsets.symmetric(horizontal: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: 8,
-                      color: Colors.black12,
-                      offset: Offset(0, 3),
-                    )
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      DateFormat('dd MMMM yyyy').format(DateTime.now()),
-                      style: AppTextStyles.heading2.copyWith(fontSize: 16),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _checkBox(
-                          title: "Check In",
-                          time: _checkInTime != null
-                              ? "${_checkInTime!.hour}:${_checkInTime!.minute.toString().padLeft(2, '0')}"
-                              : "--:--",
-                          color: Colors.green,
-                        ),
-                        _checkBox(
-                          title: "Check Out",
-                          time: _checkOutTime != null
-                              ? "${_checkOutTime!.hour}:${_checkOutTime!.minute.toString().padLeft(2, '0')}"
-                              : "--:--",
-                          color: Colors.orange,
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
+              const SizedBox(height: 20),
 
-              SizedBox(height: 20),
+              // ================= QUICK ACTIONS =================
+              _quickActions(t, empId),
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                children: [
-                  _quickAction(Icons.logout, "Leave"),
-                  _quickAction(Icons.place, "Visit"),
-                  _quickAction(Icons.timer, "Overtime"),
-                  _quickAction(Icons.history, "History", onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => AttendanceHistory(empId: empid),
-                      ),
-                    );
-                  }),
-                  _quickAction(Icons.summarize_rounded, "Summary", onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => AttendanceHistory(empId: empid),
-                      ),
-                    );
-                  }),
-                ],
-              ),
+              const SizedBox(height: 25),
 
-              SizedBox(height: 25),
+              // ================= PUNCH =================
+              _punchButton(t, userName, empId),
 
-              GestureDetector(
-                onTapDown: (_) => setState(() => _punchPressed = true),
-                onTapUp: (_) => setState(() => _punchPressed = false),
-                onTapCancel: () => setState(() => _punchPressed = false),
-                onTap: () async {
-                  try {
-                    await Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => CameraScreen(
-                          employeeName: userName,
-                          employeeId: empid,
-                        ),
-                      ),
-                    );
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Unable to open camera: $e')),
-                    );
-                  }
-                },
-                child: AnimatedContainer(
-                  duration: Duration(milliseconds: 150),
-                  curve: Curves.easeOut,
-                  padding: EdgeInsets.all(18),
-                  margin: EdgeInsets.symmetric(horizontal: 24),
-                  height: 90,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.green.shade700, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.green.withOpacity(0.2),
-                        blurRadius: 12,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.fingerprint,
-                          size: 40, color: Colors.green.shade800),
-                      SizedBox(width: 12),
-                      Text(
-                        "Punch Attendance",
-                        style: AppTextStyles.heading2.copyWith(
-                          color: _operatorPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              const SizedBox(height: 25),
 
-              // ===========================
-              //   PUNCH ATTENDANCE BUTTON
-//           GestureDetector(
-//   onTapDown: (_) => setState(() => _punchPressed = true),
-//   onTapUp: (_) => setState(() => _punchPressed = false),
-//   onTapCancel: () => setState(() => _punchPressed = false),
-//   onTap: () async {
-//     final result = await Navigator.push(
-//       context,
-//       MaterialPageRoute(
-//         builder: (context) => CameraScreen(
-//           employeeName: userName,
-//           employeeId: empid,
-//         ),
-//       ),
-//     );
-//   },
-
-//   child: AnimatedScale(
-//     duration: Duration(milliseconds: 130),
-//     scale: _punchPressed ? 0.93 : 1.0,
-//     child: Container(
-//       height: 150,
-//       width: 150,
-//       decoration: BoxDecoration(
-//         shape: BoxShape.circle,
-//         gradient: LinearGradient(
-//           colors: [Color(0xFF1B5E20), Color(0xFF66BB6A)],
-//           begin: Alignment.topLeft,
-//           end: Alignment.bottomRight,
-//         ),
-//         boxShadow: [
-//           BoxShadow(
-//             color: Colors.green.withOpacity(0.3),
-//             blurRadius: 16,
-//             spreadRadius: 2,
-//             offset: Offset(0, 6),
-//           ),
-//         ],
-//       ),
-
-//       child: Container(
-//         margin: EdgeInsets.all(6),
-//         decoration: BoxDecoration(
-//           shape: BoxShape.circle,
-//           color: Colors.white,
-//         ),
-//         child: Column(
-//           mainAxisAlignment: MainAxisAlignment.center,
-//           children: [
-//             Icon(Icons.fingerprint,
-//                 size: 55,
-//                 color: Colors.green.shade700),
-//             SizedBox(height: 8),
-//             Text(
-//               "Punch\nAttendance",
-//               textAlign: TextAlign.center,
-//               style: TextStyle(
-//                 fontSize: 15,
-//                 fontWeight: FontWeight.w800,
-//                 color: Colors.green.shade900,
-//               ),
-//             ),
-//           ],
-//         ),
-//       ),
-//     ),
-//   ),
-// ),
-
-              // SizedBox(height: 40),
-
-              SizedBox(height: 25),
-
-              if (_pendingSync.isNotEmpty)
-                Container(
-                  width: double.infinity,
-                  margin: EdgeInsets.symmetric(horizontal: 20),
-                  padding: EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 6,
-                        offset: Offset(0, 3),
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text(
-                            "Pending Sync",
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.deepOrange,
-                            ),
-                          ),
-                          Icon(Icons.sync_problem, color: Colors.deepOrange),
-                        ],
-                      ),
-                      SizedBox(height: 10),
-                      ..._pendingSync
-                          .map((item) => _pendingSyncTile(item))
-                          ,
-                    ],
-                  ),
-                ),
+              // ================= PENDING SYNC =================
+              if (_pendingSync.isNotEmpty) _pendingSyncCard(t),
             ],
           ),
         ),
@@ -731,135 +1097,258 @@ class _AttendancePageState extends State<AttendancePage> {
     );
   }
 
-  Future<void> _syncItem(Map<String, dynamic> item) async {
-    if (!_isOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("No internet. Cannot sync.")),
-      );
-      return;
-    }
+  // ================= WIDGETS =================
 
-    try {
-      final response = await http.post(
-        Uri.parse("https://zigma/api/attendance/sync.php"),
-        body: {
-          "timestamp": item["timestamp"],
-          "lat": item["lat"],
-          "long": item["long"],
-          "type": item["type"],
-        },
-      );
-
-      final data = jsonDecode(response.body);
-
-      if (data["status"] == "success") {
-        _pendingSync.remove(item);
-        setState(() {});
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Synced successfully.")),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Sync failed.")),
-        );
-      }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error syncing.")),
-      );
-    }
+  Widget _kpiRow(AppLocalizations t) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+      decoration: _cardBox(),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          _kpiItem("20", t.presence),
+          _kpiItem("3", t.leaves),
+          _kpiItem("2", t.permission),
+        ],
+      ),
+    );
   }
 
-  /// CHECK IN / OUT BOX
+  Widget _checkInOutCard(AppLocalizations t) {
+    return Container(
+      padding: const EdgeInsets.all(22),
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      decoration: _cardBox(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            DateFormat('dd MMMM yyyy').format(DateTime.now()),
+            style: AppTextStyles.heading2.copyWith(fontSize: 16),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _checkBox(
+                title: t.checkIn,
+                time: _checkInTime != null
+                    ? DateFormat('hh:mm a').format(_checkInTime!)
+                    : "--:--",
+                color: Colors.green,
+              ),
+              _checkBox(
+                title: t.checkOut,
+                time: _checkOutTime != null
+                    ? DateFormat('hh:mm a').format(_checkOutTime!)
+                    : "--:--",
+                color: Colors.orange,
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _quickActions(AppLocalizations t, String empId) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+      children: [
+        _quickAction(Icons.logout, t.leave),
+        _quickAction(Icons.place, t.visit),
+        _quickAction(Icons.timer, t.overtime),
+        _quickAction(Icons.history, t.history, onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AttendanceHistory(empId: empId),
+            ),
+          );
+        }),
+        _quickAction(Icons.summarize_rounded, t.summary, onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AttendanceHistory(empId: empId),
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _punchButton(
+      AppLocalizations t, String userName, String empId) {
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _punchPressed = true),
+      onTapUp: (_) => setState(() => _punchPressed = false),
+      onTapCancel: () => setState(() => _punchPressed = false),
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CameraScreen(
+              employeeName: userName,
+              employeeId: empId,
+            ),
+          ),
+        );
+      },
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        padding: const EdgeInsets.all(18),
+        margin: const EdgeInsets.symmetric(horizontal: 24),
+        height: 90,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.green.shade700, width: 2),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.fingerprint,
+                size: 40, color: Colors.green.shade800),
+            const SizedBox(width: 12),
+            Text(
+              t.punchAttendance,
+              style: AppTextStyles.heading2.copyWith(
+                color: _operatorPrimary,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pendingSyncCard(AppLocalizations t) {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20),
+      padding: const EdgeInsets.all(18),
+      decoration: _cardBox(),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                t.pendingSync,
+                style: const TextStyle(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.deepOrange),
+              ),
+              const Icon(Icons.sync_problem, color: Colors.deepOrange),
+            ],
+          ),
+          const SizedBox(height: 10),
+          ..._pendingSync.map(_pendingSyncTile),
+        ],
+      ),
+    );
+  }
+
+  Widget _pendingSyncTile(Map<String, dynamic> item) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.shade50,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(item["type"],
+                style:
+                    const TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            Text(item["timestamp"],
+                style: const TextStyle(fontSize: 13, color: Colors.grey)),
+          ]),
+          const Icon(Icons.sync, color: Colors.orange),
+        ],
+      ),
+    );
+  }
+
+  // ================= COMMON =================
+
+  BoxDecoration _cardBox() => BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: const [
+          BoxShadow(
+            blurRadius: 8,
+            color: Colors.black12,
+            offset: Offset(0, 3),
+          )
+        ],
+      );
+
   Widget _checkBox(
       {required String title, required String time, required Color color}) {
     return Container(
       width: 130,
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: color.withOpacity(0.15),
         borderRadius: BorderRadius.circular(18),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(time,
-              style: TextStyle(
-                  fontSize: 26, fontWeight: FontWeight.bold, color: color)),
-          SizedBox(height: 6),
-          Text(title,
-              style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600)),
-        ],
-      ),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+        Text(time,
+            style: TextStyle(
+                fontSize: 26, fontWeight: FontWeight.bold, color: color)),
+        const SizedBox(height: 6),
+        Text(title,
+            style: const TextStyle(
+                fontSize: 16,
+                color: Colors.black87,
+                fontWeight: FontWeight.w600)),
+      ]),
     );
   }
 
-  /// QUICK ACTION ICON
-  Widget _quickAction(IconData icon, String title, {VoidCallback? onTap}) {
+  Widget _quickAction(IconData icon, String title,
+      {VoidCallback? onTap}) {
     return InkWell(
       onTap: onTap,
       borderRadius: BorderRadius.circular(16),
-      child: Column(
-        children: [
-          Container(
-            height: 52,
-            width: 52,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  blurRadius: 8,
-                  color: Colors.black12,
-                )
-              ],
-            ),
-            child: Icon(icon, size: 24, color: Color(0xFF1B5E20)),
+      child: Column(children: [
+        Container(
+          height: 52,
+          width: 52,
+          decoration: const BoxDecoration(
+            color: Colors.white,
+            shape: BoxShape.circle,
           ),
-          SizedBox(height: 6),
-          Text(
-            title,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-          ),
-        ],
-      ),
+          child: Icon(icon, size: 24, color: _operatorPrimary),
+        ),
+        const SizedBox(height: 6),
+        Text(title,
+            style:
+                const TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
+      ]),
     );
   }
 
-  Widget _kpiItem(IconData icon, String value, String title) {
-    return Column(
-      children: [
-        // Container(
-        //   padding: EdgeInsets.all(10),
-        //   decoration: BoxDecoration(
-        //     color: color.withOpacity(0.12),
-        //     shape: BoxShape.circle,
-        //   ),
-        //   child: Icon(icon, color: color, size: 22),
-        // ),
-        // SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: Colors.black87,
-          ),
-        ),
-        SizedBox(height: 2),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.black54,
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ],
-    );
+  Widget _kpiItem(String value, String title) {
+    return Column(children: [
+      Text(value,
+          style: const TextStyle(
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+              color: Colors.black87)),
+      const SizedBox(height: 2),
+      Text(title,
+          style: const TextStyle(
+              fontSize: 12,
+              color: Colors.black54,
+              fontWeight: FontWeight.w500)),
+    ]);
   }
 }

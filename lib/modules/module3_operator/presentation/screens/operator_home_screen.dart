@@ -5,6 +5,7 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/o
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_cards.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_header.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_qr_button.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 const EdgeInsets _pagePadding =
     EdgeInsets.symmetric(horizontal: 20, vertical: 16);
@@ -48,6 +49,7 @@ class OperatorHomeScreen extends StatelessWidget {
         lastCollection ?? const OperatorCollectionSummary();
     final resolvedAttendance =
         attendanceSummary ?? const OperatorAttendanceSummary();
+    final localizations = AppLocalizations.of(context);
 
     final nextSubtitle = resolvedNextStop.locationName.isNotEmpty
         ? resolvedNextStop.locationName
@@ -72,7 +74,10 @@ class OperatorHomeScreen extends StatelessWidget {
               zone: zoneLabel,
               onLogout: onLogout,
               onMenuTap: onOpenProfile,
-              subtitle: '$operatorName · $operatorCode',
+              subtitle: localizations.operatorHeaderSubtitle(
+                operatorName,
+                operatorCode,
+              ),
             ),
             Padding(
               padding: _pagePadding,
@@ -80,14 +85,14 @@ class OperatorHomeScreen extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   OperatorInfoCard(
-                    title: "Next stop",
+                    title: localizations.operatorNextStop,
                     titleStyle: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
                     ),
                     subtitle: nextSubtitle.isNotEmpty
                         ? nextSubtitle
-                        : "Upcoming stop",
+                        : localizations.operatorUpcomingStop,
                     trailing: Chip(
                       label: Text(
                         nextStatus,
@@ -103,7 +108,7 @@ class OperatorHomeScreen extends StatelessWidget {
                       children: [
                         _InfoRowItem(
                           icon: Icons.location_pin,
-                          title: "Route",
+                          title: localizations.operatorRouteLabel,
                           value: nextRoute,
                         ),
                       ],
@@ -117,7 +122,7 @@ class OperatorHomeScreen extends StatelessWidget {
                   const SizedBox(height: 12),
                   Center(
                     child: Text(
-                      "Tap to scan QR / Collect waste",
+                      localizations.operatorTapToScan,
                       style: AppTextStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.w600,
                         color: AppColors.textSecondary,
@@ -126,7 +131,7 @@ class OperatorHomeScreen extends StatelessWidget {
                   ),
                   const SizedBox(height: 20),
                   OperatorInfoCard(
-                    title: "Last collected",
+                    title: localizations.operatorLastCollected,
                     titleStyle: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.w800,
@@ -149,7 +154,7 @@ class OperatorHomeScreen extends StatelessWidget {
                       children: [
                         _InfoRowItem(
                           icon: Icons.recycling_rounded,
-                          title: "Wet",
+                          title: localizations.operatorWet,
                           value:
                               '${(resolvedLastCollection.wetKg ?? resolvedLastCollection.totalWetKg).toStringAsFixed(1)} kg',
                         ),
@@ -160,7 +165,7 @@ class OperatorHomeScreen extends StatelessWidget {
                         ),
                         _InfoRowItem(
                           icon: Icons.layers_rounded,
-                          title: "Dry",
+                          title: localizations.operatorDry,
                           value:
                               '${(resolvedLastCollection.dryKg ?? resolvedLastCollection.totalDryKg).toStringAsFixed(1)} kg',
                         ),
@@ -171,7 +176,7 @@ class OperatorHomeScreen extends StatelessWidget {
                         ),
                         _InfoRowItem(
                           icon: Icons.access_time,
-                          title: "Time",
+                          title: localizations.operatorTime,
                           value: resolvedLastCollection.timeTaken ??
                               resolvedLastCollection.lastPickupAt,
                         ),
@@ -265,11 +270,12 @@ class _AttendanceSection extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final textTheme = Theme.of(context).textTheme;
+    final localizations = AppLocalizations.of(context);
     return OperatorInfoCard(
-      title: "Attendance",
-      subtitle: "Stay in sync with your shift",
+      title: localizations.operatorAttendanceTitle,
+      subtitle: localizations.operatorAttendanceSubtitle,
       trailing: IconButton(
-        tooltip: "Open attendance",
+        tooltip: localizations.operatorAttendanceOpen,
         onPressed: onTap,
         icon: const Icon(
           Icons.open_in_new_rounded,
@@ -280,30 +286,30 @@ class _AttendanceSection extends StatelessWidget {
         children: [
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Expanded(
-                child: OperatorQuickStat(
-                  label: "Today",
-                  value: summary.todayStatus,
-                  icon: Icons.check_circle_outline,
-                  emphasis: true,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OperatorQuickStat(
-                  label: "This month",
-                  value: summary.monthStat ?? "--",
-                  icon: Icons.calendar_month_outlined,
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: OperatorQuickStat(
-                  label: "Leave balance",
-                  value: summary.leaveBalance ?? "--",
-                  icon: Icons.local_florist_outlined,
-                ),
+                children: [
+                  Expanded(
+                    child: OperatorQuickStat(
+                      label: localizations.operatorAttendanceToday,
+                      value: summary.todayStatus,
+                      icon: Icons.check_circle_outline,
+                      emphasis: true,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OperatorQuickStat(
+                      label: localizations.operatorAttendanceMonth,
+                      value: summary.monthStat ?? "--",
+                      icon: Icons.calendar_month_outlined,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: OperatorQuickStat(
+                      label: localizations.operatorLeaveBalance,
+                      value: summary.leaveBalance ?? "--",
+                      icon: Icons.local_florist_outlined,
+                    ),
               ),
             ],
           ),
@@ -317,16 +323,16 @@ class _AttendanceSection extends StatelessWidget {
             child: Row(
               children: [
                 Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        summary.streakLabel ?? "Attendance streak",
-                        style: AppTextStyles.bodyMedium.copyWith(
-                          color: AppColors.textSecondary,
-                          fontSize: 11,
-                        ),
-                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            summary.streakLabel ?? localizations.operatorAttendanceStreak,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: AppColors.textSecondary,
+                              fontSize: 11,
+                            ),
+                          ),
                       const SizedBox(height: 4),
                       Text(
                         summary.streakValue ?? "--",
@@ -343,13 +349,13 @@ class _AttendanceSection extends StatelessWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   children: [
                     IconButton(
-                      tooltip: "Summary",
+                      tooltip: localizations.operatorAttendanceSummary,
                       onPressed: onSummaryTap ?? onTap,
                       icon:
                           const Icon(Icons.summarize, color: AppColors.primary),
                     ),
                     IconButton(
-                      tooltip: "History",
+                      tooltip: localizations.operatorAttendanceHistory,
                       onPressed: onHistoryTap ?? onTap,
                       icon: const Icon(Icons.history, color: AppColors.primary),
                     ),
@@ -369,7 +375,7 @@ class _AttendanceSection extends StatelessWidget {
                       icon: const Icon(Icons.event_available,
                           color: Colors.white),
                       label: Text(
-                        "Mark",
+                        localizations.operatorAttendanceMark,
                         style: AppTextStyles.labelLarge.copyWith(
                           color: Colors.white,
                           fontSize: 12,

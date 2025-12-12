@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 const LinearGradient _headerGradient = LinearGradient(
   colors: [AppColors.primary, AppColors.primaryVariant],
@@ -40,6 +41,7 @@ class OperatorHeader extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final textTheme = theme.textTheme;
+    final localizations = AppLocalizations.of(context);
 
     return Container(
       width: double.infinity,
@@ -57,9 +59,9 @@ class OperatorHeader extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _buildTopBar(textTheme),
+              _buildTopBar(textTheme, localizations),
               const SizedBox(height: 20),
-              _buildLocationCard(textTheme),
+              _buildLocationCard(textTheme, localizations),
             ],
           ),
         ),
@@ -70,22 +72,28 @@ class OperatorHeader extends StatelessWidget {
   // -------------------------------------------------------------
   // Top row: Title, name, subtitle & buttons
   // -------------------------------------------------------------
-  Widget _buildTopBar(TextTheme textTheme) {
+  Widget _buildTopBar(
+    TextTheme textTheme,
+    AppLocalizations localizations,
+  ) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Expanded(child: _buildTitleSection(textTheme)),
+        Expanded(child: _buildTitleSection(textTheme, localizations)),
         _buildHeaderActionButtons(),
       ],
     );
   }
 
-  Widget _buildTitleSection(TextTheme textTheme) {
+  Widget _buildTitleSection(
+    TextTheme textTheme,
+    AppLocalizations localizations,
+  ) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Operator',
+          localizations.operatorLabel,
           style: AppTextStyles.bodyMedium.copyWith(
             color: Colors.white.withOpacity(.75),
             fontWeight: FontWeight.w600,
@@ -132,7 +140,10 @@ class OperatorHeader extends StatelessWidget {
   // -------------------------------------------------------------
   // Ward/Zone & Badge card
   // -------------------------------------------------------------
-  Widget _buildLocationCard(TextTheme textTheme) {
+  Widget _buildLocationCard(
+    TextTheme textTheme,
+    AppLocalizations localizations,
+  ) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
       decoration: BoxDecoration(
@@ -144,7 +155,7 @@ class OperatorHeader extends StatelessWidget {
         children: [
           Expanded(
             child: Text(
-              '$ward · $zone',
+              localizations.operatorWardZone(ward, zone),
               style: AppTextStyles.bodyMedium.copyWith(
                 color: Colors.white,
                 fontWeight: FontWeight.w600,
