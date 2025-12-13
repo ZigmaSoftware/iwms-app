@@ -326,7 +326,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://10.64.151.226:8000/api/mobile/recognize/'),
+        Uri.parse('http://10.164.86.186:8000/api/mobile/recognize/'),
       );
 
       request.fields["emp_id"] = widget.employeeId;

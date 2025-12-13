@@ -57,7 +57,7 @@ class _OperatorHeaderState extends State<OperatorHeader> {
   Future<void> fetchEmployeeImage() async {
     try {
       final url =
-          "http://10.64.151.226:8000/api/mobile/staff-profile/?staff_id_id=${widget.emp_id}";
+          "http://10.164.86.186:8000/api/mobile/staff-profile/?staff_id_id=${widget.emp_id}";
 
       final request = await HttpClient().getUrl(Uri.parse(url));
       final response = await request.close();
@@ -88,7 +88,7 @@ class _OperatorHeaderState extends State<OperatorHeader> {
   // Convert Django file path to full URL
   String convertToUrl(String path) {
     final filename = path.split("\\").last;
-    return "http://10.64.151.226:8000/media/$filename";
+    return "http://10.164.86.186:8000/media/$filename";
   }
 
   // Convert name to proper case
@@ -184,51 +184,51 @@ class _OperatorHeaderState extends State<OperatorHeader> {
   // -------------------------------------------------------------
   // PROFILE IMAGE / REGISTER BUTTON
   // -------------------------------------------------------------
-  Widget _buildAvatarButton() {
-    return GestureDetector(
-      onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ProfilePage(empId: widget.emp_id),
-          ),
-        );
+    Widget _buildAvatarButton() {
+      return GestureDetector(
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProfilePage(empId: widget.emp_id),
+            ),
+          );
 
-        fetchEmployeeImage();
-      },
-      child: CircleAvatar(
-        radius: 30, // SMALLER AVATAR
-        backgroundColor: Colors.white,
+          fetchEmployeeImage();
+        },
+        child: CircleAvatar(
+          radius: 30, // SMALLER AVATAR
+          backgroundColor: Colors.white,
 
-        backgroundImage:
-            (hasProfile && imageName != null) ? NetworkImage(convertToUrl(imageName!)) : null,
+          backgroundImage:
+              (hasProfile && imageName != null) ? NetworkImage(convertToUrl(imageName!)) : null,
 
-        child: imageLoading
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
-              )
-            : (!hasProfile)
-                ? Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.person_add_alt_1, size: 26, color: Colors.green),
-                      SizedBox(height: 2),
-                      Text(
-                        "Register",
-                        style: TextStyle(
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
+          child: imageLoading
+              ? const SizedBox(
+                  width: 22,
+                  height: 22,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Colors.green),
+                )
+              : (!hasProfile)
+                  ? Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.person_add_alt_1, size: 26, color: Colors.green),
+                        SizedBox(height: 2),
+                        Text(
+                          "Register",
+                          style: TextStyle(
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
                         ),
-                      ),
-                    ],
-                  )
-                : null,
-      ),
-    );
-  }
+                      ],
+                    )
+                  : null,
+        ),
+      );
+    }
 
   // -------------------------------------------------------------
   // Ward · Zone Section — COMPACT

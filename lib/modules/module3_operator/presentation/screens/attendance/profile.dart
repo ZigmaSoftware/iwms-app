@@ -23,7 +23,7 @@ class _ProfilePageState extends State<ProfilePage> {
   XFile? _image;
   String? imageName;
 
-  final String baseUrl = "http://10.64.151.226:8000";
+  final String baseUrl = "http://10.164.86.186:8000";
 
   // Read-only fields
   String employeeName = "";

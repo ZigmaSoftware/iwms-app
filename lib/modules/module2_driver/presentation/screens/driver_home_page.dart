@@ -1,10 +1,19 @@
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:animations/animations.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:motion_tab_bar/MotionTabBar.dart';
+import 'package:path/path.dart';
 
 import '../../../../core/di.dart';
 import '../../../../core/geofence_config.dart';
@@ -120,7 +129,7 @@ Widget _tripLiveVehicleSummary(VehicleModel? liveVehicle) {
   );
 }
 
-enum _DriverTab { home, history, profile }
+enum _DriverTab { home, history, profile, attendance }
 
 class _DemoStop {
   final String label;
@@ -175,7 +184,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   final List<LatLng> _routePoints =
       _demoStops.map((stop) => stop.location).toList();
-
+ 
   @override
   void initState() {
     super.initState();
@@ -205,6 +214,17 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   @override
   Widget build(BuildContext context) {
+        OperatorSessionDetails? _sessionDetails;
+    final nameFromState = context.select<AuthBloc, String?>((bloc) =>
+    bloc.state is AuthStateAuthenticated
+        ? (bloc.state as AuthStateAuthenticated).userName
+        : null);
+
+final empIdFromState = context.select<AuthBloc, String?>((bloc) =>
+    bloc.state is AuthStateAuthenticated
+        ? (bloc.state as AuthStateAuthenticated).emp_id
+        : null);
+
     return BlocProvider(
       create: (_) => getIt<VehicleBloc>(),
       child: BlocListener<VehicleBloc, VehicleState>(
@@ -232,17 +252,32 @@ class _DriverHomePageState extends State<DriverHomePage> {
                   children: [
                     Column(
                       children: [
-                        _DriverHeader(
-                          key: ValueKey<_DriverTab>(_activeTab),
-                          title: _headerTitle(_activeTab),
-                          subtitle: _headerSubtitle(_activeTab),
-                          activeTab: _activeTab,
-                          routeStops: _routePoints.length,
-                          onLogoutTapped: () => _logout(context),
-                          speed: selectedVehicle?.speedKmh,
-                          fuel: selectedVehicle?.fuelLevel,
-                          distance: selectedVehicle?.distanceKm,
-                        ),
+                        // _DriverHeader(
+                        //   key: ValueKey<_DriverTab>(_activeTab),
+                        //   title: _headerTitle(_activeTab),
+                        //   subtitle: _headerSubtitle(_activeTab),
+                        //   activeTab: _activeTab,
+                        //   routeStops: _routePoints.length,
+                        //   onLogoutTapped: () => _logout(context),
+                        //   speed: selectedVehicle?.speedKmh,
+                        //   fuel: selectedVehicle?.fuelLevel,
+                        //   distance: selectedVehicle?.distanceKm,
+                        // ),
+                        AnimatedSwitcher(
+  duration: Duration(milliseconds: 250),
+  child: _DriverHeader(
+    key: ValueKey(_activeTab),
+    title: _headerTitle(_activeTab),
+    subtitle: _headerSubtitle(_activeTab),
+    activeTab: _activeTab,
+    routeStops: _routePoints.length,
+    onLogoutTapped: () => _logout(context),
+    speed: selectedVehicle?.speedKmh,
+    fuel: selectedVehicle?.fuelLevel,
+    distance: selectedVehicle?.distanceKm,
+  ),
+),
+
                         Expanded(
                           child: PageTransitionSwitcher(
                             duration: const Duration(milliseconds: 320),
@@ -261,7 +296,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
                             },
                             child: KeyedSubtree(
                               key: ValueKey<_DriverTab>(_activeTab),
-                              child: _buildTab(_activeTab, driverLocation),
+                              child: _buildTab(_activeTab, driverLocation, nameFromState!, empIdFromState!,_sessionDetails),
                             ),
                           ),
                         ),
@@ -287,11 +322,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
               ),
               bottomNavigationBar: SafeArea(
                 child: MotionTabBar(
-                  labels: const ['Home', 'History', 'Profile'],
+                  labels: const ['Home', 'History', 'Profile','Attendance'],
                   icons: const [
                     Icons.home_rounded,
                     Icons.history_rounded,
                     Icons.person_outline_rounded,
+                    Icons.face
                   ],
                   initialSelectedTab: _tabLabel(_activeTab),
                   tabBarColor: Colors.white,
@@ -320,7 +356,18 @@ class _DriverHomePageState extends State<DriverHomePage> {
     );
   }
 
-  Widget _buildTab(_DriverTab tab, LatLng driverLocation) {
+  Widget _buildTab(_DriverTab tab, LatLng driverLocation,String nameFromState,
+  String empIdFromState,OperatorSessionDetails? _sessionDetails) {
+    //   OperatorSessionDetails? _sessionDetails;
+    //     final nameFromState = context.select<AuthBloc, String?>((bloc) =>
+    //     bloc.state is AuthStateAuthenticated
+    //         ? (bloc.state as AuthStateAuthenticated).userName
+    //         : null);
+    //          final emp_idFromState = context.select<AuthBloc, String?>((bloc) =>
+    //     bloc.state is AuthStateAuthenticated
+    //         ? (bloc.state as AuthStateAuthenticated).emp_id
+    //         : null);
+  
     switch (tab) {
       case _DriverTab.home:
         return _HomeTab(
@@ -333,7 +380,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
       case _DriverTab.history:
         return const _HistoryTab();
       case _DriverTab.profile:
-        return _ProfileTab(onLogout: () => _logout(context));
+        return _ProfileTab(onLogout: () => _logout(context as BuildContext));
+      case _DriverTab.attendance:
+        return  AttendancePageDriver(
+          operatorName:nameFromState,
+          operatorCode: empIdFromState,
+        );
     }
   }
 
@@ -345,6 +397,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
         return 'History';
       case _DriverTab.profile:
         return 'Profile';
+      case _DriverTab.attendance:
+        return 'Attendance';
+
     }
   }
 
@@ -354,6 +409,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
         return _DriverTab.history;
       case 'Profile':
         return _DriverTab.profile;
+       case 'Attendance':
+        return _DriverTab.attendance;
       case 'Home':
       default:
         return _DriverTab.home;
@@ -366,6 +423,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
         return _DriverTab.history;
       case 2:
         return _DriverTab.profile;
+      case 3:
+        return _DriverTab.attendance;
       case 0:
       default:
         return _DriverTab.home;
@@ -378,6 +437,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
         return 'Trip history';
       case _DriverTab.profile:
         return 'Driver profile';
+      case _DriverTab.attendance:
+        return 'Driver Attendance';
       case _DriverTab.home:
       default:
         return 'Driver Console';
@@ -390,6 +451,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
         return 'Recent collection runs';
       case _DriverTab.profile:
         return 'Your shift, vehicle, and contact';
+      case _DriverTab.attendance:
+        return "Manage today's presence and history";
       case _DriverTab.home:
       default:
         return 'Live stats - Keep moving safely';
@@ -427,8 +490,11 @@ class _DriverHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool showStats = activeTab != _DriverTab.profile;
+    final bool showStats =
+    activeTab != _DriverTab.profile &&
+    activeTab != _DriverTab.attendance;
 
+ 
     return AnimatedContainer(
       duration: _kHeaderTransitionDuration,
       curve: Curves.easeInOut,
@@ -475,44 +541,97 @@ class _DriverHeader extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                // Row(
+                //   children: [
+                //     Column(
+                //       crossAxisAlignment: CrossAxisAlignment.start,
+                //       children: [
+                //         Text(
+                //           title,
+                //           style: const TextStyle(
+                //             color: Colors.white,
+                //             fontSize: 22,
+                //             fontWeight: FontWeight.w800,
+                //             letterSpacing: 0.4,
+                //           ),
+                //         ),
+                //         const SizedBox(height: 2),
+                //         Text(
+                //           subtitle,
+                //           style: const TextStyle(
+                //             color: Colors.white70,
+                //             fontSize: 13,
+                //           ),
+                //         ),
+                //       ],
+                //     ),
+                //     const Spacer(),
+                //     IconButton(
+                //       onPressed: onLogoutTapped,
+                //       icon: const Icon(Icons.power_settings_new_rounded,
+                //           color: Colors.white),
+                //       tooltip: 'Logout',
+                //     ),
+                //   ],
+                // ),
                 Row(
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: onLogoutTapped,
-                      icon: const Icon(Icons.power_settings_new_rounded,
-                          color: Colors.white),
-                      tooltip: 'Logout',
-                    ),
-                  ],
-                ),
+  children: [
+    Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
+            letterSpacing: 0.4,
+          ),
+        ),
+        const SizedBox(height: 2),
+        Text(
+          subtitle,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 13,
+          ),
+        ),
+      ],
+    ),
+
+    const Spacer(),
+
+    // If Attendance → show avatar instead of logout
+    if (activeTab == _DriverTab.attendance)
+      Builder(
+        builder: (context) {
+          final empId = context.select<AuthBloc, String?>(
+            (bloc) => bloc.state is AuthStateAuthenticated
+                ? (bloc.state as AuthStateAuthenticated).emp_id
+                : null,
+          );
+
+          return DriverAvatar(empId: empId!);
+        },
+      )
+    else
+      IconButton(
+        onPressed: onLogoutTapped,
+        icon: const Icon(
+          Icons.power_settings_new_rounded,
+          color: Colors.white,
+        ),
+        tooltip: 'Logout',
+      ),
+  ],
+),
+
                 AnimatedSwitcher(
                   duration: _kHeaderTransitionDuration,
                   switchInCurve: Curves.easeOut,
                   switchOutCurve: Curves.easeIn,
-                  child: _buildStatsContent(showStats),
+                child: _buildStatsContent(context, showStats),
+
                 ),
               ],
             ),
@@ -522,26 +641,173 @@ class _DriverHeader extends StatelessWidget {
     );
   }
 
-  Widget _buildStatsContent(bool showStats) {
-    if (!showStats) {
-      return const SizedBox(
-        key: ValueKey('header-no-stats'),
-        height: 0,
-      );
-    }
+//   Widget _buildStatsContent(bool showStats) {
+//     if (!showStats) {
+//       return const SizedBox(
+//         key: ValueKey('header-no-stats'),
+//         height: 0,
+//       );
+//     }
 
-    if (activeTab == _DriverTab.history) {
-      return _HistoryDistanceCard(
-        key: const ValueKey('header-history-distance'),
-        stops: routeStops,
-      );
-    }
+//     if (activeTab == _DriverTab.history) {
+//       return _HistoryDistanceCard(
+//         key: const ValueKey('header-history-distance'),
+//         stops: routeStops,
+//       );
+//     }
 
-    return _HeaderStatsRow(
-      key: const ValueKey('header-stats-row'),
-      speed: speed,
-      fuel: fuel,
-      distance: distance,
+//     return _HeaderStatsRow(
+//       key: const ValueKey('header-stats-row'),
+//       speed: speed,
+//       fuel: fuel,
+//       distance: distance,
+//     );
+//   }
+// }
+
+Widget _buildStatsContent(BuildContext context, bool showStats) {
+  // Case: Profile → No stats, no avatar
+  if (activeTab == _DriverTab.profile) {
+    return const SizedBox(key: ValueKey('header-profile'), height: 0);
+  }
+
+  // Case: Attendance → Show avatar only
+ if (activeTab == _DriverTab.attendance) {
+  final empId = context.select<AuthBloc, String?>(
+    (bloc) => bloc.state is AuthStateAuthenticated
+        ? (bloc.state as AuthStateAuthenticated).emp_id
+        : null,
+  );
+
+  return const SizedBox(key: ValueKey('header-profile'), height: 0);
+}
+
+  // Case: History → show distance card
+  if (activeTab == _DriverTab.history) {
+    return _HistoryDistanceCard(
+      key: const ValueKey('header-history-distance'),
+      stops: routeStops,
+    );
+  }
+
+  // Case: Home → normal stats
+  return _HeaderStatsRow(
+    key: const ValueKey('header-stats-row'),
+    speed: speed,
+    fuel: fuel,
+    distance: distance,
+  );
+}
+}
+ class DriverAvatar extends StatefulWidget {
+  final String empId;
+  const DriverAvatar({super.key, required this.empId});
+
+  @override
+  State<DriverAvatar> createState() => _DriverAvatarState();
+}
+
+class _DriverAvatarState extends State<DriverAvatar> {
+  bool hasProfile = false;
+  bool imageLoading = true;
+  String? imageName;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchEmployeeImage();
+  }
+
+  Future<void> fetchEmployeeImage() async {
+    try {
+      final url =
+          "http://10.164.86.186:8000/api/mobile/staff-profile/?staff_id_id=${widget.empId}";
+
+      final request = await HttpClient().getUrl(Uri.parse(url));
+      final response = await request.close();
+      final body = await response.transform(utf8.decoder).join();
+      final json = jsonDecode(body);
+
+      if (json["status"] == "success") {
+        setState(() {
+          imageName = json["data"]["photo"] ?? "";
+          hasProfile = imageName != null && imageName!.isNotEmpty;
+          imageLoading = false;
+        });
+      } else {
+        setState(() {
+          hasProfile = false;
+          imageLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        hasProfile = false;
+        imageLoading = false;
+      });
+    }
+  }
+
+  // String convertToUrl(String path) {  
+  //   final filename = path.split("\\").last;
+  //   return "http://10.164.86.186:8000/media/$filename";
+  // }
+String convertToUrl(String path) {
+  // Normalize slashes for Windows/Linux
+  final clean = path.replaceAll("\\", "/");
+
+  // Extract only the filename
+  final filename = clean.split("/").last;
+
+  // Construct proper media URL
+  return "http://10.164.86.186:8000/media/emp_image/$filename";
+}
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProfilePage(empId: widget.empId),
+          ),
+        );
+
+        fetchEmployeeImage(); // Refresh after returning
+      },
+      child: CircleAvatar(
+        radius: 30,
+        backgroundColor: Colors.white,
+        backgroundImage:
+            (hasProfile && imageName != null) ? NetworkImage(convertToUrl(imageName!)) : null,
+        child: imageLoading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.green,
+                ),
+              )
+            : (!hasProfile)
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.person_add_alt_1, size: 26, color: Colors.green),
+                      SizedBox(height: 2),
+                      Text(
+                        "Register",
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
+                  )
+                : null,
+      ),
     );
   }
 }

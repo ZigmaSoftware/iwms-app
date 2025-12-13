@@ -27,7 +27,7 @@ class ApiConfig {
   //static const String _localMobileBase = 'http://192.168.4.75:8000/api/mobile/';
   // static const String _localMobileBase = 'http://192.168.5.92:8000/api/mobile/';
   // static const String _localMobileBase = 'http://10.111.127.123:8000/api/mobile/';
-  static const String _localMobileBase = 'http://10.64.151.226:8000/api/mobile/';
+  static const String _localMobileBase = 'http://10.165.19.226:8000/api/mobile/';
   // static const String _localMobileBase = 'http://115.245.93.26:4216/api/mobile/'; server
 
   /// Base URL used by the Flutter apps for mobile endpoints.

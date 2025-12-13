@@ -8,6 +8,7 @@ import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:animated_neumorphic/animated_neumorphic.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/camerapage.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart'; // Import geolocator package
 import 'package:http/http.dart' as http;
@@ -17,13 +18,13 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/a
 // import 'package:zigma_payroll/attendance/userimage.dart';
 
 // import '../provider/username.dart';
-import 'camerapage.dart';
+
 
 const Color _operatorPrimary = AppColors.primary;
 const Color _operatorAccent = AppColors.primaryVariant;
 
-class AttendancePage extends StatefulWidget {
-  const AttendancePage({
+class AttendancePageDriver extends StatefulWidget {
+  const AttendancePageDriver({
     super.key,
     this.operatorName = '',
     this.operatorCode = '',
@@ -34,10 +35,10 @@ class AttendancePage extends StatefulWidget {
   final String operatorCode;
   final String emp_id;
   @override
-  State<AttendancePage> createState() => _AttendancePageState();
+  State<AttendancePageDriver> createState() => _AttendancePageDriverState();
 }
 
-class _AttendancePageState extends State<AttendancePage> {
+class _AttendancePageDriverState extends State<AttendancePageDriver> {
   final bool _isElevated = false;
   bool _punchPressed = false;
 
@@ -305,44 +306,44 @@ class _AttendancePageState extends State<AttendancePage> {
               // ===========================
               //        HEADER CARD
               // ===========================
-              Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 26),
-                decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      _operatorPrimary,
-                      _operatorAccent,
-                    ],
-                  ),
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(35),
-                  ),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Attendance",
-                      style: AppTextStyles.heading2.copyWith(
-                        color: Colors.white,
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 6),
-                    Text(
-                      "Manage today's presence and history",
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
+              // Container(
+              //   width: double.infinity,
+              //   padding: const EdgeInsets.fromLTRB(20, 24, 20, 26),
+              //   decoration: BoxDecoration(
+              //     gradient: LinearGradient(
+              //       begin: Alignment.topCenter,
+              //       end: Alignment.bottomCenter,
+              //       colors: [
+              //         _operatorPrimary,
+              //         _operatorAccent,
+              //       ],
+              //     ),
+              //     borderRadius: const BorderRadius.vertical(
+              //       bottom: Radius.circular(35),
+              //     ),
+              //   ),
+              //   child: Column(
+              //     crossAxisAlignment: CrossAxisAlignment.start,
+              //     children: [
+              //       Text(
+              //         "Attendance",
+              //         style: AppTextStyles.heading2.copyWith(
+              //           color: Colors.white,
+              //           fontSize: 22,
+              //           fontWeight: FontWeight.w800,
+              //         ),
+              //       ),
+              //       const SizedBox(height: 6),
+              //       Text(
+              //         "Manage today's presence and history",
+              //         style: AppTextStyles.bodyMedium.copyWith(
+              //           color: Colors.white70,
+              //           fontWeight: FontWeight.w600,
+              //         ),
+              //       ),
+              //     ],
+              //   ),
+              // ),
               // Text(emp_idFromState!),
               SizedBox(height: 15),
 

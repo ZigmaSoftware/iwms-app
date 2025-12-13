@@ -100,7 +100,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     _syncService = OfflineSyncService(
       recordDao: _pendingDao,
       finalizeDao: _finalizeDao,
-      baseUrl: 'http://192.168.5.92:8000/api/mobile/waste',
+      baseUrl: 'http://10.164.86.186:8000/api/mobile/waste',
     )..start();
 
     _fetchWasteTypes();
@@ -218,7 +218,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   Future<void> _fetchWasteTypes() async {
     try {
       final response = await http.get(
-        Uri.parse('http://192.168.5.92:8000/api/mobile/waste/get-waste-types/'),
+        Uri.parse('http://10.164.86.186:8000/api/mobile/waste/get-waste-types/'),
       );
 
       final data = json.decode(response.body);
@@ -278,7 +278,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   Future<void> _fetchWasteRecord(String type) async {
     try {
       final uri = Uri.parse(
-          'http://192.168.5.92:8000/api/mobile/waste/get-latest-waste/');
+          'http://10.164.86.186:8000/api/mobile/waste/get-latest-waste/');
       final response = await http.post(uri, body: {
         'screen_unique_id': screenUniqueId,
         'customer_id': widget.customerId,
@@ -344,8 +344,8 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       // ------------------------------------------------------------
       final uri = Uri.parse(
         isUpdate
-            ? 'http://192.168.5.92:8000/api/mobile/waste/update-waste-sub/'
-            : 'http://192.168.5.92:8000/api/mobile/waste/insert-waste-sub/',
+            ? 'http://10.164.86.186:8000/api/mobile/waste/update-waste-sub/'
+            : 'http://10.164.86.186:8000/api/mobile/waste/insert-waste-sub/',
       );
 
       debugPrint(
@@ -523,7 +523,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       }
 
       final uri = Uri.parse(
-          'http://192.168.5.92:8000/api/mobile/waste/finalize-waste/');
+          'http://10.164.86.186:8000/api/mobile/waste/finalize-waste/');
 
       final request = http.MultipartRequest('POST', uri)
         ..fields['screen_unique_id'] = screenUniqueId
