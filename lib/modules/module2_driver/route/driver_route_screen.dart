@@ -9,20 +9,20 @@ import 'driver_route_controller.dart';
 class DriverRouteScreen extends StatelessWidget {
   const DriverRouteScreen({
     super.key,
-    required this.orsApiKey,
     required this.nextHouseUrl,
   });
 
-  final String orsApiKey;
   final String nextHouseUrl;
+
 
   @override
   Widget build(BuildContext context) {
     return ChangeNotifierProvider(
-      create: (_) => DriverRouteController(
-        orsApiKey: orsApiKey,
-        djangoNextHouseUrl: nextHouseUrl,
-      )..start(),
+     create: (_) => DriverRouteController(
+  djangoNextHouseUrl: nextHouseUrl,
+)..start(),
+
+
       child: const _DriverRouteView(),
     );
   }
@@ -99,7 +99,12 @@ class _RouteMap extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final points = <LatLng>[driver, if (destination != null) destination!, ...route];
+final points = route.isNotEmpty
+    ? route
+    : [
+        driver,
+        if (destination != null) destination!,
+      ];
     final mapController = MapController();
     final bounds = points.isNotEmpty
         ? LatLngBounds.fromPoints(points)
@@ -185,7 +190,6 @@ void openDriverRoute(BuildContext context) {
   Navigator.of(context).push(
     MaterialPageRoute(
       builder: (_) => DriverRouteScreen(
-        orsApiKey: ApiConfig.orsApiKey,
         nextHouseUrl: ApiConfig.driverNextHouse,
       ),
     ),
