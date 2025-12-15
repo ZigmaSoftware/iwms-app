@@ -25,6 +25,7 @@ import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/ors_service.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/driver_details.dart';
 
 const Color _driverPrimary = Color(0xFF1B5E20);
 const Color _driverAccent = Color(0xFF66BB6A);
@@ -145,12 +146,11 @@ class _DriverHomePageState extends State<DriverHomePage> {
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
                       child: _DriverHeader(
-  activeTab: _activeTab,
-  onLogoutTapped: () => _logout(context),
-  empId: empIdFromState ?? '',
-  driverName: nameFromState ?? 'Driver',
-),
-
+                        activeTab: _activeTab,
+                        onLogoutTapped: () => _logout(context),
+                        empId: empIdFromState ?? '',
+                        driverName: nameFromState ?? 'Driver',
+                      ),
                     ),
                     Expanded(
                       child: PageTransitionSwitcher(
@@ -170,6 +170,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
                             driverLocation,
                             nameFromState ?? 'Driver',
                             empIdFromState ?? '',
+                            selectedVehicle,
                           ),
                         ),
                       ),
@@ -178,40 +179,39 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 ),
               ),
               bottomNavigationBar: SafeArea(
-  child: BottomNavigationBar(
-    type: BottomNavigationBarType.fixed,
-    currentIndex: _activeTab.index,
-    selectedItemColor: _driverPrimary,
-    unselectedItemColor: Colors.black54,
-    selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
-    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500),
-    onTap: (index) {
-      final tab = _tabFromIndex(index);
-      if (tab != _activeTab) {
-        setState(() => _activeTab = tab);
-      }
-    },
-    items: const [
-      BottomNavigationBarItem(
-        icon: Icon(Icons.home_rounded),
-        label: 'Home',
-      ),
-      BottomNavigationBarItem(
-        icon: Icon(Icons.history_rounded),
-        label: 'History',
-      ),
-      BottomNavigationBarItem(
-        icon: Icon(Icons.person_outline_rounded),
-        label: 'Profile',
-      ),
-      BottomNavigationBarItem(
-        icon: Icon(Icons.event_available_rounded),
-        label: 'Attendance',
-      ),
-    ],
-  ),
-),
-
+                child: BottomNavigationBar(
+                  type: BottomNavigationBarType.fixed,
+                  currentIndex: _activeTab.index,
+                  selectedItemColor: _driverPrimary,
+                  unselectedItemColor: Colors.black54,
+                  selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
+                  unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500),
+                  onTap: (index) {
+                    final tab = _tabFromIndex(index);
+                    if (tab != _activeTab) {
+                      setState(() => _activeTab = tab);
+                    }
+                  },
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.home_rounded),
+                      label: 'Home',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.history_rounded),
+                      label: 'History',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person_outline_rounded),
+                      label: 'Profile',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.event_available_rounded),
+                      label: 'Attendance',
+                    ),
+                  ],
+                ),
+              ),
             );
           },
         ),
@@ -323,7 +323,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
     return out;
   }
 
-  Widget _buildTab(_DriverTab tab, LatLng driverLocation, String nameFromState, String empIdFromState) {
+  Widget _buildTab(_DriverTab tab, LatLng driverLocation, String nameFromState, String empIdFromState, VehicleModel? vehicle) {
     switch (tab) {
       case _DriverTab.home:
         return _HomeTab(
@@ -344,52 +344,17 @@ class _DriverHomePageState extends State<DriverHomePage> {
           onRefresh: _loadCustomers,
         );
       case _DriverTab.profile:
-        return _ProfileTab(onLogout: () => _logout(context));
+        return _ProfileTab(
+          onLogout: () => _logout(context),
+          driverName: nameFromState,
+          empId: empIdFromState,
+          vehicle: vehicle,
+        );
       case _DriverTab.attendance:
         return AttendancePageDriver(
           operatorName: nameFromState,
           operatorCode: empIdFromState,
         );
-    }
-  }
-
-  String _headerTitle(_DriverTab tab) {
-    switch (tab) {
-      case _DriverTab.history:
-        return 'History';
-      case _DriverTab.profile:
-        return 'Driver Profile';
-      case _DriverTab.attendance:
-        return 'Driver Attendance';
-      case _DriverTab.home:
-        return 'Driver Console';
-    }
-  }
-
-  String _tabLabel(_DriverTab tab) {
-    switch (tab) {
-      case _DriverTab.home:
-        return 'Home';
-      case _DriverTab.history:
-        return 'History';
-      case _DriverTab.profile:
-        return 'Profile';
-      case _DriverTab.attendance:
-        return 'Attendance';
-    }
-  }
-
-  _DriverTab _tabFromLabel(String label) {
-    switch (label) {
-      case 'History':
-        return _DriverTab.history;
-      case 'Profile':
-        return _DriverTab.profile;
-      case 'Attendance':
-        return _DriverTab.attendance;
-      case 'Home':
-      default:
-        return _DriverTab.home;
     }
   }
 
@@ -404,19 +369,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
       case 0:
       default:
         return _DriverTab.home;
-    }
-  }
-
-  String _headerSubtitle(_DriverTab tab) {
-    switch (tab) {
-      case _DriverTab.history:
-        return 'Recent collection runs';
-      case _DriverTab.profile:
-        return 'Your shift, vehicle, and contact';
-      case _DriverTab.attendance:
-        return "Manage today's presence and history";
-      case _DriverTab.home:
-        return 'Live stats - Keep moving safely';
     }
   }
 
@@ -435,6 +387,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
             address: c.address,
             location: c.location,
             status: status,
+            skipReason: c.skipReason,
           );
         }
         return c;
@@ -507,7 +460,6 @@ class _DriverHeader extends StatelessWidget {
     );
   }
 }
-
 
 class _StatItem extends StatelessWidget {
   const _StatItem({
@@ -685,46 +637,18 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   _NavigationMode _navMode = _NavigationMode.overview;
   String? _activeNavigationId;
   late AnimationController _navAnimController;
-  void _fitDriverAndNextCustomer() {
-  if (_customers.isEmpty) return;
-
-  final nextCustomer = _customers.first;
-
-  final bounds = LatLngBounds.fromPoints([
-    widget.driverLocation,
-    nextCustomer.location,
-  ]);
-
-  widget.mapController.fitCamera(
-    CameraFit.bounds(
-      bounds: bounds,
-      padding: const EdgeInsets.all(80),
-    ),
-  );
-}
-
-void _rotateMapToDriverBearing() {
-  final normalized = (_driverBearing + 360) % 360;
-  widget.mapController.rotate(-normalized);
-
-}
-
 
   @override
   void initState() {
     super.initState();
-    _customers = widget.customers;
+    _customers = widget.customers
+        .where((c) => c.status == _CustomerStatus.pending || c.status == _CustomerStatus.navigating)
+        .toList();
     _navAnimController = AnimationController(
       vsync: this,
       duration: _kNavigationTransitionDuration,
     );
     _computeRoute();
-  }
-
-  void _followDriver() {
-    if (_orsRoute.length < 2) return;
-    final center = _orsRoute.first;
-    widget.mapController.move(center, 17.8);
   }
 
   @override
@@ -738,7 +662,9 @@ void _rotateMapToDriverBearing() {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.customers != widget.customers ||
         oldWidget.driverLocation != widget.driverLocation) {
-      _customers = List<_DriverCustomerStop>.from(widget.customers);
+      _customers = widget.customers
+          .where((c) => c.status == _CustomerStatus.pending || c.status == _CustomerStatus.navigating)
+          .toList();
       _computeRoute();
     }
   }
@@ -761,26 +687,24 @@ void _rotateMapToDriverBearing() {
     try {
       final route = await ORSService.fetchMultiRoute(coords);
 
-if (!mounted) return;
+      if (!mounted) return;
 
-setState(() {
-  _orsRoute = route;
+      setState(() {
+        _orsRoute = route;
 
-  if (route.length > 1) {
-    _driverBearing =
-        ORSService.calculateBearing(route.first, route[1]);
-  } else {
-    _driverBearing = 0.0;
-  }
-});
+        if (route.length > 1) {
+          _driverBearing = ORSService.calculateBearing(route.first, route[1]);
+        } else {
+          _driverBearing = 0.0;
+        }
+      });
 
-/// 🔥 ADD THIS PART IMMEDIATELY AFTER setState
-WidgetsBinding.instance.addPostFrameCallback((_) {
-  if (!mounted) return;
-  _fitDriverAndNextCustomer();
-  _rotateMapToDriverBearing();
-});
-
+      if (_navMode == _NavigationMode.overview) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _fitDriverAndNextCustomer();
+        });
+      }
     } catch (e) {
       if (!mounted) return;
       setState(() {
@@ -788,6 +712,24 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
         _driverBearing = 0.0;
       });
     }
+  }
+
+  void _fitDriverAndNextCustomer() {
+    if (_customers.isEmpty) return;
+
+    final nextCustomer = _customers.first;
+
+    final bounds = LatLngBounds.fromPoints([
+      widget.driverLocation,
+      nextCustomer.location,
+    ]);
+
+    widget.mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.all(80),
+      ),
+    );
   }
 
   void _startNavigation(String customerId) {
@@ -801,7 +743,7 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
 
     widget.onStatusChanged(customerId, _CustomerStatus.navigating);
     _navAnimController.forward();
-    _animateToNavigationView(customer.location);
+    _animateToNavigationView();
   }
 
   void _stopNavigation() {
@@ -819,19 +761,41 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
     _animateToOverview();
   }
 
-  void _animateToNavigationView(LatLng destination) {
-    final targetZoom = 17.5;
-    final targetCenter = widget.driverLocation;
+  void _recenterNavigation() {
+    if (_navMode == _NavigationMode.navigating) {
+      _animateToNavigationView();
+    } else {
+      _fitDriverAndNextCustomer();
+    }
+  }
+
+  void _animateToNavigationView() {
+    if (_orsRoute.isEmpty) return;
+
+    // Position driver at bottom third of screen, facing up
+    final driverPos = _orsRoute.first;
+    
+    // Calculate offset to position driver marker at bottom third
+    final screenHeight = MediaQuery.of(context).size.height;
+    final mapHeight = screenHeight - 200; // approximate map height
+    final offsetLat = 0.003; // Adjust this value based on zoom level
+    
+    final targetCenter = LatLng(
+      driverPos.latitude + offsetLat,
+      driverPos.longitude,
+    );
 
     Future.delayed(const Duration(milliseconds: 100), () {
       if (!mounted) return;
-      widget.mapController.move(targetCenter, targetZoom);
+      widget.mapController.move(targetCenter, 17.5);
+      widget.mapController.rotate(0); // North-up orientation
     });
   }
 
   void _animateToOverview() {
     if (_customers.isEmpty) {
       widget.mapController.move(widget.driverLocation, 15.0);
+      widget.mapController.rotate(0);
       return;
     }
 
@@ -850,6 +814,7 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
           padding: const EdgeInsets.all(80),
         ),
       );
+      widget.mapController.rotate(0);
     });
   }
 
@@ -892,16 +857,15 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
           Positioned.fill(
             child: FlutterMap(
               mapController: widget.mapController,
-             options: MapOptions(
-  initialCenter: widget.driverLocation,
-  initialZoom: 14.5,
-  minZoom: 10,
-  maxZoom: 18,
-  interactionOptions: const InteractionOptions(
-    flags: InteractiveFlag.all, // 🔥 allow rotation
-  ),
-),
-
+              options: MapOptions(
+                initialCenter: widget.driverLocation,
+                initialZoom: 14.5,
+                minZoom: 10,
+                maxZoom: 18,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all,
+                ),
+              ),
               children: [
                 TileLayer(
                   urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
@@ -953,12 +917,18 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
           ),
 
           // Top controls
-          if (!isNavigating)
-            Positioned(
-              top: 12,
-              right: 12,
-              child: Column(
-                children: [
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Column(
+              children: [
+                if (isNavigating)
+                  _MapButton(
+                    icon: Icons.my_location_rounded,
+                    onPressed: _recenterNavigation,
+                    tooltip: 'Recenter',
+                  ),
+                if (!isNavigating) ...[
                   _MapButton(
                     icon: Icons.my_location_rounded,
                     onPressed: widget.onCenter,
@@ -974,8 +944,9 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
                     tooltip: 'Refresh',
                   ),
                 ],
-              ),
+              ],
             ),
+          ),
 
           // Navigation header
           if (isNavigating && _activeNavigationId != null)
@@ -992,17 +963,15 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
               ),
             ),
 
-          // Bottom customer carousel
+          // Bottom customer carousel - compact design
           Positioned(
             left: 0,
             right: 0,
             bottom: 12,
             child: AnimatedContainer(
-  duration: _kNavigationTransitionDuration,
-  curve: Curves.easeInOut,
-  constraints: BoxConstraints(
-    maxHeight: isNavigating ? 0 : 180,
-  ),
+              duration: _kNavigationTransitionDuration,
+              curve: Curves.easeInOut,
+              height: isNavigating ? 0 : 140, // Reduced from 180 to 140
               child: widget.loading
                   ? const Center(child: CircularProgressIndicator())
                   : widget.error != null
@@ -1016,7 +985,16 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
                           ),
                         )
                       : _customers.isEmpty
-                          ? const Center(child: Text('No customers assigned'))
+                          ? const Center(
+                              child: Text(
+                                'All customers completed!',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            )
                           : ListView.separated(
                               padding: const EdgeInsets.symmetric(horizontal: 16),
                               scrollDirection: Axis.horizontal,
@@ -1082,7 +1060,7 @@ WidgetsBinding.instance.addPostFrameCallback((_) {
                                                   const Text('Select a reason for skipping:'),
                                                   const SizedBox(height: 12),
                                                   DropdownButtonFormField<String>(
-                                                    initialValue: selectedReason,
+                                                    value: selectedReason,
                                                     isExpanded: true,
                                                     dropdownColor: Colors.white,
                                                     decoration: const InputDecoration(
@@ -1205,8 +1183,7 @@ class _NavigationHeader extends StatelessWidget {
                   color: Colors.blue.shade50,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.arrow_upward_rounded
-,
+                child: Icon(Icons.navigation_rounded,
                     color: Colors.blue.shade700, size: 20),
               ),
               const SizedBox(width: 12),
@@ -1271,6 +1248,7 @@ class _NavigationHeader extends StatelessWidget {
     );
   }
 }
+
 class _CustomerCard extends StatelessWidget {
   const _CustomerCard({
     required this.customer,
@@ -1302,191 +1280,171 @@ class _CustomerCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: 260,
+      width: 240, // Reduced from 260
       child: Card(
         elevation: 6,
         shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(20),
+          borderRadius: BorderRadius.circular(16),
         ),
-        child: LayoutBuilder(
-          builder: (context, constraints) {
-            return ConstrainedBox(
-              constraints: BoxConstraints(
-                maxHeight: constraints.maxHeight,
+        child: Padding(
+          padding: const EdgeInsets.all(10), // Reduced from 12
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 16, // Reduced from 18
+                    backgroundColor: _statusColor.withValues(alpha: 0.15),
+                    child: Text(
+                      customer.name[0].toUpperCase(),
+                      style: TextStyle(
+                        color: _statusColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          customer.name,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                        ),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.near_me_rounded,
+                              size: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              distance,
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // -------------------------------------------------
-                    // Header
-                    // -------------------------------------------------
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 18,
-                          backgroundColor:
-                              _statusColor.withValues(alpha: 0.15),
-                          child: Text(
-                            customer.name[0].toUpperCase(),
-                            style: TextStyle(
-                              color: _statusColor,
-                              fontWeight: FontWeight.w800,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                customer.name,
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  fontSize: 14,
-                                ),
-                              ),
-                              Row(
-                                children: [
-                                  Icon(
-                                    Icons.near_me_rounded,
-                                    size: 12,
-                                    color: Colors.grey.shade600,
-                                  ),
-                                  const SizedBox(width: 4),
-                                  Text(
-                                    distance,
-                                    style: TextStyle(
-                                      color: Colors.grey.shade600,
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w600,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
 
-                    const SizedBox(height: 10),
+              const SizedBox(height: 8),
 
-                    // -------------------------------------------------
-                    // Complete / Skip buttons
-                    // -------------------------------------------------
-                    Row(
-                      children: [
-                        Expanded(
-                          child: SizedBox(
-                            height: 36,
-                            child: ElevatedButton(
-                              onPressed: customer.status ==
-                                      _CustomerStatus.collected
-                                  ? null
-                                  : onComplete,
-                              style: ElevatedButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                backgroundColor: Colors.green.shade700,
-                                foregroundColor: Colors.white,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              child: const Text(
-                                'Complete',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 8),
-                        Expanded(
-                          child: SizedBox(
-                            height: 36,
-                            child: OutlinedButton(
-                              onPressed: customer.status ==
-                                      _CustomerStatus.skipped
-                                  ? null
-                                  : onSkip,
-                              style: OutlinedButton.styleFrom(
-                                padding: EdgeInsets.zero,
-                                shape: RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                              ),
-                              child: const Text(
-                                'Skip',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  fontWeight: FontWeight.w700,
-                                ),
-                              ),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-
-                    const SizedBox(height: 10),
-
-                    // -------------------------------------------------
-                    // Navigate button (reduced height)
-                    // -------------------------------------------------
-                    SizedBox(
-                      width: double.infinity,
-                      height: 34,
-                      child: ElevatedButton.icon(
-                        onPressed: customer.status ==
-                                _CustomerStatus.navigating
+              // Complete / Skip buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 32, // Reduced from 36
+                      child: ElevatedButton(
+                        onPressed: customer.status == _CustomerStatus.collected
                             ? null
-                            : onStart,
-                        icon: const Icon(
-                          Icons.navigation_rounded,
-                          size: 14,
+                            : onComplete,
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          backgroundColor: Colors.green.shade700,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
                         ),
-                        label: const Text(
-                          'Navigate',
+                        child: const Text(
+                          'Complete',
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: TextStyle(
-                            fontSize: 12,
+                            fontSize: 11,
                             fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        style: ElevatedButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          backgroundColor: Colors.blue.shade700,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(10),
                           ),
                         ),
                       ),
                     ),
-                  ],
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: SizedBox(
+                      height: 32,
+                      child: OutlinedButton(
+                        onPressed: customer.status == _CustomerStatus.skipped
+                            ? null
+                            : onSkip,
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Skip',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+
+              // Navigate button
+              SizedBox(
+                width: double.infinity,
+                height: 32,
+                child: ElevatedButton.icon(
+                  onPressed:
+                      customer.status == _CustomerStatus.navigating ? null : onStart,
+                  icon: const Icon(
+                    Icons.navigation_rounded,
+                    size: 13,
+                  ),
+                  label: const Text(
+                    'Navigate',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    backgroundColor: Colors.blue.shade700,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
                 ),
               ),
-            );
-          },
+            ],
+          ),
         ),
       ),
     );
   }
 }
-
 
 class _HistoryTab extends StatelessWidget {
   const _HistoryTab({
@@ -1503,35 +1461,74 @@ class _HistoryTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final completedCustomers = customers
+        .where((c) =>
+            c.status == _CustomerStatus.collected ||
+            c.status == _CustomerStatus.skipped)
+        .toList();
+
     return RefreshIndicator(
       onRefresh: onRefresh,
       child: ListView(
         padding: const EdgeInsets.all(16),
         children: [
-          const Text(
-            'History',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Collection History',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _driverPrimary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${completedCustomers.length} completed',
+                  style: const TextStyle(
+                    color: _driverPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 16),
           if (loading)
             const Center(child: CircularProgressIndicator())
           else if (error != null)
             Center(
               child: Text(error!, style: const TextStyle(color: Colors.red)),
             )
-          else if (customers.isEmpty)
-            const Center(child: Text('No history available'))
+          else if (completedCustomers.isEmpty)
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.history_rounded,
+                      size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No collection history yet',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            )
           else
-            ...customers
-                .where((c) =>
-                    c.status == _CustomerStatus.collected ||
-                    c.status == _CustomerStatus.skipped)
-                .map((c) {
+            ...completedCustomers.map((c) {
               final isCollected = c.status == _CustomerStatus.collected;
               final color = isCollected ? Colors.green : Colors.orange;
 
               return Container(
-                margin: const EdgeInsets.only(bottom: 10),
+                margin: const EdgeInsets.only(bottom: 12),
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: color, width: 1.5),
@@ -1552,24 +1549,34 @@ class _HistoryTab extends StatelessWidget {
                   subtitle: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(c.address),
-                      if (c.status == _CustomerStatus.skipped &&
-                          c.skipReason != null)
-                        Text(
-                          'Reason: ${c.skipReason}',
-                          style: TextStyle(
-                            color: color,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w600,
+                      if (c.address.isNotEmpty) Text(c.address),
+                      if (c.status == _CustomerStatus.skipped && c.skipReason != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Reason: ${c.skipReason}',
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
                           ),
                         ),
                     ],
                   ),
-                  trailing: Text(
-                    isCollected ? 'Collected' : 'Skipped',
-                    style: TextStyle(
-                      color: color,
-                      fontWeight: FontWeight.w800,
+                  trailing: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      isCollected ? 'Collected' : 'Skipped',
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
                     ),
                   ),
                 ),
@@ -1582,30 +1589,267 @@ class _HistoryTab extends StatelessWidget {
 }
 
 class _ProfileTab extends StatelessWidget {
-  const _ProfileTab({required this.onLogout});
+  const _ProfileTab({
+    required this.onLogout,
+    required this.driverName,
+    required this.empId,
+    required this.vehicle,
+  });
 
   final VoidCallback onLogout;
+  final String driverName;
+  final String empId;
+  final VehicleModel? vehicle;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Profile Header
+          Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [_driverPrimary, _driverAccent],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Column(
+              children: [
+                const CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.white,
+                  child: Icon(Icons.person, size: 50, color: _driverPrimary),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  driverName,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                Text(
+                  'Employee ID: $empId',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+
+          const SizedBox(height: 20),
+
+          // Vehicle Information
+          if (vehicle != null) ...[
+            _ProfileSection(
+              title: 'Vehicle Information',
+              icon: Icons.local_shipping_rounded,
+              children: [
+                _ProfileItem(
+                  label: 'Vehicle Number',
+                  value: vehicle!.vehicleNumber ?? 'N/A',
+                  icon: Icons.confirmation_number_outlined,
+                ),
+                _ProfileItem(
+                  label: 'Vehicle Type',
+                  value: vehicle!.vehicleType ?? 'N/A',
+                  icon: Icons.category_outlined,
+                ),
+                _ProfileItem(
+                  label: 'Status',
+                  value: vehicle!.status ?? 'N/A',
+                  icon: Icons.circle,
+                  valueColor: (vehicle!.status ?? '').toLowerCase() == 'running'
+                      ? Colors.green
+                      : Colors.orange,
+                ),
+                _ProfileItem(
+                  label: 'Driver Name',
+                  value: vehicle!.driverName ?? 'N/A',
+                  icon: Icons.person_outline,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Work Information
+          _ProfileSection(
+            title: 'Work Information',
+            icon: Icons.work_outline_rounded,
+            children: [
+              _ProfileItem(
+                label: 'Role',
+                value: 'Waste Collection Driver',
+                icon: Icons.badge_outlined,
+              ),
+              _ProfileItem(
+                label: 'Department',
+                value: 'Waste Management',
+                icon: Icons.business_outlined,
+              ),
+              _ProfileItem(
+                label: 'Shift',
+                value: 'Morning (6:00 AM - 2:00 PM)',
+                icon: Icons.access_time_outlined,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Contact Information
+          _ProfileSection(
+            title: 'Contact Information',
+            icon: Icons.contact_phone_outlined,
+            children: [
+              _ProfileItem(
+                label: 'Phone',
+                value: '+91 XXXXX XXXXX',
+                icon: Icons.phone_outlined,
+              ),
+              _ProfileItem(
+                label: 'Emergency Contact',
+                value: '1800-XXX-XXXX',
+                icon: Icons.emergency_outlined,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          // Logout Button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: onLogout,
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text(
+                'Logout',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileSection extends StatelessWidget {
+  const _ProfileSection({
+    required this.title,
+    required this.icon,
+    required this.children,
+  });
+
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(icon, color: _driverPrimary, size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: _driverPrimary,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Divider(height: 1),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileItem extends StatelessWidget {
+  const _ProfileItem({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.all(16),
-      child: Column(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
         children: [
-          const CircleAvatar(
-            radius: 40,
-            child: Icon(Icons.person, size: 40),
-          ),
-          const SizedBox(height: 12),
-          const Text(
-            'Driver Profile',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
-          ),
-          const Spacer(),
-          ElevatedButton.icon(
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout),
-            label: const Text('Logout'),
+          Icon(icon, size: 20, color: Colors.grey.shade600),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: valueColor ?? Colors.black87,
+                  ),
+                ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1624,15 +1868,11 @@ class _DriverMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Transform.rotate(
-  angle: 0, // arrow always points UP
-  child: Icon(
-    Icons.navigation_rounded,
-    size: isActive ? 38 : 32,
-    color: Colors.deepOrange.shade600,
-  ),
-);
-
+    return const Icon(
+      Icons.navigation_rounded,
+      size: 38,
+      color: Colors.deepOrange,
+    );
   }
 }
 
@@ -1661,6 +1901,7 @@ class _HouseMarker extends StatelessWidget {
         style: TextStyle(
           color: color,
           fontWeight: FontWeight.w800,
+          fontSize: 12,
         ),
       ),
     );

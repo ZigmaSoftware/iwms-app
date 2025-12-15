@@ -187,4 +187,8 @@ class VehicleModel extends Equatable {
         fuelLevel,
         distanceKm,
       ];
+
+  get vehicleNumber => null;
+
+  get vehicleType => null;
 }
