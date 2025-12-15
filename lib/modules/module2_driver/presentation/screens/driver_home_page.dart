@@ -1,10 +1,15 @@
+// ============================================================
+// PART 1: Imports, Constants, Enums, and Main Widget Classes
+// ============================================================
+
 import 'dart:convert';
+import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:go_router/go_router.dart';
+import 'package:animations/animations.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:http/http.dart' as http;
 
@@ -13,19 +18,19 @@ import '../../../../core/geofence_config.dart';
 import 'package:iwms_citizen_app/data/models/vehicle_model.dart';
 import '../../../../logic/vehicle_tracking/vehicle_bloc.dart';
 import '../../../../logic/vehicle_tracking/vehicle_event.dart';
-import '../../../../router/app_router.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/shared/widgets/tracking_view_shell.dart';
-import '../../route/driver_route_screen.dart';
 import 'package:iwms_citizen_app/core/ors_service.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
 
 const Color _driverPrimary = Color(0xFF1B5E20);
 const Color _driverAccent = Color(0xFF66BB6A);
 const Duration _kHeaderTransitionDuration = Duration(milliseconds: 320);
 const Duration _kNavigationTransitionDuration = Duration(milliseconds: 600);
-const double _kStopMarkerDiameter = 32;
+
 const List<String> _skipReasons = [
   'No one at home',
   'Access blocked / gate locked',
@@ -37,7 +42,6 @@ const List<String> _skipReasons = [
 ];
 
 enum _NavigationMode { overview, navigating }
-
 enum _CustomerStatus { pending, collected, skipped, navigating }
 
 class _DriverCustomerStop {
@@ -58,7 +62,7 @@ class _DriverCustomerStop {
   });
 }
 
-enum _DriverTab { home, history, profile }
+enum _DriverTab { home, history, profile, attendance }
 
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({super.key});
@@ -105,6 +109,16 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final nameFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).userName
+            : null);
+
+    final empIdFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).emp_id
+            : null);
+
     return BlocProvider(
       create: (_) => getIt<VehicleBloc>(),
       child: BlocListener<VehicleBloc, VehicleState>(
@@ -128,47 +142,76 @@ class _DriverHomePageState extends State<DriverHomePage> {
               body: SafeArea(
                 child: Column(
                   children: [
-                    _MiniHeader(
-                      driverName:
-                          selectedVehicle?.registrationNumber ?? 'Driver',
-                      onNotification: () {},
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: _DriverHeader(
+  activeTab: _activeTab,
+  onLogoutTapped: () => _logout(context),
+  empId: empIdFromState ?? '',
+  driverName: nameFromState ?? 'Driver',
+),
+
                     ),
                     Expanded(
-                      child: KeyedSubtree(
-                        key: ValueKey<_DriverTab>(_activeTab),
-                        child: _buildTab(_activeTab, driverLocation),
+                      child: PageTransitionSwitcher(
+                        duration: const Duration(milliseconds: 320),
+                        transitionBuilder: (child, animation, secondaryAnimation) {
+                          return SharedAxisTransition(
+                            animation: animation,
+                            secondaryAnimation: secondaryAnimation,
+                            transitionType: SharedAxisTransitionType.horizontal,
+                            child: child,
+                          );
+                        },
+                        child: KeyedSubtree(
+                          key: ValueKey<_DriverTab>(_activeTab),
+                          child: _buildTab(
+                            _activeTab,
+                            driverLocation,
+                            nameFromState ?? 'Driver',
+                            empIdFromState ?? '',
+                          ),
+                        ),
                       ),
                     ),
                   ],
                 ),
               ),
               bottomNavigationBar: SafeArea(
-                child: BottomNavigationBar(
-                  currentIndex: _tabFromIndexReverse(_activeTab),
-                  selectedItemColor: _driverPrimary,
-                  unselectedItemColor: Colors.black54,
-                  onTap: (index) {
-                    final tab = _tabFromIndex(index);
-                    if (tab != _activeTab) {
-                      setState(() => _activeTab = tab);
-                    }
-                  },
-                  items: const [
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.home_rounded),
-                      label: 'Home',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.history_rounded),
-                      label: 'History',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.person_outline_rounded),
-                      label: 'Profile',
-                    ),
-                  ],
-                ),
-              ),
+  child: BottomNavigationBar(
+    type: BottomNavigationBarType.fixed,
+    currentIndex: _activeTab.index,
+    selectedItemColor: _driverPrimary,
+    unselectedItemColor: Colors.black54,
+    selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
+    unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500),
+    onTap: (index) {
+      final tab = _tabFromIndex(index);
+      if (tab != _activeTab) {
+        setState(() => _activeTab = tab);
+      }
+    },
+    items: const [
+      BottomNavigationBarItem(
+        icon: Icon(Icons.home_rounded),
+        label: 'Home',
+      ),
+      BottomNavigationBarItem(
+        icon: Icon(Icons.history_rounded),
+        label: 'History',
+      ),
+      BottomNavigationBarItem(
+        icon: Icon(Icons.person_outline_rounded),
+        label: 'Profile',
+      ),
+      BottomNavigationBarItem(
+        icon: Icon(Icons.event_available_rounded),
+        label: 'Attendance',
+      ),
+    ],
+  ),
+),
+
             );
           },
         ),
@@ -184,12 +227,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
     try {
       final assignmentsUri = Uri.parse(ApiConfig.assignments);
-      final resp =
-          await http.get(assignmentsUri).timeout(const Duration(seconds: 12));
+      final resp = await http.get(assignmentsUri).timeout(const Duration(seconds: 12));
 
       if (resp.statusCode == 200) {
-        final decodedAssignments =
-            _decodeCustomerList(resp.body, fromAssignments: true);
+        final decodedAssignments = _decodeCustomerList(resp.body, fromAssignments: true);
         if (decodedAssignments.isNotEmpty) {
           setState(() {
             _customers = decodedAssignments;
@@ -212,8 +253,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
       } else {
         setState(() {
           _loadingCustomers = false;
-          _customerError =
-              'Failed to load customers (${customersResp.statusCode})';
+          _customerError = 'Failed to load customers (${customersResp.statusCode})';
         });
       }
     } catch (_) {
@@ -232,31 +272,26 @@ class _DriverHomePageState extends State<DriverHomePage> {
     return LatLng(lat, lon);
   }
 
-  List<_DriverCustomerStop> _decodeCustomerList(String body,
-      {bool fromAssignments = false}) {
+  List<_DriverCustomerStop> _decodeCustomerList(String body, {bool fromAssignments = false}) {
     final List<_DriverCustomerStop> out = [];
 
     try {
       final decoded = jsonDecode(body);
       final list = decoded is List
           ? decoded
-          : (decoded is Map && decoded['results'] is List
-              ? decoded['results']
-              : []);
+          : (decoded is Map && decoded['results'] is List ? decoded['results'] : []);
 
       if (list is! List) return out;
 
       for (final entry in list) {
         if (entry is! Map) continue;
-        final map = Map<String, dynamic>.from(entry as Map);
+        final map = Map<String, dynamic>.from(entry);
 
         final id = (map['unique_id'] ?? map['customer_id'] ?? '').toString();
         if (id.trim().isEmpty) continue;
 
-        final latRaw =
-            fromAssignments ? map['customer_latitude'] : map['latitude'];
-        final lonRaw =
-            fromAssignments ? map['customer_longitude'] : map['longitude'];
+        final latRaw = fromAssignments ? map['customer_latitude'] : map['latitude'];
+        final lonRaw = fromAssignments ? map['customer_longitude'] : map['longitude'];
 
         final position = _safeLatLng(latRaw, lonRaw);
         if (position == null) continue;
@@ -288,7 +323,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
     return out;
   }
 
-  Widget _buildTab(_DriverTab tab, LatLng driverLocation) {
+  Widget _buildTab(_DriverTab tab, LatLng driverLocation, String nameFromState, String empIdFromState) {
     switch (tab) {
       case _DriverTab.home:
         return _HomeTab(
@@ -310,6 +345,51 @@ class _DriverHomePageState extends State<DriverHomePage> {
         );
       case _DriverTab.profile:
         return _ProfileTab(onLogout: () => _logout(context));
+      case _DriverTab.attendance:
+        return AttendancePageDriver(
+          operatorName: nameFromState,
+          operatorCode: empIdFromState,
+        );
+    }
+  }
+
+  String _headerTitle(_DriverTab tab) {
+    switch (tab) {
+      case _DriverTab.history:
+        return 'History';
+      case _DriverTab.profile:
+        return 'Driver Profile';
+      case _DriverTab.attendance:
+        return 'Driver Attendance';
+      case _DriverTab.home:
+        return 'Driver Console';
+    }
+  }
+
+  String _tabLabel(_DriverTab tab) {
+    switch (tab) {
+      case _DriverTab.home:
+        return 'Home';
+      case _DriverTab.history:
+        return 'History';
+      case _DriverTab.profile:
+        return 'Profile';
+      case _DriverTab.attendance:
+        return 'Attendance';
+    }
+  }
+
+  _DriverTab _tabFromLabel(String label) {
+    switch (label) {
+      case 'History':
+        return _DriverTab.history;
+      case 'Profile':
+        return _DriverTab.profile;
+      case 'Attendance':
+        return _DriverTab.attendance;
+      case 'Home':
+      default:
+        return _DriverTab.home;
     }
   }
 
@@ -319,21 +399,24 @@ class _DriverHomePageState extends State<DriverHomePage> {
         return _DriverTab.history;
       case 2:
         return _DriverTab.profile;
+      case 3:
+        return _DriverTab.attendance;
       case 0:
       default:
         return _DriverTab.home;
     }
   }
 
-  int _tabFromIndexReverse(_DriverTab tab) {
+  String _headerSubtitle(_DriverTab tab) {
     switch (tab) {
       case _DriverTab.history:
-        return 1;
+        return 'Recent collection runs';
       case _DriverTab.profile:
-        return 2;
+        return 'Your shift, vehicle, and contact';
+      case _DriverTab.attendance:
+        return "Manage today's presence and history";
       case _DriverTab.home:
-      default:
-        return 0;
+        return 'Live stats - Keep moving safely';
     }
   }
 
@@ -359,63 +442,216 @@ class _DriverHomePageState extends State<DriverHomePage> {
     });
   }
 }
+// ============================================================
+// PART 2: Header, Stats, and Avatar Widgets
+// ============================================================
 
-class _MiniHeader extends StatelessWidget {
-  const _MiniHeader({
+class _DriverHeader extends StatelessWidget {
+  const _DriverHeader({
+    super.key,
+    required this.activeTab,
+    required this.onLogoutTapped,
+    required this.empId,
     required this.driverName,
-    required this.onNotification,
   });
 
+  final _DriverTab activeTab;
+  final VoidCallback onLogoutTapped;
+  final String empId;
   final String driverName;
-  final VoidCallback onNotification;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      color: _driverPrimary,
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
+      decoration: const BoxDecoration(
+        gradient: LinearGradient(
+          colors: [_driverPrimary, _driverAccent],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.only(
+          bottomLeft: Radius.circular(18),
+          bottomRight: Radius.circular(18),
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black26,
+            blurRadius: 14,
+            offset: Offset(0, 6),
+          ),
+        ],
+      ),
       child: Row(
         children: [
-          const CircleAvatar(
-            backgroundColor: Colors.white,
-            child: Icon(Icons.person, color: _driverPrimary),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Driver',
-                  style: TextStyle(
-                    color: Colors.white70,
-                    fontSize: 12,
-                  ),
-                ),
-                Text(
-                  driverName,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 16,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
+          Text(
+            driverName,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          IconButton(
-            onPressed: onNotification,
-            icon: const Icon(Icons.notifications_none_rounded,
-                color: Colors.white),
-            tooltip: 'Notifications',
-          ),
+          const Spacer(),
+          if (activeTab == _DriverTab.attendance)
+            DriverAvatar(empId: empId)
+          else
+            IconButton(
+              onPressed: onLogoutTapped,
+              icon: const Icon(Icons.power_settings_new_rounded,
+                  color: Colors.white),
+            ),
         ],
       ),
     );
   }
 }
+
+
+class _StatItem extends StatelessWidget {
+  const _StatItem({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white70, size: 18),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class DriverAvatar extends StatefulWidget {
+  final String empId;
+  const DriverAvatar({super.key, required this.empId});
+
+  @override
+  State<DriverAvatar> createState() => _DriverAvatarState();
+}
+
+class _DriverAvatarState extends State<DriverAvatar> {
+  bool hasProfile = false;
+  bool imageLoading = true;
+  String? imageName;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchEmployeeImage();
+  }
+
+  Future<void> fetchEmployeeImage() async {
+    try {
+      final url =
+          "http://10.164.86.186:8000/api/mobile/staff-profile/?staff_id_id=${widget.empId}";
+
+      final request = await HttpClient().getUrl(Uri.parse(url));
+      final response = await request.close();
+      final body = await response.transform(utf8.decoder).join();
+      final json = jsonDecode(body);
+
+      if (json["status"] == "success") {
+        setState(() {
+          imageName = json["data"]["photo"] ?? "";
+          hasProfile = imageName != null && imageName!.isNotEmpty;
+          imageLoading = false;
+        });
+      } else {
+        setState(() {
+          hasProfile = false;
+          imageLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        hasProfile = false;
+        imageLoading = false;
+      });
+    }
+  }
+
+  String convertToUrl(String path) {
+    final clean = path.replaceAll("\\", "/");
+    final filename = clean.split("/").last;
+    return "http://10.164.86.186:8000/media/emp_image/$filename";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProfilePage(empId: widget.empId),
+          ),
+        );
+        fetchEmployeeImage();
+      },
+      child: CircleAvatar(
+        radius: 30,
+        backgroundColor: Colors.white,
+        backgroundImage: (hasProfile && imageName != null)
+            ? NetworkImage(convertToUrl(imageName!))
+            : null,
+        child: imageLoading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.green,
+                ),
+              )
+            : (!hasProfile)
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.person_add_alt_1, size: 26, color: Colors.green),
+                      SizedBox(height: 2),
+                      Text(
+                        "Register",
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
+                  )
+                : null,
+      ),
+    );
+  }
+}
+// ============================================================
+// PART 3: HomeTab Widget with Map and Navigation
+// ============================================================
 
 class _HomeTab extends StatefulWidget {
   const _HomeTab({
@@ -449,6 +685,30 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   _NavigationMode _navMode = _NavigationMode.overview;
   String? _activeNavigationId;
   late AnimationController _navAnimController;
+  void _fitDriverAndNextCustomer() {
+  if (_customers.isEmpty) return;
+
+  final nextCustomer = _customers.first;
+
+  final bounds = LatLngBounds.fromPoints([
+    widget.driverLocation,
+    nextCustomer.location,
+  ]);
+
+  widget.mapController.fitCamera(
+    CameraFit.bounds(
+      bounds: bounds,
+      padding: const EdgeInsets.all(80),
+    ),
+  );
+}
+
+void _rotateMapToDriverBearing() {
+  final normalized = (_driverBearing + 360) % 360;
+  widget.mapController.rotate(-normalized);
+
+}
+
 
   @override
   void initState() {
@@ -461,13 +721,9 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     _computeRoute();
   }
 
-  @override
   void _followDriver() {
     if (_orsRoute.length < 2) return;
-
     final center = _orsRoute.first;
-    final bearing = ORSService.calculateBearing(_orsRoute[0], _orsRoute[1]);
-
     widget.mapController.move(center, 17.8);
   }
 
@@ -499,36 +755,33 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
 
     final List<List<double>> coords = [
       [widget.driverLocation.longitude, widget.driverLocation.latitude],
-      ..._customers.map(
-        (c) => [c.location.longitude, c.location.latitude],
-      ),
+      ..._customers.map((c) => [c.location.longitude, c.location.latitude]),
     ];
-
-    debugPrint('DRIVER HOME: Computing route for ${coords.length} points');
 
     try {
       final route = await ORSService.fetchMultiRoute(coords);
 
-      if (!mounted) return;
+if (!mounted) return;
 
-      setState(() {
-        _orsRoute = route;
+setState(() {
+  _orsRoute = route;
 
-        if (route.length > 1) {
-          _driverBearing = ORSService.calculateBearing(route.first, route[1]);
-        } else if (_customers.isNotEmpty) {
-          _driverBearing = ORSService.calculateBearing(
-            widget.driverLocation,
-            _customers.first.location,
-          );
-        } else {
-          _driverBearing = 0.0;
-        }
-      });
+  if (route.length > 1) {
+    _driverBearing =
+        ORSService.calculateBearing(route.first, route[1]);
+  } else {
+    _driverBearing = 0.0;
+  }
+});
 
-      debugPrint('DRIVER HOME: Route computed with ${_orsRoute.length} points');
+/// 🔥 ADD THIS PART IMMEDIATELY AFTER setState
+WidgetsBinding.instance.addPostFrameCallback((_) {
+  if (!mounted) return;
+  _fitDriverAndNextCustomer();
+  _rotateMapToDriverBearing();
+});
+
     } catch (e) {
-      debugPrint('DRIVER HOME: Route computation failed: $e');
       if (!mounted) return;
       setState(() {
         _orsRoute = [];
@@ -545,25 +798,16 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       _navMode = _NavigationMode.navigating;
       customer.status = _CustomerStatus.navigating;
     });
-    if (_navMode == _NavigationMode.navigating) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (mounted) _followDriver();
-      });
-    }
 
     widget.onStatusChanged(customerId, _CustomerStatus.navigating);
     _navAnimController.forward();
-
-    // Smooth navigation camera transition
     _animateToNavigationView(customer.location);
-    _followDriver();
   }
 
   void _stopNavigation() {
     setState(() {
       if (_activeNavigationId != null) {
-        final customer =
-            _customers.firstWhere((c) => c.id == _activeNavigationId);
+        final customer = _customers.firstWhere((c) => c.id == _activeNavigationId);
         customer.status = _CustomerStatus.pending;
         widget.onStatusChanged(_activeNavigationId!, _CustomerStatus.pending);
       }
@@ -572,21 +816,13 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     });
 
     _navAnimController.reverse();
-
-    // Return to overview
     _animateToOverview();
   }
 
   void _animateToNavigationView(LatLng destination) {
-    // Calculate bearing to destination
-    final bearing =
-        ORSService.calculateBearing(widget.driverLocation, destination);
-
-    // Google Maps style: tilt map, zoom in, rotate to bearing
     final targetZoom = 17.5;
     final targetCenter = widget.driverLocation;
 
-    // Smooth animation to navigation view
     Future.delayed(const Duration(milliseconds: 100), () {
       if (!mounted) return;
       widget.mapController.move(targetCenter, targetZoom);
@@ -599,7 +835,6 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       return;
     }
 
-    // Fit all markers in view
     final allPoints = [
       widget.driverLocation,
       ..._customers.map((c) => c.location),
@@ -627,7 +862,6 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       case _CustomerStatus.navigating:
         return Colors.blue;
       case _CustomerStatus.pending:
-      default:
         return Colors.red;
     }
   }
@@ -658,19 +892,19 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
           Positioned.fill(
             child: FlutterMap(
               mapController: widget.mapController,
-              options: MapOptions(
-                initialCenter: widget.driverLocation,
-                initialZoom: 14.5,
-                minZoom: 10,
-                maxZoom: 18,
-                interactionOptions: const InteractionOptions(
-                  flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                ),
-              ),
+             options: MapOptions(
+  initialCenter: widget.driverLocation,
+  initialZoom: 14.5,
+  minZoom: 10,
+  maxZoom: 18,
+  interactionOptions: const InteractionOptions(
+    flags: InteractiveFlag.all, // 🔥 allow rotation
+  ),
+),
+
               children: [
                 TileLayer(
-                  urlTemplate:
-                      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                   subdomains: const ['a', 'b', 'c'],
                   userAgentPackageName: 'com.iwms.citizen.app',
                 ),
@@ -750,8 +984,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
               left: 0,
               right: 0,
               child: _NavigationHeader(
-                customer:
-                    _customers.firstWhere((c) => c.id == _activeNavigationId),
+                customer: _customers.firstWhere((c) => c.id == _activeNavigationId),
                 distance: _getDistanceToCustomer(
                   _customers.firstWhere((c) => c.id == _activeNavigationId),
                 ),
@@ -765,9 +998,11 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
             right: 0,
             bottom: 12,
             child: AnimatedContainer(
-              duration: _kNavigationTransitionDuration,
-              height: isNavigating ? 0 : 160,
-              curve: Curves.easeInOut,
+  duration: _kNavigationTransitionDuration,
+  curve: Curves.easeInOut,
+  constraints: BoxConstraints(
+    maxHeight: isNavigating ? 0 : 180,
+  ),
               child: widget.loading
                   ? const Center(child: CircularProgressIndicator())
                   : widget.error != null
@@ -781,12 +1016,9 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                           ),
                         )
                       : _customers.isEmpty
-                          ? const Center(
-                              child: Text('No customers assigned'),
-                            )
+                          ? const Center(child: Text('No customers assigned'))
                           : ListView.separated(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
                               scrollDirection: Axis.horizontal,
                               itemBuilder: (context, index) {
                                 final customer = _customers[index];
@@ -803,13 +1035,11 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                         ),
                                         actions: [
                                           TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, false),
+                                            onPressed: () => Navigator.pop(context, false),
                                             child: const Text('Cancel'),
                                           ),
                                           ElevatedButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, true),
+                                            onPressed: () => Navigator.pop(context, true),
                                             child: const Text('Confirm'),
                                           ),
                                         ],
@@ -819,19 +1049,19 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                     if (confirmed != true) return;
 
                                     setState(() {
-                                      customer.status =
-                                          _CustomerStatus.collected;
+                                      customer.status = _CustomerStatus.collected;
                                     });
 
-                                    widget.onStatusChanged(
-                                        customer.id, _CustomerStatus.collected);
+                                    widget.onStatusChanged(customer.id, _CustomerStatus.collected);
 
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Collection completed'),
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Collection completed'),
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
 
                                     await _computeRoute();
                                   },
@@ -845,40 +1075,30 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                         return StatefulBuilder(
                                           builder: (context, setStateDialog) {
                                             return AlertDialog(
-                                              title: const Text(
-                                                  'Skip Waste Collection'),
+                                              title: const Text('Skip Waste Collection'),
                                               content: Column(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  const Text(
-                                                      'Select a reason for skipping:'),
+                                                  const Text('Select a reason for skipping:'),
                                                   const SizedBox(height: 12),
-
-                                                  // 👇 THEMED DROPDOWN
-                                                  DropdownButtonFormField<
-                                                      String>(
-                                                    value: selectedReason,
+                                                  DropdownButtonFormField<String>(
+                                                    initialValue: selectedReason,
                                                     isExpanded: true,
-                                                    dropdownColor: Colors
-                                                        .white, // FIX 2 (theme)
-                                                    decoration:
-                                                        const InputDecoration(
+                                                    dropdownColor: Colors.white,
+                                                    decoration: const InputDecoration(
                                                       filled: true,
                                                       fillColor: Colors.white,
-                                                      border:
-                                                          OutlineInputBorder(),
+                                                      border: OutlineInputBorder(),
                                                       hintText: 'Reason',
                                                     ),
                                                     items: _skipReasons
                                                         .map(
-                                                          (r) =>
-                                                              DropdownMenuItem(
+                                                          (r) => DropdownMenuItem(
                                                             value: r,
                                                             child: Text(
                                                               r,
                                                               style: const TextStyle(
-                                                                  color: Colors
-                                                                      .black),
+                                                                  color: Colors.black),
                                                             ),
                                                           ),
                                                         )
@@ -894,16 +1114,13 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                               actions: [
                                                 TextButton(
                                                   onPressed: () =>
-                                                      Navigator.pop(
-                                                          dialogContext, false),
+                                                      Navigator.pop(dialogContext, false),
                                                   child: const Text('Cancel'),
                                                 ),
                                                 ElevatedButton(
-                                                  onPressed: selectedReason ==
-                                                          null
+                                                  onPressed: selectedReason == null
                                                       ? null
-                                                      : () => Navigator.pop(
-                                                          dialogContext, true),
+                                                      : () => Navigator.pop(dialogContext, true),
                                                   child: const Text('Skip'),
                                                 ),
                                               ],
@@ -913,31 +1130,30 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                       },
                                     );
 
-                                    if (confirmed != true ||
-                                        selectedReason == null) return;
+                                    if (confirmed != true || selectedReason == null) return;
 
                                     setState(() {
                                       customer.status = _CustomerStatus.skipped;
                                       customer.skipReason = selectedReason;
                                     });
 
-                                    widget.onStatusChanged(
-                                        customer.id, _CustomerStatus.skipped);
+                                    widget.onStatusChanged(customer.id, _CustomerStatus.skipped);
 
-                                    ScaffoldMessenger.of(context).showSnackBar(
-                                      const SnackBar(
-                                        content: Text('Skipped'),
-                                        duration: Duration(seconds: 2),
-                                      ),
-                                    );
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Skipped'),
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
 
                                     await _computeRoute();
                                   },
                                   onStart: () => _startNavigation(customer.id),
                                 );
                               },
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(width: 10),
+                              separatorBuilder: (_, __) => const SizedBox(width: 10),
                               itemCount: _customers.length,
                             ),
             ),
@@ -947,6 +1163,9 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     );
   }
 }
+// ============================================================
+// PART 4: NavigationHeader, Cards, History, Profile, and Markers
+// ============================================================
 
 class _NavigationHeader extends StatelessWidget {
   const _NavigationHeader({
@@ -969,7 +1188,7 @@ class _NavigationHeader extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.15),
+            color: Colors.black.withValues(alpha: 0.15),
             blurRadius: 20,
             offset: const Offset(0, 4),
           ),
@@ -986,7 +1205,8 @@ class _NavigationHeader extends StatelessWidget {
                   color: Colors.blue.shade50,
                   shape: BoxShape.circle,
                 ),
-                child: Icon(Icons.navigation_rounded,
+                child: Icon(Icons.arrow_upward_rounded
+,
                     color: Colors.blue.shade700, size: 20),
               ),
               const SizedBox(width: 12),
@@ -1051,7 +1271,6 @@ class _NavigationHeader extends StatelessWidget {
     );
   }
 }
-
 class _CustomerCard extends StatelessWidget {
   const _CustomerCard({
     required this.customer,
@@ -1076,7 +1295,6 @@ class _CustomerCard extends StatelessWidget {
       case _CustomerStatus.navigating:
         return Colors.blue;
       case _CustomerStatus.pending:
-      default:
         return Colors.red;
     }
   }
@@ -1090,143 +1308,185 @@ class _CustomerCard extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(20),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  CircleAvatar(
-                    radius: 18,
-                    backgroundColor: _statusColor.withOpacity(0.15),
-                    child: Text(
-                      customer.name[0].toUpperCase(),
-                      style: TextStyle(
-                        color: _statusColor,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            return ConstrainedBox(
+              constraints: BoxConstraints(
+                maxHeight: constraints.maxHeight,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // -------------------------------------------------
+                    // Header
+                    // -------------------------------------------------
+                    Row(
                       children: [
-                        Text(
-                          customer.name,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        Row(
-                          children: [
-                            Icon(Icons.near_me_rounded,
-                                size: 12, color: Colors.grey.shade600),
-                            const SizedBox(width: 4),
-                            Text(
-                              distance,
-                              style: TextStyle(
-                                color: Colors.grey.shade600,
-                                fontSize: 12,
-                                fontWeight: FontWeight.w600,
-                              ),
+                        CircleAvatar(
+                          radius: 18,
+                          backgroundColor:
+                              _statusColor.withValues(alpha: 0.15),
+                          child: Text(
+                            customer.name[0].toUpperCase(),
+                            style: TextStyle(
+                              color: _statusColor,
+                              fontWeight: FontWeight.w800,
                             ),
-                          ],
+                          ),
+                        ),
+                        const SizedBox(width: 10),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                customer.name,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontWeight: FontWeight.w800,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              Row(
+                                children: [
+                                  Icon(
+                                    Icons.near_me_rounded,
+                                    size: 12,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                  const SizedBox(width: 4),
+                                  Text(
+                                    distance,
+                                    style: TextStyle(
+                                      color: Colors.grey.shade600,
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ],
+                          ),
                         ),
                       ],
                     ),
-                  ),
-                ],
-              ),
-              const Spacer(),
 
-              // Action buttons
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton(
-                      onPressed: customer.status == _CustomerStatus.collected
-                          ? null
-                          : onComplete,
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade700,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Complete',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: OutlinedButton(
-                      onPressed: customer.status == _CustomerStatus.skipped
-                          ? null
-                          : onSkip,
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 10),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                      ),
-                      child: const Text(
-                        'Skip',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
+                    const SizedBox(height: 10),
 
-              const SizedBox(height: 8),
+                    // -------------------------------------------------
+                    // Complete / Skip buttons
+                    // -------------------------------------------------
+                    Row(
+                      children: [
+                        Expanded(
+                          child: SizedBox(
+                            height: 36,
+                            child: ElevatedButton(
+                              onPressed: customer.status ==
+                                      _CustomerStatus.collected
+                                  ? null
+                                  : onComplete,
+                              style: ElevatedButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                backgroundColor: Colors.green.shade700,
+                                foregroundColor: Colors.white,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              child: const Text(
+                                'Complete',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: SizedBox(
+                            height: 36,
+                            child: OutlinedButton(
+                              onPressed: customer.status ==
+                                      _CustomerStatus.skipped
+                                  ? null
+                                  : onSkip,
+                              style: OutlinedButton.styleFrom(
+                                padding: EdgeInsets.zero,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                              ),
+                              child: const Text(
+                                'Skip',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
 
-              // Start navigation
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: customer.status == _CustomerStatus.navigating
-                      ? null
-                      : onStart,
-                  icon: const Icon(Icons.navigation_rounded, size: 18),
-                  label: const Text(
-                    'Navigate',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w800,
-                      fontSize: 14,
+                    const SizedBox(height: 10),
+
+                    // -------------------------------------------------
+                    // Navigate button (reduced height)
+                    // -------------------------------------------------
+                    SizedBox(
+                      width: double.infinity,
+                      height: 34,
+                      child: ElevatedButton.icon(
+                        onPressed: customer.status ==
+                                _CustomerStatus.navigating
+                            ? null
+                            : onStart,
+                        icon: const Icon(
+                          Icons.navigation_rounded,
+                          size: 14,
+                        ),
+                        label: const Text(
+                          'Navigate',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          backgroundColor: Colors.blue.shade700,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                      ),
                     ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue.shade700,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(14),
-                    ),
-                  ),
+                  ],
                 ),
               ),
-            ],
-          ),
+            );
+          },
         ),
       ),
     );
   }
 }
+
 
 class _HistoryTab extends StatelessWidget {
   const _HistoryTab({
@@ -1275,11 +1535,11 @@ class _HistoryTab extends StatelessWidget {
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(color: color, width: 1.5),
-                  color: color.withOpacity(0.08),
+                  color: color.withValues(alpha: 0.08),
                 ),
                 child: ListTile(
                   leading: CircleAvatar(
-                    backgroundColor: color.withOpacity(0.2),
+                    backgroundColor: color.withValues(alpha: 0.2),
                     child: Icon(
                       isCollected ? Icons.check_circle : Icons.warning_rounded,
                       color: color,
@@ -1365,16 +1625,14 @@ class _DriverMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Transform.rotate(
-      angle: rotation * math.pi / 180,
-      child: Icon(
-        Icons.navigation_rounded,
-        size: isActive ? 38 : 32,
-        color: Colors.deepOrange.shade600, // ✅ changed
-        shadows: const [
-          Shadow(color: Colors.black45, blurRadius: 6),
-        ],
-      ),
-    );
+  angle: 0, // arrow always points UP
+  child: Icon(
+    Icons.navigation_rounded,
+    size: isActive ? 38 : 32,
+    color: Colors.deepOrange.shade600,
+  ),
+);
+
   }
 }
 
@@ -1393,7 +1651,7 @@ class _HouseMarker extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       decoration: BoxDecoration(
-        color: color.withOpacity(0.2),
+        color: color.withValues(alpha: 0.2),
         shape: BoxShape.circle,
         border: Border.all(color: color, width: 2),
       ),

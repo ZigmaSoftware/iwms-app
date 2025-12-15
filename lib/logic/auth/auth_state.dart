@@ -21,14 +21,15 @@ class AuthStateLoading extends AuthState {
 class AuthStateAuthenticated extends AuthState {
   final String userName;
   final String role; // citizen, operator, driver, admin
-
+  final String? emp_id; 
   const AuthStateAuthenticated({
     required this.userName,
     required this.role,
+       this.emp_id,
   });
 
   @override
-  List<Object?> get props => [userName, role];
+  List<Object?> get props => [userName, role,emp_id];
 }
 
 /// Logged out

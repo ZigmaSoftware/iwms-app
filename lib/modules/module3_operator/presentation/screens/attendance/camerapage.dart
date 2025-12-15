@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_attendance.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:camera/camera.dart';
 import 'package:flutter_tts/flutter_tts.dart';
@@ -49,7 +50,6 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     longitude = "0.0";
     _checkGpsAndInitialize();
     _initializeTts();
-    WakelockPlus.enable();
     _initializeCamera();
   }
 
@@ -194,7 +194,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           });
         }
 
-        _takePicture();
+    
       } catch (e) {
         print('Error initializing camera: $e');
       }
@@ -202,138 +202,76 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       print('Camera permission denied');
     }
   }
+Future<void> _takePicture() async {
+  if (_isCaptured) return;
 
-  Future<void> _takePicture() async {
-    if (_isCaptured) return;
-
-    if (_cameraController == null || !_cameraController!.value.isInitialized) {
-      print('Camera is not initialized');
-      return;
-    }
-
-    try {
-      final image = await _cameraController!.takePicture();
-      final compressedImage = await _compressImage(image);
-
-      setState(() {
-        _image = compressedImage;
-        _isCaptured = true;
-      });
-
-      await _sendDataToBackend();
-        } catch (e) {
-      print('Error capturing image: $e');
-    }
+  if (_cameraController == null ||
+      !_cameraController!.value.isInitialized) {
+    return;
   }
+
+  try {
+    setState(() => _isCaptured = true);
+
+    final image = await _cameraController!.takePicture();
+
+    // 🔴 CRITICAL: stop camera preview immediately
+    await _cameraController!.stopImageStream();
+    await _cameraController!.dispose();
+    _cameraController = null;
+
+    final compressedImage = await _compressImage(image);
+
+    if (!mounted) return;
+
+    setState(() {
+      _image = compressedImage;
+    });
+
+    await _sendDataToBackend();
+
+  } catch (e) {
+    print('❌ Error capturing image: $e');
+  }
+}
 
   Future<void> _speak(String message) async {
     await _flutterTts.speak(message);
-  }
-
-  Future<void> _sendDataToBackend() async {
-    setState(() {
-      _isLoading = true;
-    });
-
-    // ⏳ Ensure valid location before sending data
-    if (latitude == "0.0" || longitude == "0.0") {
-      print("⚠️ Invalid coordinates: $latitude, $longitude. Retrying location fetch...");
-      Position? position = await _getCurrentLocation();
-      if (position != null) {
-        latitude = position.latitude.toString();
-        longitude = position.longitude.toString();
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('GPS error! Move outside and retry.'), backgroundColor: Colors.red),
-        );
-        setState(() {
-          _isLoading = false;
-        });
-        return;
-      }
-    }
-
-    try {
-      var request = http.MultipartRequest(
-        'POST',
-        Uri.parse('http://125.17.238.158:5000/recognize'),
-      );
-      request.fields['emp_id'] = widget.employeeId;
-      request.fields['name'] = widget.employeeName;
-      request.fields['latitude'] = latitude;
-      request.fields['longitude'] = longitude;
-
-      var multipartFile = http.MultipartFile(
-        'captured_image',
-        http.ByteStream.fromBytes(await _image!.readAsBytes()),
-        await _image!.length(),
-        filename: path.basename(_image!.path),
-      );
-      request.files.add(multipartFile);
-
-      var response = await request.send();
-      var responseBody = await response.stream.bytesToString();
-
-      if (response.statusCode == 200) {
-        setState(() {
-          _isRecognized = true;
-          _recognitionFinished = true;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('✅ Attendance marked successfully'), backgroundColor: Colors.green),
-        );
-
-        await _speak('Attendance marked successfully');
-        // widget.onAttendanceMarked();
-        Navigator.of(context).pop(true);
-      } else {
-        var data = json.decode(responseBody);
-        setState(() {
-          _isRecognized = false;
-          _recognitionFinished = true;
-        });
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(data['error'] ?? 'Failed to send data'), backgroundColor: Colors.red),
-        );
-
-        await _speak('Failed to send data');
-        Navigator.of(context).pop(false);
-      }
-    } catch (e) {
-      setState(() {
-        _isRecognized = false;
-        _recognitionFinished = true;
-      });
-
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('🚨 Network error: $e'), backgroundColor: Colors.red),
-      );
-
-      await _speak('Face Not Matched');
-    } finally {
-      setState(() {
-        _isLoading = false;
-      });
-    }
   }
 
   // Future<void> _sendDataToBackend() async {
   //   setState(() {
   //     _isLoading = true;
   //   });
-  //
+
+  //   // ⏳ Ensure valid location before sending data
+  //   if (latitude == "0.0" || longitude == "0.0") {
+  //     print("⚠️ Invalid coordinates: $latitude, $longitude. Retrying location fetch...");
+  //     Position? position = await _getCurrentLocation();
+  //     if (position != null) {
+  //       latitude = position.latitude.toString();
+  //       longitude = position.longitude.toString();
+  //     } else {
+  //       ScaffoldMessenger.of(context).showSnackBar(
+  //         SnackBar(content: Text('GPS error! Move outside and retry.'), backgroundColor: Colors.red),
+  //       );
+  //       setState(() {
+  //         _isLoading = false;
+  //       });
+  //       return;
+  //     }
+  //   }
+
   //   try {
   //     var request = http.MultipartRequest(
   //       'POST',
-  //       Uri.parse('http://125.17.238.158:5000/recognize'),
+  //       Uri.parse('http://10.64.151.226:8000/api/mobile/recognize/'),
   //     );
   //     request.fields['emp_id'] = widget.employeeId;
   //     request.fields['name'] = widget.employeeName;
-  //     request.fields['latitude'] = widget.latitude;
-  //     request.fields['longitude'] = widget.longitude;
-  //
+  //     request.fields['latitude'] = latitude;
+  //     request.fields['longitude'] = longitude;
+
   //     var multipartFile = http.MultipartFile(
   //       'captured_image',
   //       http.ByteStream.fromBytes(await _image!.readAsBytes()),
@@ -341,46 +279,47 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   //       filename: path.basename(_image!.path),
   //     );
   //     request.files.add(multipartFile);
-  //
+
   //     var response = await request.send();
   //     var responseBody = await response.stream.bytesToString();
-  //
+
   //     if (response.statusCode == 200) {
   //       setState(() {
   //         _isRecognized = true;
   //         _recognitionFinished = true;
   //       });
-  //
+
   //       ScaffoldMessenger.of(context).showSnackBar(
-  //         SnackBar(content: Text('Attendance marked successfully'), backgroundColor: Colors.green),
+  //         SnackBar(content: Text('✅ Attendance marked successfully'), backgroundColor: Colors.green),
   //       );
-  //
+
   //       await _speak('Attendance marked successfully');
-  //       Navigator.of(context).pop();
+  //       // widget.onAttendanceMarked();
+  //       Navigator.of(context).pop(true);
   //     } else {
   //       var data = json.decode(responseBody);
   //       setState(() {
   //         _isRecognized = false;
   //         _recognitionFinished = true;
   //       });
-  //
+
   //       ScaffoldMessenger.of(context).showSnackBar(
-  //         SnackBar(  content: Text(data['error'] ?? 'Failed to send data'), backgroundColor: Colors.red),
+  //         SnackBar(content: Text(data['error'] ?? 'Failed to send data'), backgroundColor: Colors.red),
   //       );
-  //
+
   //       await _speak('Failed to send data');
-  //       Navigator.of(context).pop();
+  //       Navigator.of(context).pop(false);
   //     }
   //   } catch (e) {
   //     setState(() {
   //       _isRecognized = false;
   //       _recognitionFinished = true;
   //     });
-  //
+
   //     ScaffoldMessenger.of(context).showSnackBar(
-  //       SnackBar(content: Text('An error occurred: $e'), backgroundColor: Colors.red),
+  //       SnackBar(content: Text('🚨 Network error: $e'), backgroundColor: Colors.red),
   //     );
-  //
+
   //     await _speak('Face Not Matched');
   //   } finally {
   //     setState(() {
@@ -389,30 +328,79 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   //   }
   // }
 
+  Future<void> _sendDataToBackend() async {
+    setState(() => _isLoading = true);
+
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('http://10.164.86.186:8000/api/mobile/recognize/'),
+      );
+
+      request.fields["emp_id"] = widget.employeeId;
+      request.fields["name"] = widget.employeeName;
+      request.fields["latitude"] = latitude;
+      request.fields["longitude"] = longitude;
+
+      request.files.add(await http.MultipartFile.fromPath(
+        "captured_image",
+        _image!.path,
+      ));
+
+      var response = await request.send();
+
+      if (response.statusCode == 200) {
+        _speak("Attendance marked successfully");
+        Navigator.pop(context, true);
+      } else {
+        throw Exception("Face mismatch");
+      }
+
+    } catch (e) {
+      // ---------------------------------------------------------
+      // OFFLINE SAVE
+      // ---------------------------------------------------------
+      await saveOfflineAttendance(
+        empId: widget.employeeId,
+        name: widget.employeeName,
+        imagePath: _image!.path,
+        latitude: latitude,
+        longitude: longitude,
+      );
+
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text("No internet. Attendance saved offline."),
+        backgroundColor: Colors.orange,
+      ));
+
+      _speak("Attendance saved offline");
+      Navigator.pop(context, true);
+    }
+
+    setState(() => _isLoading = false);
+  }
   Future<XFile> _compressImage(XFile image) async {
     final imageBytes = await image.readAsBytes();
     final compressedBytes = await FlutterImageCompress.compressWithList(imageBytes, minWidth: 640, minHeight: 480, quality: 50);
     return XFile.fromData(Uint8List.fromList(compressedBytes), path: image.path);
   }
-
-  @override
-  Widget build(BuildContext context) {
-    return SafeArea(
-      child: Scaffold(
-        body: _cameraController == null || !_cameraController!.value.isInitialized
-            ? Center(child: CircularProgressIndicator())
-            : Stack(
-          fit: StackFit.expand, // Expands preview to full screen
-          children: [
-            RotatedBox(
-              quarterTurns: 0, // Adjust rotation if needed
-              child: CameraPreview(_cameraController!),
-            ),
-      
-      
-          ],
-        ),
-      ),
-    );
+@override
+Widget build(BuildContext context) {
+  if (_cameraController != null &&
+      _cameraController!.value.isInitialized &&
+      !_isCaptured) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _takePicture();
+    });
   }
+
+  return SafeArea(
+    child: Scaffold(
+      body: _cameraController == null
+          ? const Center(child: CircularProgressIndicator())
+          : CameraPreview(_cameraController!),
+    ),
+  );
+}
+
 }

@@ -196,6 +196,7 @@ class OperatorContactInfo {
 class OperatorSessionDetails {
   const OperatorSessionDetails({
     required this.displayName,
+    required this.operatoremp_id,
     required this.operatorCode,
     this.wardLabel = '',
     this.zoneLabel = '',
@@ -205,6 +206,7 @@ class OperatorSessionDetails {
 
   final String displayName;
   final String operatorCode;
+  final String operatoremp_id;
   final String wardLabel;
   final String zoneLabel;
   final String shift;
@@ -225,6 +227,7 @@ class OperatorSessionDetails {
       zoneLabel: zoneLabel ?? this.zoneLabel,
       shift: shift ?? this.shift,
       contactInfo: contactInfo ?? this.contactInfo,
+      operatoremp_id:operatoremp_id
     );
   }
 }

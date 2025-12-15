@@ -11,6 +11,7 @@ import 'package:iwms_citizen_app/logic/locale/locale_cubit.dart';
 
 const EdgeInsets _profilePagePadding =
     EdgeInsets.symmetric(horizontal: 20, vertical: 16);
+
 class _OperatorLanguageOption {
   const _OperatorLanguageOption({
     required this.code,
@@ -27,16 +28,11 @@ const List<_OperatorLanguageOption> _operatorLanguageOptions = [
   _OperatorLanguageOption(code: 'ta', label: 'Tamil'),
 ];
 
-const Gradient _profileHeaderGradient = LinearGradient(
-  colors: [AppColors.primary, AppColors.primaryVariant],
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-);
-
 class OperatorProfileScreen extends StatelessWidget {
   const OperatorProfileScreen({
     super.key,
     required this.operatorName,
+    required this.emp_id,
     required this.operatorCode,
     required this.wardLabel,
     required this.zoneLabel,
@@ -48,6 +44,7 @@ class OperatorProfileScreen extends StatelessWidget {
 
   final String operatorName;
   final String operatorCode;
+  final String emp_id;
   final String wardLabel;
   final String zoneLabel;
   final VoidCallback onLogout;
@@ -59,6 +56,7 @@ class OperatorProfileScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final localizations = AppLocalizations.of(context);
+
     return ColoredBox(
       color: AppColors.background,
       child: SingleChildScrollView(
@@ -68,6 +66,7 @@ class OperatorProfileScreen extends StatelessWidget {
           children: [
             OperatorHeader(
               name: operatorName,
+              empId: emp_id,
               badge: operatorCode,
               ward: wardLabel,
               zone: zoneLabel,
@@ -82,10 +81,6 @@ class OperatorProfileScreen extends StatelessWidget {
                   const SizedBox(height: 24),
                   OperatorInfoCard(
                     title: localizations.profileContactTitle,
-                    titleStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
                     subtitle: localizations.profileContactSubtitle,
                     child: Column(
                       children: [
@@ -118,10 +113,6 @@ class OperatorProfileScreen extends StatelessWidget {
                   const SizedBox(height: 24),
                   OperatorInfoCard(
                     title: localizations.profileAttendanceTitle,
-                    titleStyle: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
                     subtitle: localizations.profileAttendanceSubtitle,
                     child: Column(
                       children: [
@@ -129,16 +120,20 @@ class OperatorProfileScreen extends StatelessWidget {
                           children: [
                             Expanded(
                               child: OperatorQuickStat(
-                                label: localizations.operatorAttendanceMonth,
-                                value: attendanceSummary.monthStat ?? "--",
+                                label:
+                                    localizations.operatorAttendanceMonth,
+                                value:
+                                    attendanceSummary.monthStat ?? "--",
                                 icon: Icons.calendar_month,
                                 emphasis: true,
                               ),
                             ),
                             Expanded(
                               child: OperatorQuickStat(
-                                label: localizations.operatorLeaveBalance,
-                                value: attendanceSummary.leaveBalance ?? "--",
+                                label:
+                                    localizations.operatorLeaveBalance,
+                                value:
+                                    attendanceSummary.leaveBalance ?? "--",
                                 icon: Icons.eco_outlined,
                               ),
                             ),
@@ -148,30 +143,39 @@ class OperatorProfileScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(16),
                           decoration: BoxDecoration(
-                            color: AppColors.primary.withOpacity(0.08),
-                            borderRadius: BorderRadius.circular(18),
+                            color:
+                                AppColors.primary.withOpacity(0.08),
+                            borderRadius:
+                                BorderRadius.circular(18),
                           ),
                           child: Row(
                             children: [
                               Expanded(
                                 child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
                                   children: [
                                     Text(
                                       attendanceSummary.streakLabel ??
-                                          localizations.operatorAttendanceStreak,
-                                      style:
-                                          theme.textTheme.bodySmall?.copyWith(
-                                        color: AppColors.textSecondary,
+                                          localizations
+                                              .operatorAttendanceStreak,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                        color:
+                                            AppColors.textSecondary,
                                       ),
                                     ),
                                     const SizedBox(height: 4),
                                     Text(
-                                      attendanceSummary.streakValue ?? "--",
-                                      style: theme.textTheme.headlineSmall
+                                      attendanceSummary.streakValue ??
+                                          "--",
+                                      style: theme
+                                          .textTheme.headlineSmall
                                           ?.copyWith(
-                                        color: AppColors.primary,
-                                        fontWeight: FontWeight.w800,
+                                        color:
+                                            AppColors.primary,
+                                        fontWeight:
+                                            FontWeight.w800,
                                       ),
                                     ),
                                   ],
@@ -179,22 +183,14 @@ class OperatorProfileScreen extends StatelessWidget {
                               ),
                               FilledButton.icon(
                                 onPressed: onEditProfile ??
-                                    () => _showComingSoon(context),
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 18,
-                                    vertical: 12,
-                                  ),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(24),
-                                  ),
-                                ),
+                                    () => _showComingSoon(
+                                        context),
                                 icon: const Icon(Icons.edit,
                                     color: Colors.white),
                                 label: Text(
                                   localizations.profileEditButton,
-                                  style: const TextStyle(color: Colors.white),
+                                  style: const TextStyle(
+                                      color: Colors.white),
                                 ),
                               ),
                             ],
@@ -204,18 +200,22 @@ class OperatorProfileScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  _OperatorLanguageCard(),
+                  const _OperatorLanguageCard(),
                   const SizedBox(height: 12),
                   FilledButton.icon(
                     onPressed: onLogout,
                     style: FilledButton.styleFrom(
-                      backgroundColor: const Color(0xFFCF1B1B),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
+                      backgroundColor:
+                          const Color(0xFFCF1B1B),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 16),
                       shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(26),
+                        borderRadius:
+                            BorderRadius.circular(26),
                       ),
                     ),
-                    icon: const Icon(Icons.logout, color: Colors.white),
+                    icon: const Icon(Icons.logout,
+                        color: Colors.white),
                     label: const Text(
                       "Logout",
                       style: TextStyle(
@@ -236,89 +236,58 @@ class OperatorProfileScreen extends StatelessWidget {
   void _showComingSoon(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text("Edit profile flow will open the existing screen."),
+        content: Text(
+            "Edit profile flow will open the existing screen."),
       ),
     );
   }
 }
 
 class _OperatorLanguageCard extends StatelessWidget {
-  const _OperatorLanguageCard({super.key});
+  const _OperatorLanguageCard();
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final localizations = AppLocalizations.of(context);
-    final Color highlightColor = AppColors.primary;
-    final Color textColor =
-        theme.textTheme.bodyMedium?.color ?? Colors.black87;
 
     return Card(
-      elevation: theme.brightness == Brightness.dark ? 0 : 2,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16)),
       child: ListTile(
-        leading: Icon(Icons.language, color: highlightColor),
-        title: Text(
-          localizations.changeLanguage,
-          style: theme.textTheme.bodyMedium?.copyWith(
-            color: textColor,
-            fontWeight: FontWeight.w600,
-          ),
-        ),
-        subtitle: Text(
-          localizations.changeLanguageSubtitle,
-          style: theme.textTheme.bodySmall?.copyWith(
-            color: theme.textTheme.bodySmall?.color,
-          ),
-        ),
-        trailing: BlocBuilder<LocaleCubit, Locale>(
-          builder: (context, locale) {
-            return DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: locale.languageCode,
-                dropdownColor: theme.cardColor,
-                items: _operatorLanguageOptions
-                    .map(
-                      (option) => DropdownMenuItem<String>(
-                        value: option.code,
-                        child: Text(
-                          option.label,
-                          style: theme.textTheme.bodyMedium?.copyWith(
-                            color: textColor,
-                            fontWeight: FontWeight.w600,
-                          ),
+        leading:
+            const Icon(Icons.language, color: AppColors.primary),
+        title: Text(localizations.changeLanguage),
+        subtitle:
+            Text(localizations.changeLanguageSubtitle),
+
+        // ✅ CRITICAL FIX
+        trailing: SizedBox(
+          width: 120,
+          child: BlocBuilder<LocaleCubit, Locale>(
+            builder: (context, locale) {
+              return DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: locale.languageCode,
+                  items: _operatorLanguageOptions
+                      .map(
+                        (o) => DropdownMenuItem<String>(
+                          value: o.code,
+                          child: Text(o.label),
                         ),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (code) async {
-                  if (code == null || code == locale.languageCode) return;
-                  final selectedOption = _operatorLanguageOptions.firstWhere(
-                    (option) => option.code == code,
-                    orElse: () => _operatorLanguageOptions.first,
-                  );
-                  await context
-                      .read<LocaleCubit>()
-                      .setLocale(Locale(selectedOption.code));
-                  final messenger = ScaffoldMessenger.of(context);
-                  messenger
-                    ..hideCurrentSnackBar()
-                    ..showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          localizations.languageSaved(selectedOption.label),
-                        ),
-                        duration: const Duration(seconds: 2),
-                      ),
-                    );
-                },
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: textColor,
-                  fontWeight: FontWeight.w600,
+                      )
+                      .toList(),
+                  onChanged: (code) {
+                    if (code == null) return;
+                    context
+                        .read<LocaleCubit>()
+                        .setLocale(Locale(code));
+                  },
                 ),
-              ),
-            );
-          },
+              );
+            },
+          ),
         ),
       ),
     );
@@ -339,27 +308,30 @@ class _ProfileDetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Icon(icon, color: AppColors.primary),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               Text(
                 label,
                 style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: AppColors.textSecondary),
+                    .textTheme.bodySmall
+                    ?.copyWith(
+                        color:
+                            AppColors.textSecondary),
               ),
               const SizedBox(height: 4),
               Text(
                 value,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: AppColors.textPrimary,
-                      fontWeight: FontWeight.w600,
+                style: Theme.of(context)
+                    .textTheme.titleMedium
+                    ?.copyWith(
+                      fontWeight:
+                          FontWeight.w600,
                     ),
               ),
             ],
