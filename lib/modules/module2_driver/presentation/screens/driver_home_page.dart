@@ -1326,26 +1326,107 @@ class _ProfileTab extends StatelessWidget {
 
   final VoidCallback onLogout;
 
+  Widget _profileField(String label, String value) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 13,
+            fontWeight: FontWeight.w600,
+            color: Colors.black87,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 16),
+          decoration: BoxDecoration(
+            border: Border.all(color: Colors.black, width: 1.2),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Text(
+            value,
+            style: const TextStyle(
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    return Padding(
+    return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CircleAvatar(
-            radius: 40,
-            child: Icon(Icons.person, size: 40),
+          // Profile Header
+          const Center(
+            child: CircleAvatar(
+              radius: 40,
+              child: Icon(Icons.person, size: 40),
+            ),
           ),
           const SizedBox(height: 12),
-          const Text(
-            'Driver Profile',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          const Center(
+            child: Text(
+              'Driver Profile',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+            ),
           ),
-          const Spacer(),
-          ElevatedButton.icon(
-            onPressed: onLogout,
-            icon: const Icon(Icons.logout),
-            label: const Text('Logout'),
+          const SizedBox(height: 24),
+
+          // Profile Fields
+          _profileField('Your Name', 'Jeevanantham P'),
+          _profileField('Date of Birth', '29 March 1988'),
+          _profileField('Language Speak', 'Tamil'),
+          _profileField('Experience', '23 Years'),
+          _profileField('Driving Licence No', 'TN21X20080011684'),
+
+          // Driving Licence Image
+          const Text(
+            'Driving Licence',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: Colors.black87,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Container(
+            width: double.infinity,
+            height: 180,
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.black, width: 1.2),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(10),
+              child: Image.network(
+                'https://your-server-url/driving_licence.jpg',
+                fit: BoxFit.cover,
+                errorBuilder: (_, __, ___) => const Center(
+                  child: Icon(Icons.image_not_supported, size: 40),
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 32),
+
+          // Logout
+          Center(
+            child: ElevatedButton.icon(
+              onPressed: onLogout,
+              icon: const Icon(Icons.logout),
+              label: const Text('Logout'),
+            ),
           ),
         ],
       ),
