@@ -25,12 +25,12 @@ Dio createDioClient() {
 class ApiConfig {
   static const String _legacyBase = 'https://zigma.in/iwms_app/iwms_app/';
   static const String _localMobileBase =
-      'http://10.244.208.158:8000/api/mobile/'; // bharathi
+      'http://192.168.5.92:8000/api/mobile/'; // bharathi
   // static const String _localMobileBase = 'http://192.168.5.92:8000/api/mobile/'; //sameer
   static const String _localDesktopBase =
-      'http://10.244.208.158:8000/api/desktop/';
+      'http://192.168.5.92:8000/api/desktop/';
   // static const String _localMobileBase = 'http://10.111.127.123:8000/api/mobile/';
-  //static const String _localMobileBase = 'http://:8000/api/mobile/';
+  //  // static const String _localMobileBase = 'http://115.245.93.26:4216/api/mobile/'; server
 
   /// Base URL used by the Flutter apps for mobile endpoints.
   static const String mobileBase = _localMobileBase;
@@ -48,8 +48,8 @@ class ApiConfig {
       'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjU3MzI5ZTM0NjM3YTQ2N2ZhZDYwMDM0ZmQ3ZDk0NTc3IiwiaCI6Im11cm11cjY0In0=';
 
   static const String driverNextHouse =
-      'https://10.244.208.158:8000/api/driver/next-house/';
-  static const String updateAssignmentStatus = 'https://10.244.208.158:8000/driver/assignment/update-status/';
+      'https://192.168.5.92:8000/api/driver/next-house/';
+  static const String updateAssignmentStatus = 'https://192.168.5.92:8000/driver/assignment/update-status/';
 
 
 

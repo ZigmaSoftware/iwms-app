@@ -707,39 +707,7 @@ Future<void> fetchAttendanceData() async {
               child: Column(
                   children: [
                     SizedBox(height: 5,),
-                    // // --------------------------------------------------
-                    // // ⭐ MONTHLY KPI STRIP
-                    // // --------------------------------------------------
-                    // Padding(
-                    //   padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                    //   child: Container(
-                    //     padding: EdgeInsets.all(16),
-                    //     decoration: BoxDecoration(
-                    //       color: Colors.white,
-                    //       borderRadius: BorderRadius.circular(18),
-                    //       boxShadow: [
-                    //         BoxShadow(
-                    //           color: Colors.black12.withOpacity(0.05),
-                    //           blurRadius: 8,
-                    //           offset: Offset(0, 3),
-                    //         ),
-                    //       ],
-                    //     ),
-                    //     child: Row(
-                    //       mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    //       children: [
-                    //         _kpi("Present", _countPresent().toString(), Colors.green),
-                    //         _kpi("Absent", _countAbsent().toString(), Colors.redAccent),
-                    //         _kpi("Leave", _countLeave().toString(), Colors.orange),
-                    //         _kpi("Permission", _countPermission().toString(), Colors.blue),
-                    //       ],
-                    //     ),
-                    //   ),
-                    // ),
-                      
-                    // --------------------------------------------------
-                    // 🎨 LEGEND STRIP (Modern & Clean)
-                    // --------------------------------------------------
+
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       margin: EdgeInsets.only(bottom: 8),
