@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:get_it/get_it.dart';
+import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
@@ -57,4 +58,8 @@ Future<void> setupDI() async {
   getIt.registerFactory(() => VehicleBloc(
         getIt<VehicleRepository>(),
       ));
+      getIt.registerLazySingleton<AssignmentRepository>(
+  () => AssignmentRepository(getIt<Dio>()),
+);
+
 }

@@ -14,8 +14,11 @@ import 'package:iwms_citizen_app/features/citizen_dashboard/track/models/waste_s
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/services/track_service.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/assignment_details_screen.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'assign_form_sheet.dart';
+import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
 
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart'
     as citizen_map;
@@ -57,23 +60,44 @@ class _DashboardShell extends StatefulWidget {
   @override
   State<_DashboardShell> createState() => _DashboardShellState();
 }
-
 class _DashboardShellState extends State<_DashboardShell> {
+  int _currentIndex = 0; // ✅ ADD THIS
+
   late final TrackService _trackService;
   late final VehicleRepository _vehicleRepository;
+  late final AssignmentRepository _assignmentRepository;
   late Future<_DashboardData> _dashboardFuture;
 
-  int _currentIndex = 0;
 
-  @override
-  void initState() {
-    super.initState();
-    _trackService = TrackService();
-    _vehicleRepository = getIt<VehicleRepository>();
+@override
+void initState() {
+  super.initState();
+  _trackService = TrackService();
+  _vehicleRepository = getIt<VehicleRepository>();
+  _assignmentRepository = getIt<AssignmentRepository>(); // ✅ ADD THIS
+  _dashboardFuture = _loadDashboardData();
+}
+
+  void _reloadDashboard() {
+  setState(() {
     _dashboardFuture = _loadDashboardData();
-  }
+  });
+}
+
 
   Future<_DashboardData> _loadDashboardData() async {
+final assignmentsFuture =
+    _assignmentRepository.fetchTodayAssignments()
+        .then((list) {
+          debugPrint('ASSIGNMENTS COUNT: ${list.length}');
+          return list;
+        })
+        .catchError((e) {
+          debugPrint('ASSIGNMENTS ERROR: $e');
+          return <DailyAssignmentModel>[];
+        });
+
+
     final today = DateTime.now();
     final todayKey = DateFormat('yyyy-MM-dd').format(today);
     final fromDate = DateTime(today.year, today.month, 1);
@@ -105,6 +129,7 @@ class _DashboardShellState extends State<_DashboardShell> {
     final dateRangeSummaries = await dateRangeFuture;
     final dayTickets = await dayTicketsFuture;
     final vehicleWeights = await vehicleWeightsFuture;
+    final assignments = await assignmentsFuture;
 
     return _DashboardData(
       summary: summary,
@@ -113,12 +138,14 @@ class _DashboardShellState extends State<_DashboardShell> {
       dateRangeSummaries: dateRangeSummaries,
       dayTickets: dayTickets,
       vehicleWeights: vehicleWeights,
+      assignments: assignments,
     );
   }
 
   Future<void> _refreshHome() async {
     setState(() {
       _dashboardFuture = _loadDashboardData();
+      
     });
     await _dashboardFuture;
   }
@@ -128,19 +155,30 @@ class _DashboardShellState extends State<_DashboardShell> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       body: IndexedStack(
-        index: _currentIndex,
-        children: [
-          _buildHome(context),
-          const AdminMapScreen(),
-          const _ApprovalsScreen(),
-          VehiclesScreen(vehicleRepository: _vehicleRepository),
-          const MoreScreen(),
-        ],
-      ),
-      bottomNavigationBar: _DashboardNavBar(
-        currentIndex: _currentIndex,
-        onChanged: (index) => setState(() => _currentIndex = index),
-      ),
+  index: _currentIndex,
+  children: [
+    _buildHome(context),                    // 0
+    const AssignmentsScreen(),              // 1
+    const _ApprovalsScreen(),               // 2
+    VehiclesScreen(vehicleRepository: _vehicleRepository), // 3
+    const MoreScreen(),                     // 4
+  ],
+),
+
+
+     bottomNavigationBar: _DashboardNavBar(
+  currentIndex: _currentIndex,
+  onChanged: (index) {
+  setState(() {
+    _currentIndex = index;
+    if (index == 0) {
+      _dashboardFuture = _loadDashboardData();
+    }
+  });
+},
+
+),
+
     );
   }
 
@@ -251,24 +289,157 @@ class _DashboardHomeContent extends StatelessWidget {
                   totalVehicles: data.vehicles.length,
                 ),
                 const SizedBox(height: 16),
-                _ActivityAndVehicleRow(
-                  vehicles: data.vehicles,
-                  statusCounts: statusCounts,
-                  summary: summary,
-                ),
-                if (monthSeries.isNotEmpty ||
-                    vehicleWeights.isNotEmpty ||
-                    dayTickets.isNotEmpty) ...[
-                  const SizedBox(height: 16),
-                  _WeighbridgeInsights(
-                    monthSeries: monthSeries,
-                    rangeSummaries: rangeSummaries,
-                    dayTickets: dayTickets,
-                    vehicleWeights: vehicleWeights,
-                  ),
-                ],
+//                 const SizedBox(height: 16),
+// Container(
+//   padding: const EdgeInsets.all(12),
+//   color: Colors.redAccent,
+//   child: Text(
+//     'Assignments length = ${data.assignments.length}',
+//     style: const TextStyle(color: Colors.white),
+//   ),
+// ),
+if (data.assignments.isNotEmpty)
+  _TodayAssignmentsCarousel(
+    assignments: data.assignments,
+    onCancelled: () {
+      (context.findAncestorStateOfType<_DashboardShellState>())
+          ?._reloadDashboard();
+    },
+  ),
+
+
               ],
             ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TodayAssignmentsCarousel extends StatelessWidget {
+  const _TodayAssignmentsCarousel({  required this.assignments,
+    required this.onCancelled,});
+
+  final List<DailyAssignmentModel> assignments;
+  final VoidCallback onCancelled;
+
+  Color _typeBg(String type) {
+    switch (type.toLowerCase()) {
+      case 'temporary':
+        return const Color(0xFFFFF3E0);
+      case 'emergency':
+        return const Color(0xFFFFEBEE);
+      default:
+        return const Color(0xFFE8F5E9);
+    }
+  }
+
+  Color _typeFg(String type) {
+    switch (type.toLowerCase()) {
+      case 'temporary':
+        return const Color(0xFFF57C00);
+      case 'emergency':
+        return const Color(0xFFC62828);
+      default:
+        return _primaryGreen;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            "Today’s Assignments",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(height: 10),
+        
+
+        SizedBox(
+          height: 155,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: assignments.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final a = assignments[i];
+              return Container(
+                width: 260,
+                padding: const EdgeInsets.all(14),
+                decoration: _cardDecoration(),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      a.ward,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Text("Driver: ${a.driver}",
+                        style: const TextStyle(fontSize: 13)),
+                    Text("Operator: ${a.operatorName}",
+                        style: const TextStyle(fontSize: 13)),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _typeBg(a.assignmentType),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            a.assignmentType.toUpperCase(),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              color: _typeFg(a.assignmentType),
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          a.shift.replaceAll('_', ' ').toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: _iconGray,
+                          ),
+                        ),
+                        TextButton(
+  onPressed: () {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AssignmentDetailsScreen(
+          assignment: a,
+          onCancelled: onCancelled,
+        ),
+      ),
+    );
+  },
+  child: const Text('Details'),
+),
+
+
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -1421,18 +1592,13 @@ class _DashboardNavBar extends StatelessWidget {
       selectedFontSize: 11,
       unselectedFontSize: 11,
       items: const [
-        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
-        BottomNavigationBarItem(icon: Icon(Icons.map_outlined), label: 'Map'),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.fact_check_outlined),
-          label: 'Approvals',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.directions_bus_outlined),
-          label: 'Vehicles',
-        ),
-        BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
-      ],
+  BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
+  BottomNavigationBarItem(icon: Icon(Icons.assignment_outlined), label: 'Assignments'),
+  BottomNavigationBarItem(icon: Icon(Icons.fact_check_outlined), label: 'Approvals'),
+  BottomNavigationBarItem(icon: Icon(Icons.directions_bus_outlined), label: 'Vehicles'),
+  BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
+],
+
     );
   }
 }
@@ -1540,25 +1706,49 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                         statusCounts: _DashboardData.countByStatus(_vehicles),
                       ),
                       const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: ElevatedButton.icon(
-                          icon: Icon(
-                            _showList ? Icons.list_alt : Icons.directions_bus,
-                          ),
-                          label: Text(
-                              _showList ? 'Hide vehicles' : 'All vehicles'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _primaryGreen,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                          ),
-                          onPressed: () =>
-                              setState(() => _showList = !_showList),
-                        ),
-                      ),
+                      Row(
+  children: [
+    ElevatedButton.icon(
+      icon: Icon(
+        _showList ? Icons.list_alt : Icons.directions_bus,
+      ),
+      label: Text(
+          _showList ? 'Hide vehicles' : 'All vehicles'),
+      style: ElevatedButton.styleFrom(
+        backgroundColor: _primaryGreen,
+        foregroundColor: Colors.white,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      onPressed: () =>
+          setState(() => _showList = !_showList),
+    ),
+    const SizedBox(width: 12),
+
+    // 🔽 NEW VIEW MAP BUTTON
+    OutlinedButton.icon(
+      icon: const Icon(Icons.map_outlined),
+      label: const Text('View Map'),
+      style: OutlinedButton.styleFrom(
+        foregroundColor: _primaryGreen,
+        side: BorderSide(color: _primaryGreen.withOpacity(0.6)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      onPressed: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => const AdminMapScreen(),
+          ),
+        );
+      },
+    ),
+  ],
+),
+
                       const SizedBox(height: 8),
                       if (_showList)
                         ..._vehicles.map(
@@ -1925,10 +2115,10 @@ class _MoreItem {
   final String label;
   final VoidCallback? onTap;
 }
+
 // ---------------------------------------------------------------------------
 // HELPERS & MODELS
 // ---------------------------------------------------------------------------
-
 class _DashboardData {
   const _DashboardData({
     this.summary,
@@ -1937,6 +2127,7 @@ class _DashboardData {
     this.dateRangeSummaries = const [],
     this.dayTickets = const [],
     this.vehicleWeights = const [],
+    this.assignments = const [],
   });
 
   const _DashboardData.empty() : this();
@@ -1947,6 +2138,9 @@ class _DashboardData {
   final List<WasteSummary> dateRangeSummaries;
   final List<DayWiseTicket> dayTickets;
   final List<VehicleWeightReport> vehicleWeights;
+
+  // 🔽 NEW
+  final List<DailyAssignmentModel> assignments;
 
   Map<_VehicleState, int> get statusCounts => countByStatus(vehicles);
 
@@ -2159,5 +2353,167 @@ String _formatRelative(String? raw) {
     return '${difference.inDays}d ago';
   } catch (_) {
     return raw;
+  }
+}
+
+
+class AssignmentsScreen extends StatefulWidget {
+  const AssignmentsScreen({super.key});
+
+  @override
+  State<AssignmentsScreen> createState() => _AssignmentsScreenState();
+}
+
+class _AssignmentsScreenState extends State<AssignmentsScreen> {
+    late final AssignmentRepository _assignmentRepository; // ✅ ADD THIS
+
+  late Future<List<DailyAssignmentModel>> _future;
+@override
+void initState() {
+  super.initState();
+  _assignmentRepository = getIt<AssignmentRepository>(); // ✅ ADD THIS
+  _load();
+}
+void _load() {
+  _future = _assignmentRepository.fetchTodayAssignments(); // ✅ FIXED
+}
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Assignments')),
+      body: FutureBuilder<List<DailyAssignmentModel>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Center(child: CircularProgressIndicator());
+          }
+
+          final list = snapshot.data ?? [];
+          if (list.isEmpty) {
+            return const Center(child: Text('No assignments'));
+          }
+
+          return RefreshIndicator(
+            onRefresh: () async {
+              setState(_load);
+              await _future;
+            },
+            child: ListView.separated(
+              padding: const EdgeInsets.all(16),
+              itemCount: list.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, i) {
+                final a = list[i];
+                return _AssignmentTile(
+                  assignment: a,
+                  onCancelled: () => setState(_load),
+                );
+              },
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+class _AssignmentTile extends StatelessWidget {
+  const _AssignmentTile({
+    required this.assignment,
+    required this.onCancelled,
+  });
+
+  final DailyAssignmentModel assignment;
+  final VoidCallback onCancelled;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Ward
+          Text(
+            assignment.ward,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // Driver / Operator
+          Text('Driver: ${assignment.driver}',
+              style: const TextStyle(fontSize: 13)),
+          Text('Operator: ${assignment.operatorName}',
+              style: const TextStyle(fontSize: 13)),
+
+          const SizedBox(height: 10),
+
+          Row(
+            children: [
+              // Assignment type pill
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: Colors.green.shade50,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  assignment.assignmentType.toUpperCase(),
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: Colors.green,
+                  ),
+                ),
+              ),
+
+              const Spacer(),
+
+              // Shift
+              Text(
+                assignment.shift.replaceAll('_', ' ').toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey,
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Details CTA
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AssignmentDetailsScreen(
+                        assignment: assignment,
+                        onCancelled: onCancelled,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Details'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

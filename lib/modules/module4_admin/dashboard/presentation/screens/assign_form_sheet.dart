@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 
 const Color _primaryGreen = Color(0xFF2E7D32);
@@ -19,6 +20,23 @@ class AssignFormSheet extends StatefulWidget {
 }
 
 class _AssignFormSheetState extends State<AssignFormSheet> {
+  DateTime _assignmentDate = DateTime.now();
+
+  String _shift = "full_day";
+  String _assignmentType = "primary";
+
+  final _shifts = const [
+    ("morning", "Morning"),
+    ("afternoon", "Afternoon"),
+    ("full_day", "Full Day"),
+  ];
+
+  final _assignmentTypes = const [
+    ("primary", "Primary"),
+    ("temporary", "Temporary"),
+    ("emergency", "Emergency"),
+  ];
+
   List<_IdName> wards = [];
   List<_IdName> customers = [];
   List<_IdName> drivers = [];
@@ -205,10 +223,13 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
 
   Future<bool> _postAssignment() async {
     final payload = {
+      "date": DateFormat('yyyy-MM-dd').format(_assignmentDate),
       "ward": wardId,
       "customer": customerId,
       "driver": driverId,
       "operator": operatorId,
+      "shift": _shift,
+      "assignment_type": _assignmentType,
     };
 
     final resp = await http.post(
@@ -243,6 +264,52 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
     );
   }
 
+  Future<bool> _checkAssignmentConflict() async {
+    if (wardId == null) return false;
+
+    final dateStr = DateFormat('yyyy-MM-dd').format(_assignmentDate);
+
+    final url =
+        "${ApiConfig.assignments}?date=$dateStr&ward_id=$wardId&shift=$_shift";
+
+    final resp =
+        await http.get(Uri.parse(url)).timeout(const Duration(seconds: 10));
+
+    if (resp.statusCode != 200) {
+      // Fail open (don’t block admin due to network issue)
+      return false;
+    }
+
+    final decoded = jsonDecode(resp.body);
+
+    // DRF may return list OR paginated results
+    final List items = decoded is List
+        ? decoded
+        : (decoded["results"] is List ? decoded["results"] : []);
+
+    // Any active assignment = conflict
+    return items.isNotEmpty;
+  }
+
+  Future<void> _showConflictDialog() async {
+    await showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text("Assignment Conflict"),
+        content: const Text(
+          "This ward is already assigned for the selected date and shift.\n\n"
+          "Please choose a different shift or ward.",
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Padding(
@@ -271,6 +338,76 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
                       icon: const Icon(Icons.close),
                     ),
                   ],
+                ),
+
+                GestureDetector(
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: _assignmentDate,
+                      firstDate:
+                          DateTime.now().subtract(const Duration(days: 7)),
+                      lastDate: DateTime.now().add(const Duration(days: 30)),
+                    );
+                    if (picked != null) {
+                      setState(() => _assignmentDate = picked);
+                    }
+                  },
+                  child: AbsorbPointer(
+                    child: TextFormField(
+                      decoration: _inputDecoration("Assignment Date"),
+                      controller: TextEditingController(
+                        text: DateFormat('yyyy-MM-dd').format(_assignmentDate),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  decoration: _inputDecoration("Shift"),
+                  value: _shift,
+                  items: _shifts
+                      .map((s) => DropdownMenuItem(
+                            value: s.$1,
+                            child: Text(s.$2),
+                          ))
+                      .toList(),
+                  onChanged: (val) => setState(() => _shift = val!),
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  decoration: _inputDecoration("Assignment Type"),
+                  value: _assignmentType,
+                  items: _assignmentTypes
+                      .map((a) => DropdownMenuItem(
+                            value: a.$1,
+                            child: Text(a.$2),
+                          ))
+                      .toList(),
+                  onChanged: (val) {
+                    setState(() {
+                      _assignmentType = val!;
+                      if (_assignmentType == "primary") {
+                        customerId = null; // enforce rule
+                      }
+                    });
+                  },
+                ),
+                const SizedBox(height: 10),
+                DropdownButtonFormField<String>(
+                  decoration: _inputDecoration(
+                    _assignmentType == "primary"
+                        ? "Citizen (not allowed for Primary)"
+                        : "Select Citizen (optional)",
+                  ),
+                  value: customerId,
+                  items: customers
+                      .map((c) =>
+                          DropdownMenuItem(value: c.id, child: Text(c.name)))
+                      .toList(),
+                  onChanged: _assignmentType == "primary"
+                      ? null
+                      : (val) => setState(() => customerId = val),
                 ),
 
                 // --------------------------
@@ -335,13 +472,25 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
-                    onPressed:
-                        wardId != null && driverId != null && operatorId != null
-                            ? () async {
-                                final ok = await _postAssignment();
-                                if (ok) Navigator.pop(context);
-                              }
-                            : null,
+                    onPressed: wardId != null &&
+        driverId != null &&
+        operatorId != null &&
+        (_assignmentType != "primary" || customerId == null)
+    ? () async {
+        // 1. Pre-check conflict
+        final hasConflict = await _checkAssignmentConflict();
+
+        if (hasConflict) {
+          await _showConflictDialog();
+          return;
+        }
+
+        // 2. Proceed with POST
+        final ok = await _postAssignment();
+        if (ok && mounted) Navigator.pop(context);
+      }
+    : null,
+
                     style: ElevatedButton.styleFrom(
                       backgroundColor: _primaryGreen,
                       foregroundColor: Colors.white,
