@@ -15,6 +15,7 @@ import 'package:iwms_citizen_app/features/citizen_dashboard/track/services/track
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/assignment_details_screen.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/citizen_collection_screen.dart';
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/staff_management_screen.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'assign_form_sheet.dart';
@@ -284,6 +285,8 @@ class _DashboardHomeContent extends StatelessWidget {
                   totalVehicles: data.vehicles.length,
                 ),
                 const SizedBox(height: 16),
+                const _CitizenCollectionCard(),
+                const SizedBox(height: 16),
 //                 const SizedBox(height: 16),
 // Container(
 //   padding: const EdgeInsets.all(12),
@@ -355,7 +358,8 @@ class _TodayAssignmentsCarousel extends StatelessWidget {
         ),
         const SizedBox(height: 10),
         SizedBox(
-          height: 155,
+          height: 180,
+          width: 400,
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -779,6 +783,61 @@ class _AssignCard extends StatelessWidget {
                 foregroundColor: Colors.white,
               ),
               child: const Text('Assign'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CitizenCollectionCard extends StatelessWidget {
+  const _CitizenCollectionCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: _cardDecoration(),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.people_alt_outlined, color: _primaryGreen),
+              const SizedBox(width: 8),
+              Text(
+                'Citizen Collection Status',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Review completed, pending, or skipped pickups ward-wise.',
+            style: TextStyle(color: _iconGray),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CitizenCollectionScreen(),
+                  ),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _primaryGreen,
+                side: const BorderSide(color: _primaryGreen),
+              ),
+              child: const Text('View citizens'),
             ),
           ),
         ],
@@ -2544,6 +2603,7 @@ class _AssignmentTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final statusColor = assignment.statusColor;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -2560,6 +2620,35 @@ class _AssignmentTile extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  assignment.statusLabel,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                DateFormat('MMM d').format(assignment.date),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: _iconGray,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
           // Ward
           Text(
             assignment.ward,
@@ -2585,15 +2674,15 @@ class _AssignmentTile extends StatelessWidget {
                 padding:
                     const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: Colors.green.shade50,
+                  color: assignment.typeBgColor,
                   borderRadius: BorderRadius.circular(12),
                 ),
                 child: Text(
                   assignment.assignmentType.toUpperCase(),
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    color: Colors.green,
+                    color: assignment.typeColor,
                   ),
                 ),
               ),

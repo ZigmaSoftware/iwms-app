@@ -100,9 +100,10 @@ class StaffManagementRepository {
     String uniqueId,
   ) async {
     try {
-      final dio = await authorizedDio();
+      final dio = getIt<Dio>();
       final response = await dio.get(
         '${ApiConfig.staffAssignments}$uniqueId/',
+        options: Options(headers: {'Authorization': null}),
       );
       return EnhancedAssignmentModel.fromJson(
         Map<String, dynamic>.from(response.data as Map),

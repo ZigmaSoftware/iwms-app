@@ -982,10 +982,13 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
 
   Future<void> _reportCompletion(_DriverAssignmentStop customer) async {
     try {
-      final dio = await authorizedDio();
+      final dio = getIt<Dio>();
       final assignmentId = customer.baseAssignmentId;
 
-      await dio.post('${ApiConfig.assignments}$assignmentId/complete/');
+      await dio.post(
+        '${ApiConfig.assignments}$assignmentId/complete/',
+        options: Options(headers: {'Authorization': null}),
+      );
       await dio.post(
         ApiConfig.collectionLogs,
         data: {
@@ -994,6 +997,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
           'latitude': widget.driverLocation.latitude,
           'longitude': widget.driverLocation.longitude,
         },
+        options: Options(headers: {'Authorization': null}),
       );
     } catch (e) {
       if (!mounted) return;
@@ -1011,12 +1015,13 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     String reason,
   ) async {
     try {
-      final dio = await authorizedDio();
+      final dio = getIt<Dio>();
       final assignmentId = customer.baseAssignmentId;
 
       await dio.post(
         '${ApiConfig.assignments}$assignmentId/skip/',
         data: {'reason': reason},
+        options: Options(headers: {'Authorization': null}),
       );
 
       await dio.post(
@@ -1028,6 +1033,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
           'latitude': widget.driverLocation.latitude,
           'longitude': widget.driverLocation.longitude,
         },
+        options: Options(headers: {'Authorization': null}),
       );
     } catch (e) {
       if (!mounted) return;
