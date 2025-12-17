@@ -15,6 +15,7 @@ import 'package:iwms_citizen_app/features/citizen_dashboard/track/services/track
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/assignment_details_screen.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/staff_management_screen.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'assign_form_sheet.dart';
 import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
@@ -60,43 +61,40 @@ class _DashboardShell extends StatefulWidget {
   @override
   State<_DashboardShell> createState() => _DashboardShellState();
 }
+
 class _DashboardShellState extends State<_DashboardShell> {
   int _currentIndex = 0; // ✅ ADD THIS
+  int _assignmentsReloadToken = 0;
 
   late final TrackService _trackService;
   late final VehicleRepository _vehicleRepository;
   late final AssignmentRepository _assignmentRepository;
   late Future<_DashboardData> _dashboardFuture;
 
-
-@override
-void initState() {
-  super.initState();
-  _trackService = TrackService();
-  _vehicleRepository = getIt<VehicleRepository>();
-  _assignmentRepository = getIt<AssignmentRepository>(); // ✅ ADD THIS
-  _dashboardFuture = _loadDashboardData();
-}
+  @override
+  void initState() {
+    super.initState();
+    _trackService = TrackService();
+    _vehicleRepository = getIt<VehicleRepository>();
+    _assignmentRepository = getIt<AssignmentRepository>(); // ✅ ADD THIS
+    _dashboardFuture = _loadDashboardData();
+  }
 
   void _reloadDashboard() {
-  setState(() {
-    _dashboardFuture = _loadDashboardData();
-  });
-}
-
+    setState(() {
+      _dashboardFuture = _loadDashboardData();
+    });
+  }
 
   Future<_DashboardData> _loadDashboardData() async {
-final assignmentsFuture =
-    _assignmentRepository.fetchTodayAssignments()
-        .then((list) {
-          debugPrint('ASSIGNMENTS COUNT: ${list.length}');
-          return list;
-        })
-        .catchError((e) {
-          debugPrint('ASSIGNMENTS ERROR: $e');
-          return <DailyAssignmentModel>[];
-        });
-
+    final assignmentsFuture =
+        _assignmentRepository.fetchTodayAssignments().then((list) {
+      debugPrint('ASSIGNMENTS COUNT: ${list.length}');
+      return list;
+    }).catchError((e) {
+      debugPrint('ASSIGNMENTS ERROR: $e');
+      return <DailyAssignmentModel>[];
+    });
 
     final today = DateTime.now();
     final todayKey = DateFormat('yyyy-MM-dd').format(today);
@@ -145,7 +143,6 @@ final assignmentsFuture =
   Future<void> _refreshHome() async {
     setState(() {
       _dashboardFuture = _loadDashboardData();
-      
     });
     await _dashboardFuture;
   }
@@ -155,30 +152,28 @@ final assignmentsFuture =
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       body: IndexedStack(
-  index: _currentIndex,
-  children: [
-    _buildHome(context),                    // 0
-    const AssignmentsScreen(),              // 1
-    const _ApprovalsScreen(),               // 2
-    VehiclesScreen(vehicleRepository: _vehicleRepository), // 3
-    const MoreScreen(),                     // 4
-  ],
-),
-
-
-     bottomNavigationBar: _DashboardNavBar(
-  currentIndex: _currentIndex,
-  onChanged: (index) {
-  setState(() {
-    _currentIndex = index;
-    if (index == 0) {
-      _dashboardFuture = _loadDashboardData();
-    }
-  });
-},
-
-),
-
+        index: _currentIndex,
+        children: [
+          _buildHome(context), // 0
+          AssignmentsScreen(key: ValueKey(_assignmentsReloadToken)), // 1
+          const _ApprovalsScreen(), // 2
+          VehiclesScreen(vehicleRepository: _vehicleRepository), // 3
+          const MoreScreen(), // 4
+        ],
+      ),
+      bottomNavigationBar: _DashboardNavBar(
+        currentIndex: _currentIndex,
+        onChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+            if (index == 0) {
+              _dashboardFuture = _loadDashboardData();
+            } else if (index == 1) {
+              _assignmentsReloadToken++;
+            }
+          });
+        },
+      ),
     );
   }
 
@@ -298,16 +293,14 @@ class _DashboardHomeContent extends StatelessWidget {
 //     style: const TextStyle(color: Colors.white),
 //   ),
 // ),
-if (data.assignments.isNotEmpty)
-  _TodayAssignmentsCarousel(
-    assignments: data.assignments,
-    onCancelled: () {
-      (context.findAncestorStateOfType<_DashboardShellState>())
-          ?._reloadDashboard();
-    },
-  ),
-
-
+                if (data.assignments.isNotEmpty)
+                  _TodayAssignmentsCarousel(
+                    assignments: data.assignments,
+                    onCancelled: () {
+                      (context.findAncestorStateOfType<_DashboardShellState>())
+                          ?._reloadDashboard();
+                    },
+                  ),
               ],
             ),
           ),
@@ -318,8 +311,10 @@ if (data.assignments.isNotEmpty)
 }
 
 class _TodayAssignmentsCarousel extends StatelessWidget {
-  const _TodayAssignmentsCarousel({  required this.assignments,
-    required this.onCancelled,});
+  const _TodayAssignmentsCarousel({
+    required this.assignments,
+    required this.onCancelled,
+  });
 
   final List<DailyAssignmentModel> assignments;
   final VoidCallback onCancelled;
@@ -359,8 +354,6 @@ class _TodayAssignmentsCarousel extends StatelessWidget {
           ),
         ),
         const SizedBox(height: 10),
-        
-
         SizedBox(
           height: 155,
           child: ListView.separated(
@@ -370,13 +363,48 @@ class _TodayAssignmentsCarousel extends StatelessWidget {
             separatorBuilder: (_, __) => const SizedBox(width: 12),
             itemBuilder: (context, i) {
               final a = assignments[i];
+              final statusColor = a.statusColor;
               return Container(
                 width: 260,
                 padding: const EdgeInsets.all(14),
-                decoration: _cardDecoration(),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: _softCardShadow(),
+                  border: Border.all(color: statusColor.withOpacity(0.25)),
+                ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            a.statusLabel,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          DateFormat('MMM d').format(a.date),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: _iconGray,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
                     Text(
                       a.ward,
                       style: const TextStyle(
@@ -419,21 +447,19 @@ class _TodayAssignmentsCarousel extends StatelessWidget {
                           ),
                         ),
                         TextButton(
-  onPressed: () {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => AssignmentDetailsScreen(
-          assignment: a,
-          onCancelled: onCancelled,
-        ),
-      ),
-    );
-  },
-  child: const Text('Details'),
-),
-
-
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AssignmentDetailsScreen(
+                                  assignment: a,
+                                  onCancelled: onCancelled,
+                                ),
+                              ),
+                            );
+                          },
+                          child: const Text('Details'),
+                        ),
                       ],
                     ),
                   ],
@@ -517,7 +543,7 @@ class _HeaderHero extends StatelessWidget {
 }
 
 void _showAssignSheet(BuildContext context) {
-  showModalBottomSheet<void>(
+  showModalBottomSheet<bool>(
     context: context,
     showDragHandle: true,
     isScrollControlled: true,
@@ -525,10 +551,14 @@ void _showAssignSheet(BuildContext context) {
     shape: const RoundedRectangleBorder(
       borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
     ),
-    builder: (ctx) {
-      return const AssignFormSheet();
-    },
-  );
+    builder: (ctx) => const AssignFormSheet(),
+  ).then((created) {
+    if (created == true) {
+      final shell = context.findAncestorStateOfType<_DashboardShellState>();
+      shell?._reloadDashboard();
+      shell?._assignmentsReloadToken++;
+    }
+  });
 }
 
 class _DailyWasteCard extends StatelessWidget {
@@ -1592,13 +1622,15 @@ class _DashboardNavBar extends StatelessWidget {
       selectedFontSize: 11,
       unselectedFontSize: 11,
       items: const [
-  BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
-  BottomNavigationBarItem(icon: Icon(Icons.assignment_outlined), label: 'Assignments'),
-  BottomNavigationBarItem(icon: Icon(Icons.fact_check_outlined), label: 'Approvals'),
-  BottomNavigationBarItem(icon: Icon(Icons.directions_bus_outlined), label: 'Vehicles'),
-  BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
-],
-
+        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
+        BottomNavigationBarItem(
+            icon: Icon(Icons.assignment_outlined), label: 'Assignments'),
+        BottomNavigationBarItem(
+            icon: Icon(Icons.fact_check_outlined), label: 'Approvals'),
+        BottomNavigationBarItem(
+            icon: Icon(Icons.directions_bus_outlined), label: 'Vehicles'),
+        BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
+      ],
     );
   }
 }
@@ -1707,48 +1739,48 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                       ),
                       const SizedBox(height: 12),
                       Row(
-  children: [
-    ElevatedButton.icon(
-      icon: Icon(
-        _showList ? Icons.list_alt : Icons.directions_bus,
-      ),
-      label: Text(
-          _showList ? 'Hide vehicles' : 'All vehicles'),
-      style: ElevatedButton.styleFrom(
-        backgroundColor: _primaryGreen,
-        foregroundColor: Colors.white,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      onPressed: () =>
-          setState(() => _showList = !_showList),
-    ),
-    const SizedBox(width: 12),
+                        children: [
+                          ElevatedButton.icon(
+                            icon: Icon(
+                              _showList ? Icons.list_alt : Icons.directions_bus,
+                            ),
+                            label: Text(
+                                _showList ? 'Hide vehicles' : 'All vehicles'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _primaryGreen,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () =>
+                                setState(() => _showList = !_showList),
+                          ),
+                          const SizedBox(width: 12),
 
-    // 🔽 NEW VIEW MAP BUTTON
-    OutlinedButton.icon(
-      icon: const Icon(Icons.map_outlined),
-      label: const Text('View Map'),
-      style: OutlinedButton.styleFrom(
-        foregroundColor: _primaryGreen,
-        side: BorderSide(color: _primaryGreen.withOpacity(0.6)),
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(12),
-        ),
-      ),
-      onPressed: () {
-        Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => const AdminMapScreen(),
-          ),
-        );
-      },
-    ),
-  ],
-),
-
+                          // 🔽 NEW VIEW MAP BUTTON
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.map_outlined),
+                            label: const Text('View Map'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _primaryGreen,
+                              side: BorderSide(
+                                  color: _primaryGreen.withOpacity(0.6)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const AdminMapScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
                       const SizedBox(height: 8),
                       if (_showList)
                         ..._vehicles.map(
@@ -2049,6 +2081,18 @@ class MoreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_MoreItem>[
       _MoreItem(Icons.person_outline, 'Profile'),
+      _MoreItem(
+        Icons.people_alt_outlined,
+        'Staffs',
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const StaffManagementScreen(),
+            ),
+          );
+        },
+      ),
       _MoreItem(Icons.notifications_none, 'Notifications'),
       _MoreItem(Icons.settings_outlined, 'Settings'),
       _MoreItem(Icons.support_agent, 'Support'),
@@ -2356,7 +2400,6 @@ String _formatRelative(String? raw) {
   }
 }
 
-
 class AssignmentsScreen extends StatefulWidget {
   const AssignmentsScreen({super.key});
 
@@ -2365,58 +2408,131 @@ class AssignmentsScreen extends StatefulWidget {
 }
 
 class _AssignmentsScreenState extends State<AssignmentsScreen> {
-    late final AssignmentRepository _assignmentRepository; // ✅ ADD THIS
+  late final AssignmentRepository _assignmentRepository; // ✅ ADD THIS
 
   late Future<List<DailyAssignmentModel>> _future;
-@override
-void initState() {
-  super.initState();
-  _assignmentRepository = getIt<AssignmentRepository>(); // ✅ ADD THIS
-  _load();
-}
-void _load() {
-  _future = _assignmentRepository.fetchTodayAssignments(); // ✅ FIXED
-}
+  @override
+  void initState() {
+    super.initState();
+    _assignmentRepository = getIt<AssignmentRepository>(); // ✅ ADD THIS
+    _load();
+  }
+
+  void _load() {
+    _future = _assignmentRepository.fetchTodayAssignments(); // ✅ FIXED
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Assignments')),
-      body: FutureBuilder<List<DailyAssignmentModel>>(
-        future: _future,
-        builder: (context, snapshot) {
-          if (snapshot.connectionState == ConnectionState.waiting) {
-            return const Center(child: CircularProgressIndicator());
-          }
+      backgroundColor: const Color(0xFFF5F5F7),
+      body: SafeArea(
+        child: FutureBuilder<List<DailyAssignmentModel>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
 
-          final list = snapshot.data ?? [];
-          if (list.isEmpty) {
-            return const Center(child: Text('No assignments'));
-          }
+            final list = snapshot.data ?? [];
 
-          return RefreshIndicator(
-            onRefresh: () async {
-              setState(_load);
-              await _future;
-            },
-            child: ListView.separated(
-              padding: const EdgeInsets.all(16),
-              itemCount: list.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, i) {
-                final a = list[i];
-                return _AssignmentTile(
-                  assignment: a,
-                  onCancelled: () => setState(_load),
-                );
+            return RefreshIndicator(
+              onRefresh: () async {
+                setState(_load);
+                await _future;
               },
-            ),
-          );
-        },
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.06),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.assignment_outlined,
+                              color: _primaryGreen,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Assignments',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                '${list.length} active ${list.length == 1 ? "assignment" : "assignments"}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: _iconGray,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (list.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.inbox_outlined,
+                                size: 42, color: _iconGray),
+                            SizedBox(height: 8),
+                            Text('No assignments'),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      sliver: SliverList.separated(
+                        itemCount: list.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, i) {
+                          final a = list[i];
+                          return _AssignmentTile(
+                            assignment: a,
+                            onCancelled: () => setState(_load),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
       ),
     );
   }
 }
+
 class _AssignmentTile extends StatelessWidget {
   const _AssignmentTile({
     required this.assignment,

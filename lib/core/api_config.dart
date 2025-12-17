@@ -41,7 +41,8 @@ class ApiConfig {
   static const String desktopBase = _localDesktopBase;
   static const String customerList = '${desktopBase}customercreations/';
   static const String assignments = '${desktopBase}assignments/';
-  
+  static const String staffAssignments = '${desktopBase}staff-assignments/';
+  static const String collectionLogs = '${desktopBase}collection-logs/';
 
   // TEMP: Hardcoded ORS key (DEBUG / INTERNAL ONLY)
   static const String orsApiKey =
@@ -49,9 +50,8 @@ class ApiConfig {
 
   static const String driverNextHouse =
       'https://192.168.5.92:8000/api/driver/next-house/';
-  static const String updateAssignmentStatus = 'https://192.168.5.92:8000/driver/assignment/update-status/';
-
-
+  static const String updateAssignmentStatus =
+      'https://192.168.5.92:8000/driver/assignment/update-status/';
 
   // static const String orsApiKey = String.fromEnvironment(
   //   'ORS_API_KEY',

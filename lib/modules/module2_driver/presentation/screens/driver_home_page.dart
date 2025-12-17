@@ -4,14 +4,13 @@
 
 import 'dart:convert';
 import 'dart:io';
-import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:animations/animations.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:http/http.dart' as http;
+import 'package:dio/dio.dart';
 
 import '../../../../core/di.dart';
 import '../../../../core/geofence_config.dart';
@@ -23,9 +22,9 @@ import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/ors_service.dart';
+import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/driver_details.dart';
 
 const Color _driverPrimary = Color(0xFF1B5E20);
 const Color _driverAccent = Color(0xFF66BB6A);
@@ -43,24 +42,46 @@ const List<String> _skipReasons = [
 ];
 
 enum _NavigationMode { overview, navigating }
+
 enum _CustomerStatus { pending, collected, skipped, navigating }
 
-class _DriverCustomerStop {
-  final String id;
-  final String name;
-  final String address;
+class _DriverAssignmentStop {
+  final String assignmentId;
+  final String? wardId;
+  final String wardName;
+  final String? customerName;
   final LatLng location;
+  final String assignmentType;
+  final String shift;
+
   _CustomerStatus status;
   String? skipReason;
 
-  _DriverCustomerStop({
-    required this.id,
-    required this.name,
-    required this.address,
+  _DriverAssignmentStop({
+    required this.assignmentId,
+    required this.wardId,
+    required this.wardName,
     required this.location,
+    required this.assignmentType,
+    required this.shift,
+    this.customerName,
     this.status = _CustomerStatus.pending,
     this.skipReason,
   });
+
+  // =====================
+  // BACKWARD COMPATIBILITY
+  // =====================
+
+  String get id => assignmentId;
+
+  String get name => (customerName != null && customerName!.trim().isNotEmpty)
+      ? customerName!
+      : wardName;
+
+  String get address => wardName; // placeholder until API adds address
+
+  String get baseAssignmentId => assignmentId.split('-').first;
 }
 
 enum _DriverTab { home, history, profile, attendance }
@@ -75,7 +96,7 @@ class DriverHomePage extends StatefulWidget {
 class _DriverHomePageState extends State<DriverHomePage> {
   _DriverTab _activeTab = _DriverTab.home;
   final MapController _mapController = MapController();
-  List<_DriverCustomerStop> _customers = [];
+  List<_DriverAssignmentStop> _customers = [];
   bool _loadingCustomers = true;
   String? _customerError;
 
@@ -85,7 +106,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _centerOnDriver(GammaGeofenceConfig.center),
     );
-    _loadCustomers();
+    _loadAssignmentsForDriver();
   }
 
   VehicleModel? _selectedVehicleFrom(VehicleState state) {
@@ -155,7 +176,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
                     Expanded(
                       child: PageTransitionSwitcher(
                         duration: const Duration(milliseconds: 320),
-                        transitionBuilder: (child, animation, secondaryAnimation) {
+                        transitionBuilder:
+                            (child, animation, secondaryAnimation) {
                           return SharedAxisTransition(
                             animation: animation,
                             secondaryAnimation: secondaryAnimation,
@@ -184,8 +206,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
                   currentIndex: _activeTab.index,
                   selectedItemColor: _driverPrimary,
                   unselectedItemColor: Colors.black54,
-                  selectedLabelStyle: const TextStyle(fontWeight: FontWeight.w700),
-                  unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w500),
+                  selectedLabelStyle:
+                      const TextStyle(fontWeight: FontWeight.w700),
+                  unselectedLabelStyle:
+                      const TextStyle(fontWeight: FontWeight.w500),
                   onTap: (index) {
                     final tab = _tabFromIndex(index);
                     if (tab != _activeTab) {
@@ -219,47 +243,182 @@ class _DriverHomePageState extends State<DriverHomePage> {
     );
   }
 
-  Future<void> _loadCustomers() async {
+  Future<void> _loadAssignmentsForDriver() async {
     setState(() {
       _loadingCustomers = true;
       _customerError = null;
     });
 
     try {
-      final assignmentsUri = Uri.parse(ApiConfig.assignments);
-      final resp = await http.get(assignmentsUri).timeout(const Duration(seconds: 12));
+      // 🔹 GET AUTH STATE SAFELY
+      final authState = context.read<AuthBloc>().state;
 
-      if (resp.statusCode == 200) {
-        final decodedAssignments = _decodeCustomerList(resp.body, fromAssignments: true);
-        if (decodedAssignments.isNotEmpty) {
-          setState(() {
-            _customers = decodedAssignments;
-            _loadingCustomers = false;
-          });
+      if (authState is! AuthStateAuthenticated) {
+        setState(() {
+          _loadingCustomers = false;
+          _customerError = 'User not authenticated';
+        });
+        return;
+      }
+
+      final driverId = authState.userId.trim();
+
+      if (driverId.isEmpty) {
+        setState(() {
+          _loadingCustomers = false;
+          _customerError = 'Missing driver id';
+        });
+        return;
+      }
+
+      // Use plain client so invalid JWTs don't trigger 401 on open endpoint
+      final dio = getIt<Dio>();
+
+      final today = DateTime.now();
+      final dateStr =
+          "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+
+      // 🔹 USE empId HERE
+      final resp = await dio.get(
+        "${ApiConfig.assignments}?date=$dateStr&driver_id=$driverId",
+      );
+
+      final List list =
+          resp.data is List ? resp.data : (resp.data['results'] ?? []);
+
+      final stops = <_DriverAssignmentStop>[];
+
+      // Helper to decode customer list for a ward
+      Future<void> _hydrateWardCustomers({
+        required String wardId,
+        required Map m,
+        required String assignmentId,
+        required String assignmentType,
+        required String shift,
+      }) async {
+        List wardList = [];
+
+        Future<void> _fetchWithParam(String paramKey) async {
+          final wardResp = await dio.get(
+            ApiConfig.customerList,
+            queryParameters: {paramKey: wardId},
+          );
+          final decoded = wardResp.data;
+          wardList = decoded is List
+              ? decoded
+              : (decoded is Map ? (decoded['results'] ?? []) : []);
+        }
+
+        try {
+          await _fetchWithParam('ward');
+          if (wardList.isEmpty) {
+            await _fetchWithParam('ward_id');
+          }
+        } catch (_) {
+          // ignore, fall back below
+        }
+
+        if (wardList.isEmpty) {
+          stops.add(
+            _DriverAssignmentStop(
+              assignmentId: assignmentId,
+              wardId: wardId,
+              wardName: m['ward_name']?.toString() ?? 'Ward',
+              customerName: m['customer_name'],
+              assignmentType: assignmentType,
+              shift: shift,
+              location: GammaGeofenceConfig.center,
+            ),
+          );
           return;
+        }
+
+        for (final entry in wardList) {
+          if (entry is! Map) continue;
+          final pos = _safeLatLng(
+                entry['latitude'] ?? entry['customer_latitude'],
+                entry['longitude'] ?? entry['customer_longitude'],
+              ) ??
+              GammaGeofenceConfig.center;
+
+          final customerId =
+              (entry['unique_id'] ?? entry['customer_id'] ?? '').toString();
+          final customerName =
+              (entry['customer_name'] ?? entry['name'] ?? '').toString();
+
+          stops.add(
+            _DriverAssignmentStop(
+              assignmentId: customerId.isNotEmpty
+                  ? '$assignmentId-$customerId'
+                  : assignmentId,
+              wardId: wardId,
+              wardName: m['ward_name']?.toString() ?? 'Ward',
+              customerName: customerName.isNotEmpty ? customerName : null,
+              assignmentType: assignmentType,
+              shift: shift,
+              location: pos,
+            ),
+          );
         }
       }
 
-      final customersResp = await http
-          .get(Uri.parse(ApiConfig.customerList))
-          .timeout(const Duration(seconds: 12));
+      for (final m in list) {
+        final assignmentId = (m['unique_id'] ?? '').toString();
+        final wardId = (m['ward'] ?? '').toString();
+        final assignmentType = m['assignment_type']?.toString() ?? 'primary';
+        final shift = m['shift']?.toString() ?? 'full_day';
 
-      if (customersResp.statusCode == 200) {
-        final decoded = _decodeCustomerList(customersResp.body);
-        setState(() {
-          _customers = decoded;
-          _loadingCustomers = false;
-        });
-      } else {
-        setState(() {
-          _loadingCustomers = false;
-          _customerError = 'Failed to load customers (${customersResp.statusCode})';
-        });
+        final directPos =
+            _safeLatLng(m['customer_latitude'], m['customer_longitude']);
+
+        if (directPos != null) {
+          stops.add(
+            _DriverAssignmentStop(
+              assignmentId: assignmentId,
+              wardId: wardId.isNotEmpty ? wardId : null,
+              wardName: m['ward_name']?.toString() ?? 'Ward',
+              customerName: m['customer_name'],
+              assignmentType: assignmentType,
+              shift: shift,
+              location: directPos,
+            ),
+          );
+          continue;
+        }
+
+        // If assignment has no specific customer point, hydrate ward customers
+        if (wardId.isNotEmpty) {
+          await _hydrateWardCustomers(
+            wardId: wardId,
+            m: m,
+            assignmentId: assignmentId,
+            assignmentType: assignmentType,
+            shift: shift,
+          );
+        } else {
+          // Fallback single stop at center
+          stops.add(
+            _DriverAssignmentStop(
+              assignmentId: assignmentId,
+              wardId: null,
+              wardName: m['ward_name']?.toString() ?? 'Ward',
+              customerName: m['customer_name'],
+              assignmentType: assignmentType,
+              shift: shift,
+              location: GammaGeofenceConfig.center,
+            ),
+          );
+        }
       }
-    } catch (_) {
+
+      setState(() {
+        _customers = stops;
+        _loadingCustomers = false;
+      });
+    } catch (e) {
       setState(() {
         _loadingCustomers = false;
-        _customerError = 'Unable to load customers';
+        _customerError = 'Failed to load assignments';
       });
     }
   }
@@ -272,58 +431,63 @@ class _DriverHomePageState extends State<DriverHomePage> {
     return LatLng(lat, lon);
   }
 
-  List<_DriverCustomerStop> _decodeCustomerList(String body, {bool fromAssignments = false}) {
-    final List<_DriverCustomerStop> out = [];
+  // List<_DriverAssignmentStop> _decodeCustomerList(String body,
+  //     {bool fromAssignments = false}) {
+  //   final List<_DriverAssignmentStop> out = [];
 
-    try {
-      final decoded = jsonDecode(body);
-      final list = decoded is List
-          ? decoded
-          : (decoded is Map && decoded['results'] is List ? decoded['results'] : []);
+  //   try {
+  //     final decoded = jsonDecode(body);
+  //     final list = decoded is List
+  //         ? decoded
+  //         : (decoded is Map && decoded['results'] is List
+  //             ? decoded['results']
+  //             : []);
 
-      if (list is! List) return out;
+  //     if (list is! List) return out;
 
-      for (final entry in list) {
-        if (entry is! Map) continue;
-        final map = Map<String, dynamic>.from(entry);
+  //     for (final entry in list) {
+  //       if (entry is! Map) continue;
+  //       final map = Map<String, dynamic>.from(entry);
 
-        final id = (map['unique_id'] ?? map['customer_id'] ?? '').toString();
-        if (id.trim().isEmpty) continue;
+  //       final id = (map['unique_id'] ?? map['customer_id'] ?? '').toString();
+  //       if (id.trim().isEmpty) continue;
 
-        final latRaw = fromAssignments ? map['customer_latitude'] : map['latitude'];
-        final lonRaw = fromAssignments ? map['customer_longitude'] : map['longitude'];
+  //       final latRaw =
+  //           fromAssignments ? map['customer_latitude'] : map['latitude'];
+  //       final lonRaw =
+  //           fromAssignments ? map['customer_longitude'] : map['longitude'];
 
-        final position = _safeLatLng(latRaw, lonRaw);
-        if (position == null) continue;
+  //       final position = _safeLatLng(latRaw, lonRaw);
+  //       if (position == null) continue;
 
-        final name = (map['customer_name'] ??
-                map['ward_name'] ??
-                map['driver_name'] ??
-                'Unknown')
-            .toString();
+  //       final name = (map['customer_name'] ??
+  //               map['ward_name'] ??
+  //               map['driver_name'] ??
+  //               'Unknown')
+  //           .toString();
 
-        final addressParts = [
-          map['building_no'],
-          map['street'],
-          map['area'],
-          map['pincode'],
-        ].whereType<String>().where((v) => v.trim().isNotEmpty).toList();
+  //       final addressParts = [
+  //         map['building_no'],
+  //         map['street'],
+  //         map['area'],
+  //         map['pincode'],
+  //       ].whereType<String>().where((v) => v.trim().isNotEmpty).toList();
 
-        out.add(
-          _DriverCustomerStop(
-            id: id,
-            name: name,
-            address: addressParts.join(', '),
-            location: position,
-          ),
-        );
-      }
-    } catch (_) {}
+  //       out.add(_DriverAssignmentStop(
+  //         assignmentId: id,
+  //         wardName: name,
+  //         assignmentType: 'primary',
+  //         shift: 'morning',
+  //         location: position,
+  //       ));
+  //     }
+  //   } catch (_) {}
 
-    return out;
-  }
+  //   return out;
+  // }
 
-  Widget _buildTab(_DriverTab tab, LatLng driverLocation, String nameFromState, String empIdFromState, VehicleModel? vehicle) {
+  Widget _buildTab(_DriverTab tab, LatLng driverLocation, String nameFromState,
+      String empIdFromState, VehicleModel? vehicle) {
     switch (tab) {
       case _DriverTab.home:
         return _HomeTab(
@@ -333,7 +497,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
           customers: _customers,
           loading: _loadingCustomers,
           error: _customerError,
-          onRefresh: _loadCustomers,
+          onRefresh: _loadAssignmentsForDriver,
           onStatusChanged: _updateCustomerStatus,
         );
       case _DriverTab.history:
@@ -341,7 +505,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
           customers: _customers,
           loading: _loadingCustomers,
           error: _customerError,
-          onRefresh: _loadCustomers,
+          onRefresh: _loadAssignmentsForDriver,
         );
       case _DriverTab.profile:
         return _ProfileTab(
@@ -379,19 +543,11 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   void _updateCustomerStatus(String id, _CustomerStatus status) {
     setState(() {
-      _customers = _customers.map((c) {
-        if (c.id == id) {
-          return _DriverCustomerStop(
-            id: c.id,
-            name: c.name,
-            address: c.address,
-            location: c.location,
-            status: status,
-            skipReason: c.skipReason,
-          );
+      for (final c in _customers) {
+        if (c.assignmentId == id) {
+          c.status = status;
         }
-        return c;
-      }).toList();
+      }
     });
   }
 }
@@ -584,7 +740,8 @@ class _DriverAvatarState extends State<DriverAvatar> {
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: const [
-                      Icon(Icons.person_add_alt_1, size: 26, color: Colors.green),
+                      Icon(Icons.person_add_alt_1,
+                          size: 26, color: Colors.green),
                       SizedBox(height: 2),
                       Text(
                         "Register",
@@ -601,16 +758,16 @@ class _DriverAvatarState extends State<DriverAvatar> {
     );
   }
 }
+
 // ============================================================
 // PART 3: HomeTab Widget with Map and Navigation
 // ============================================================
-
 class _HomeTab extends StatefulWidget {
   const _HomeTab({
     required this.mapController,
     required this.driverLocation,
     required this.onCenter,
-    required this.customers,
+    required this.customers, // ✅ DECLARED
     required this.loading,
     required this.error,
     required this.onRefresh,
@@ -620,7 +777,7 @@ class _HomeTab extends StatefulWidget {
   final MapController mapController;
   final LatLng driverLocation;
   final VoidCallback onCenter;
-  final List<_DriverCustomerStop> customers;
+  final List<_DriverAssignmentStop> customers; // ✅ ADD THIS
   final bool loading;
   final String? error;
   final Future<void> Function() onRefresh;
@@ -633,7 +790,7 @@ class _HomeTab extends StatefulWidget {
 class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   List<LatLng> _orsRoute = [];
   double _driverBearing = 0.0;
-  List<_DriverCustomerStop> _customers = [];
+  List<_DriverAssignmentStop> _customers = [];
   _NavigationMode _navMode = _NavigationMode.overview;
   String? _activeNavigationId;
   late AnimationController _navAnimController;
@@ -642,7 +799,9 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   void initState() {
     super.initState();
     _customers = widget.customers
-        .where((c) => c.status == _CustomerStatus.pending || c.status == _CustomerStatus.navigating)
+        .where((c) =>
+            c.status == _CustomerStatus.pending ||
+            c.status == _CustomerStatus.navigating)
         .toList();
     _navAnimController = AnimationController(
       vsync: this,
@@ -663,7 +822,9 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     if (oldWidget.customers != widget.customers ||
         oldWidget.driverLocation != widget.driverLocation) {
       _customers = widget.customers
-          .where((c) => c.status == _CustomerStatus.pending || c.status == _CustomerStatus.navigating)
+          .where((c) =>
+              c.status == _CustomerStatus.pending ||
+              c.status == _CustomerStatus.navigating)
           .toList();
       _computeRoute();
     }
@@ -749,7 +910,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   void _stopNavigation() {
     setState(() {
       if (_activeNavigationId != null) {
-        final customer = _customers.firstWhere((c) => c.id == _activeNavigationId);
+        final customer =
+            _customers.firstWhere((c) => c.id == _activeNavigationId);
         customer.status = _CustomerStatus.pending;
         widget.onStatusChanged(_activeNavigationId!, _CustomerStatus.pending);
       }
@@ -774,12 +936,12 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
 
     // Position driver at bottom third of screen, facing up
     final driverPos = _orsRoute.first;
-    
+
     // Calculate offset to position driver marker at bottom third
     final screenHeight = MediaQuery.of(context).size.height;
     final mapHeight = screenHeight - 200; // approximate map height
     final offsetLat = 0.003; // Adjust this value based on zoom level
-    
+
     final targetCenter = LatLng(
       driverPos.latitude + offsetLat,
       driverPos.longitude,
@@ -818,6 +980,66 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     });
   }
 
+  Future<void> _reportCompletion(_DriverAssignmentStop customer) async {
+    try {
+      final dio = await authorizedDio();
+      final assignmentId = customer.baseAssignmentId;
+
+      await dio.post('${ApiConfig.assignments}$assignmentId/complete/');
+      await dio.post(
+        ApiConfig.collectionLogs,
+        data: {
+          'assignment': assignmentId,
+          'action': 'collection_completed',
+          'latitude': widget.driverLocation.latitude,
+          'longitude': widget.driverLocation.longitude,
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to sync completion'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Future<void> _reportSkip(
+    _DriverAssignmentStop customer,
+    String reason,
+  ) async {
+    try {
+      final dio = await authorizedDio();
+      final assignmentId = customer.baseAssignmentId;
+
+      await dio.post(
+        '${ApiConfig.assignments}$assignmentId/skip/',
+        data: {'reason': reason},
+      );
+
+      await dio.post(
+        ApiConfig.collectionLogs,
+        data: {
+          'assignment': assignmentId,
+          'action': 'skipped',
+          'skip_reason': reason,
+          'latitude': widget.driverLocation.latitude,
+          'longitude': widget.driverLocation.longitude,
+        },
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to sync skip'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
   Color _statusColor(_CustomerStatus status) {
     switch (status) {
       case _CustomerStatus.collected:
@@ -831,7 +1053,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     }
   }
 
-  String _getDistanceToCustomer(_DriverCustomerStop customer) {
+  String _getDistanceToCustomer(_DriverAssignmentStop customer) {
     final distance = const Distance().as(
       LengthUnit.Meter,
       widget.driverLocation,
@@ -868,7 +1090,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
               ),
               children: [
                 TileLayer(
-                  urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  urlTemplate:
+                      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
                   subdomains: const ['a', 'b', 'c'],
                   userAgentPackageName: 'com.iwms.citizen.app',
                 ),
@@ -955,7 +1178,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
               left: 0,
               right: 0,
               child: _NavigationHeader(
-                customer: _customers.firstWhere((c) => c.id == _activeNavigationId),
+                customer:
+                    _customers.firstWhere((c) => c.id == _activeNavigationId),
                 distance: _getDistanceToCustomer(
                   _customers.firstWhere((c) => c.id == _activeNavigationId),
                 ),
@@ -996,7 +1220,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                               ),
                             )
                           : ListView.separated(
-                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
                               scrollDirection: Axis.horizontal,
                               itemBuilder: (context, index) {
                                 final customer = _customers[index];
@@ -1013,11 +1238,13 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                         ),
                                         actions: [
                                           TextButton(
-                                            onPressed: () => Navigator.pop(context, false),
+                                            onPressed: () =>
+                                                Navigator.pop(context, false),
                                             child: const Text('Cancel'),
                                           ),
                                           ElevatedButton(
-                                            onPressed: () => Navigator.pop(context, true),
+                                            onPressed: () =>
+                                                Navigator.pop(context, true),
                                             child: const Text('Confirm'),
                                           ),
                                         ],
@@ -1027,13 +1254,17 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                     if (confirmed != true) return;
 
                                     setState(() {
-                                      customer.status = _CustomerStatus.collected;
+                                      customer.status =
+                                          _CustomerStatus.collected;
                                     });
 
-                                    widget.onStatusChanged(customer.id, _CustomerStatus.collected);
+                                    widget.onStatusChanged(
+                                        customer.id, _CustomerStatus.collected);
+                                    await _reportCompletion(customer);
 
                                     if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
                                         const SnackBar(
                                           content: Text('Collection completed'),
                                           duration: Duration(seconds: 2),
@@ -1053,30 +1284,37 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                         return StatefulBuilder(
                                           builder: (context, setStateDialog) {
                                             return AlertDialog(
-                                              title: const Text('Skip Waste Collection'),
+                                              title: const Text(
+                                                  'Skip Waste Collection'),
                                               content: Column(
                                                 mainAxisSize: MainAxisSize.min,
                                                 children: [
-                                                  const Text('Select a reason for skipping:'),
+                                                  const Text(
+                                                      'Select a reason for skipping:'),
                                                   const SizedBox(height: 12),
-                                                  DropdownButtonFormField<String>(
+                                                  DropdownButtonFormField<
+                                                      String>(
                                                     value: selectedReason,
                                                     isExpanded: true,
                                                     dropdownColor: Colors.white,
-                                                    decoration: const InputDecoration(
+                                                    decoration:
+                                                        const InputDecoration(
                                                       filled: true,
                                                       fillColor: Colors.white,
-                                                      border: OutlineInputBorder(),
+                                                      border:
+                                                          OutlineInputBorder(),
                                                       hintText: 'Reason',
                                                     ),
                                                     items: _skipReasons
                                                         .map(
-                                                          (r) => DropdownMenuItem(
+                                                          (r) =>
+                                                              DropdownMenuItem(
                                                             value: r,
                                                             child: Text(
                                                               r,
                                                               style: const TextStyle(
-                                                                  color: Colors.black),
+                                                                  color: Colors
+                                                                      .black),
                                                             ),
                                                           ),
                                                         )
@@ -1092,13 +1330,16 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                               actions: [
                                                 TextButton(
                                                   onPressed: () =>
-                                                      Navigator.pop(dialogContext, false),
+                                                      Navigator.pop(
+                                                          dialogContext, false),
                                                   child: const Text('Cancel'),
                                                 ),
                                                 ElevatedButton(
-                                                  onPressed: selectedReason == null
+                                                  onPressed: selectedReason ==
+                                                          null
                                                       ? null
-                                                      : () => Navigator.pop(dialogContext, true),
+                                                      : () => Navigator.pop(
+                                                          dialogContext, true),
                                                   child: const Text('Skip'),
                                                 ),
                                               ],
@@ -1108,17 +1349,22 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                       },
                                     );
 
-                                    if (confirmed != true || selectedReason == null) return;
+                                    if (confirmed != true ||
+                                        selectedReason == null) return;
 
                                     setState(() {
                                       customer.status = _CustomerStatus.skipped;
                                       customer.skipReason = selectedReason;
                                     });
 
-                                    widget.onStatusChanged(customer.id, _CustomerStatus.skipped);
+                                    widget.onStatusChanged(
+                                        customer.id, _CustomerStatus.skipped);
+                                    await _reportSkip(
+                                        customer, selectedReason!);
 
                                     if (mounted) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
                                         const SnackBar(
                                           content: Text('Skipped'),
                                           duration: Duration(seconds: 2),
@@ -1131,7 +1377,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                   onStart: () => _startNavigation(customer.id),
                                 );
                               },
-                              separatorBuilder: (_, __) => const SizedBox(width: 10),
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 10),
                               itemCount: _customers.length,
                             ),
             ),
@@ -1152,7 +1399,7 @@ class _NavigationHeader extends StatelessWidget {
     required this.onStop,
   });
 
-  final _DriverCustomerStop customer;
+  final _DriverAssignmentStop customer;
   final String distance;
   final VoidCallback onStop;
 
@@ -1258,7 +1505,7 @@ class _CustomerCard extends StatelessWidget {
     required this.onStart,
   });
 
-  final _DriverCustomerStop customer;
+  final _DriverAssignmentStop customer;
   final String distance;
   final VoidCallback onComplete;
   final VoidCallback onSkip;
@@ -1273,33 +1520,60 @@ class _CustomerCard extends StatelessWidget {
       case _CustomerStatus.navigating:
         return Colors.blue;
       case _CustomerStatus.pending:
+      default:
         return Colors.red;
+    }
+  }
+
+  Color get _assignmentBg {
+    switch (customer.assignmentType.toLowerCase()) {
+      case 'emergency':
+        return Colors.red.shade100;
+      case 'temporary':
+        return Colors.orange.shade100;
+      default:
+        return Colors.green.shade100;
+    }
+  }
+
+  Color get _assignmentFg {
+    switch (customer.assignmentType.toLowerCase()) {
+      case 'emergency':
+        return Colors.red.shade700;
+      case 'temporary':
+        return Colors.orange.shade700;
+      default:
+        return Colors.green.shade700;
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final displayName = customer.customerName?.trim().isNotEmpty == true
+        ? customer.customerName!
+        : customer.wardName;
+
     return SizedBox(
-      width: 240, // Reduced from 260
+      width: 240,
       child: Card(
         elevation: 6,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
         child: Padding(
-          padding: const EdgeInsets.all(10), // Reduced from 12
+          padding: const EdgeInsets.all(10),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // ================= HEADER =================
               Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   CircleAvatar(
-                    radius: 16, // Reduced from 18
-                    backgroundColor: _statusColor.withValues(alpha: 0.15),
+                    radius: 16,
+                    backgroundColor: _statusColor.withOpacity(0.15),
                     child: Text(
-                      customer.name[0].toUpperCase(),
+                      displayName[0].toUpperCase(),
                       style: TextStyle(
                         color: _statusColor,
                         fontWeight: FontWeight.w800,
@@ -1313,7 +1587,7 @@ class _CustomerCard extends StatelessWidget {
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          customer.name,
+                          displayName,
                           maxLines: 1,
                           overflow: TextOverflow.ellipsis,
                           style: const TextStyle(
@@ -1321,6 +1595,7 @@ class _CustomerCard extends StatelessWidget {
                             fontSize: 13,
                           ),
                         ),
+                        const SizedBox(height: 2),
                         Row(
                           children: [
                             Icon(
@@ -1342,17 +1617,35 @@ class _CustomerCard extends StatelessWidget {
                       ],
                     ),
                   ),
+
+                  // ===== ASSIGNMENT TYPE BADGE =====
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _assignmentBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      customer.assignmentType.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: _assignmentFg,
+                      ),
+                    ),
+                  ),
                 ],
               ),
 
-              const SizedBox(height: 8),
+              const SizedBox(height: 10),
 
-              // Complete / Skip buttons
+              // ================= ACTION BUTTONS =================
               Row(
                 children: [
                   Expanded(
                     child: SizedBox(
-                      height: 32, // Reduced from 36
+                      height: 32,
                       child: ElevatedButton(
                         onPressed: customer.status == _CustomerStatus.collected
                             ? null
@@ -1367,8 +1660,6 @@ class _CustomerCard extends StatelessWidget {
                         ),
                         child: const Text(
                           'Complete',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
@@ -1393,8 +1684,6 @@ class _CustomerCard extends StatelessWidget {
                         ),
                         child: const Text(
                           'Skip',
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                           style: TextStyle(
                             fontSize: 11,
                             fontWeight: FontWeight.w700,
@@ -1408,21 +1697,17 @@ class _CustomerCard extends StatelessWidget {
 
               const SizedBox(height: 8),
 
-              // Navigate button
+              // ================= NAVIGATE =================
               SizedBox(
                 width: double.infinity,
                 height: 32,
                 child: ElevatedButton.icon(
-                  onPressed:
-                      customer.status == _CustomerStatus.navigating ? null : onStart,
-                  icon: const Icon(
-                    Icons.navigation_rounded,
-                    size: 13,
-                  ),
+                  onPressed: customer.status == _CustomerStatus.navigating
+                      ? null
+                      : onStart,
+                  icon: const Icon(Icons.navigation_rounded, size: 13),
                   label: const Text(
                     'Navigate',
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w700,
@@ -1454,7 +1739,7 @@ class _HistoryTab extends StatelessWidget {
     required this.onRefresh,
   });
 
-  final List<_DriverCustomerStop> customers;
+  final List<_DriverAssignmentStop> customers;
   final bool loading;
   final String? error;
   final Future<void> Function() onRefresh;
@@ -1480,7 +1765,8 @@ class _HistoryTab extends StatelessWidget {
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
               ),
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
                   color: _driverPrimary.withValues(alpha: 0.1),
                   borderRadius: BorderRadius.circular(20),
@@ -1550,7 +1836,8 @@ class _HistoryTab extends StatelessWidget {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       if (c.address.isNotEmpty) Text(c.address),
-                      if (c.status == _CustomerStatus.skipped && c.skipReason != null)
+                      if (c.status == _CustomerStatus.skipped &&
+                          c.skipReason != null)
                         Padding(
                           padding: const EdgeInsets.only(top: 4),
                           child: Text(
@@ -1565,7 +1852,8 @@ class _HistoryTab extends StatelessWidget {
                     ],
                   ),
                   trailing: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
                       color: color.withValues(alpha: 0.2),
                       borderRadius: BorderRadius.circular(8),

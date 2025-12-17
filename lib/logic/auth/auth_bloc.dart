@@ -39,6 +39,8 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthStateAuthenticated(
       userName: user.userName,
       role: user.role.toLowerCase(),
+      userId: user.userId,
+      emp_id: user.emp_id,
     ));
   }
 
@@ -85,6 +87,7 @@ Future<void> _onCitizenLoginRequested(
     emit(AuthStateAuthenticated(
       userName: user.userName,
       role: user.role.toLowerCase(),
+      userId: user.userId,
       emp_id: user.emp_id,
     ));
   } catch (e) {
@@ -112,6 +115,7 @@ Future<void> _onCitizenLoginRequested(
     emit(AuthStateAuthenticated(
       userName: localUser["name"],
       role: localUser["role"],
+      userId: (localUser["unique_id"] ?? "").toString(),
       emp_id: localUser["emp_id"],
     ));
   }
@@ -139,6 +143,7 @@ Future<void> _onCitizenLoginRequested(
     emit(AuthStateAuthenticated(
       userName: user.userName,
       role: "citizen",
+      userId: user.userId,
     ));
   }
 
@@ -160,6 +165,7 @@ Future<void> _onCitizenLoginRequested(
     emit(AuthStateAuthenticated(
       userName: user.userName,
       role: "operator",
+      userId: user.userId,
     ));
   }
 

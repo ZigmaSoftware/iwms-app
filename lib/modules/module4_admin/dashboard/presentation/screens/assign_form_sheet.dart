@@ -1,8 +1,10 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
+
 
 const Color _primaryGreen = Color(0xFF2E7D32);
 
@@ -26,15 +28,15 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
   String _assignmentType = "primary";
 
   final _shifts = const [
-    ("morning", "Morning"),
-    ("afternoon", "Afternoon"),
-    ("full_day", "Full Day"),
+    ("morning", "Morning", Icons.wb_sunny_outlined),
+    ("afternoon", "Afternoon", Icons.wb_twilight_outlined),
+    ("full_day", "Full Day", Icons.access_time),
   ];
 
   final _assignmentTypes = const [
-    ("primary", "Primary"),
-    ("temporary", "Temporary"),
-    ("emergency", "Emergency"),
+    ("primary", "Primary", Icons.stars_rounded, "Regular scheduled assignment"),
+    ("temporary", "Temporary", Icons.schedule, "Short-term coverage"),
+    ("emergency", "Emergency", Icons.warning_amber_rounded, "Urgent response"),
   ];
 
   List<_IdName> wards = [];
@@ -48,6 +50,7 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
   String? operatorId;
 
   bool loading = true;
+  bool submitting = false;
   String? error;
 
   // Correct backend endpoints
@@ -149,13 +152,13 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
   // FETCH LIST FROM API
   // ===========================
   Future<List<_IdName>> _fetchList(String url) async {
-    print("FETCH → $url");
+    debugPrint("FETCH → $url");
 
     final resp =
         await http.get(Uri.parse(url)).timeout(const Duration(seconds: 12));
 
     if (resp.statusCode != 200) {
-      print("API ERROR → ${resp.statusCode}, BODY: ${resp.body}");
+      debugPrint("API ERROR → ${resp.statusCode}, BODY: ${resp.body}");
       return [];
     }
 
@@ -169,13 +172,13 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
 
   // Improved version: re-fetch raw items to inspect staffusertype
   Future<List<_IdName>> _filterUserListByRole(String targetRole) async {
-    print("=== FILTER ROLE START → $targetRole ===");
+    debugPrint("=== FILTER ROLE START → $targetRole ===");
 
     final resp = await http
         .get(Uri.parse(usersUrl))
         .timeout(const Duration(seconds: 12));
 
-    print("RAW USERS → ${resp.body}");
+    debugPrint("RAW USERS → ${resp.body}");
 
     if (resp.statusCode != 200) return [];
 
@@ -189,17 +192,17 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
     for (final m in rawItems) {
       final rawRole = m["staffusertype_name"]; // <-- THE REAL FIELD IN YOUR API
 
-      print("CHECK ROLE → $rawRole");
+      debugPrint("CHECK ROLE → $rawRole");
 
       if (rawRole != null &&
           rawRole.toString().toLowerCase() == normalizedTarget) {
         validIds.add(m["unique_id"].toString());
-        print("MATCH FOUND → ${m["unique_id"]}");
+        debugPrint("MATCH FOUND → ${m["unique_id"]}");
       }
     }
 
-    print("MATCHED IDS → $validIds");
-    print("=== FILTER ROLE END ===");
+    debugPrint("MATCHED IDS → $validIds");
+    debugPrint("=== FILTER ROLE END ===");
 
     return displayList.where((e) => validIds.contains(e.id)).toList();
   }
@@ -238,15 +241,16 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
       body: jsonEncode(payload),
     );
 
-    print("POST → $payload");
-    print("RESP → ${resp.statusCode} ${resp.body}");
+    debugPrint("POST → $payload");
+    debugPrint("RESP → ${resp.statusCode} ${resp.body}");
 
     return resp.statusCode >= 200 && resp.statusCode < 300;
   }
 
-  InputDecoration _inputDecoration(String label) {
+  InputDecoration _inputDecoration(String label, {IconData? icon}) {
     return InputDecoration(
       labelText: label,
+      prefixIcon: icon != null ? Icon(icon, size: 20) : null,
       filled: true,
       fillColor: Colors.white,
       labelStyle: const TextStyle(
@@ -254,7 +258,7 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
         fontWeight: FontWeight.bold,
       ),
       enabledBorder: OutlineInputBorder(
-        borderSide: BorderSide(color: _primaryGreen.withOpacity(0.3)),
+        borderSide: BorderSide(color: _primaryGreen.withValues(alpha: 0.3)),
         borderRadius: BorderRadius.circular(12),
       ),
       focusedBorder: OutlineInputBorder(
@@ -295,7 +299,14 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
     await showDialog<void>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text("Assignment Conflict"),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Row(
+          children: const [
+            Icon(Icons.warning_amber_rounded, color: Color(0xFFFF6F00)),
+            SizedBox(width: 12),
+            Text("Assignment Conflict"),
+          ],
+        ),
         content: const Text(
           "This ward is already assigned for the selected date and shift.\n\n"
           "Please choose a different shift or ward.",
@@ -312,194 +323,360 @@ class _AssignFormSheetState extends State<AssignFormSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: EdgeInsets.only(
-        left: 20,
-        right: 20,
-        top: 12,
-        bottom: 12 + MediaQuery.of(context).viewInsets.bottom,
-      ),
-      child: loading
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Text(
-                      "Assign Driver & Operator",
-                      style:
-                          TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: () => Navigator.pop(context),
-                      icon: const Icon(Icons.close),
-                    ),
-                  ],
-                ),
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
 
-                GestureDetector(
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: _assignmentDate,
-                      firstDate:
-                          DateTime.now().subtract(const Duration(days: 7)),
-                      lastDate: DateTime.now().add(const Duration(days: 30)),
-                    );
-                    if (picked != null) {
-                      setState(() => _assignmentDate = picked);
-                    }
-                  },
-                  child: AbsorbPointer(
-                    child: TextFormField(
-                      decoration: _inputDecoration("Assignment Date"),
-                      controller: TextEditingController(
-                        text: DateFormat('yyyy-MM-dd').format(_assignmentDate),
+    return SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return Container(
+            decoration: const BoxDecoration(
+              color: Color(0xFFF8F9FB),
+              borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            ),
+            child: loading
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(40),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                : SingleChildScrollView(
+                    padding: EdgeInsets.only(
+                      left: 20,
+                      right: 20,
+                      top: 20,
+                      bottom: 20 + bottomInset,
+                    ),
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: constraints.maxHeight,
+                      ),
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          gradient: const LinearGradient(
+                            colors: [Color(0xFF2E7D32), Color(0xFF1B5E20)],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: const Icon(
+                          Icons.assignment_ind_rounded,
+                          color: Colors.white,
+                          size: 24,
+                        ),
+                      ),
+                      const SizedBox(width: 14),
+                      const Expanded(
+                        child: Text(
+                          "Create Assignment",
+                          style: TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 22,
+                            letterSpacing: -0.5,
+                          ),
+                        ),
+                      ),
+                      IconButton(
+                        onPressed: () => Navigator.pop(context),
+                        icon: const Icon(Icons.close_rounded),
+                        style: IconButton.styleFrom(
+                          backgroundColor: const Color(0xFFEEEEEE),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  GestureDetector(
+                    onTap: () async {
+                      final picked = await showDatePicker(
+                        context: context,
+                        initialDate: _assignmentDate,
+                        firstDate:
+                            DateTime.now().subtract(const Duration(days: 7)),
+                        lastDate: DateTime.now().add(const Duration(days: 30)),
+                      );
+                      if (picked != null) {
+                        setState(() => _assignmentDate = picked);
+                      }
+                    },
+                    child: AbsorbPointer(
+                      child: TextFormField(
+                        decoration: _inputDecoration(
+                          "Assignment Date",
+                          icon: Icons.calendar_today_rounded,
+                        ),
+                        controller: TextEditingController(
+                          text: DateFormat('MMM dd, yyyy').format(_assignmentDate),
+                        ),
                       ),
                     ),
                   ),
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  decoration: _inputDecoration("Shift"),
-                  value: _shift,
-                  items: _shifts
-                      .map((s) => DropdownMenuItem(
-                            value: s.$1,
-                            child: Text(s.$2),
-                          ))
-                      .toList(),
-                  onChanged: (val) => setState(() => _shift = val!),
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  decoration: _inputDecoration("Assignment Type"),
-                  value: _assignmentType,
-                  items: _assignmentTypes
-                      .map((a) => DropdownMenuItem(
-                            value: a.$1,
-                            child: Text(a.$2),
-                          ))
-                      .toList(),
-                  onChanged: (val) {
-                    setState(() {
-                      _assignmentType = val!;
-                      if (_assignmentType == "primary") {
-                        customerId = null; // enforce rule
-                      }
-                    });
-                  },
-                ),
-                const SizedBox(height: 10),
-                DropdownButtonFormField<String>(
-                  decoration: _inputDecoration(
-                    _assignmentType == "primary"
-                        ? "Citizen (not allowed for Primary)"
-                        : "Select Citizen (optional)",
-                  ),
-                  value: customerId,
-                  items: customers
-                      .map((c) =>
-                          DropdownMenuItem(value: c.id, child: Text(c.name)))
-                      .toList(),
-                  onChanged: _assignmentType == "primary"
-                      ? null
-                      : (val) => setState(() => customerId = val),
-                ),
-
-                // --------------------------
-                // Ward
-                // --------------------------
-                DropdownButtonFormField<String>(
-                  decoration: _inputDecoration("Select Ward"),
-                  value: wardId,
-                  items: wards
-                      .map((w) =>
-                          DropdownMenuItem(value: w.id, child: Text(w.name)))
-                      .toList(),
-                  onChanged: (val) {
-                    setState(() => wardId = val);
-                    if (val != null) _loadCustomersForWard(val);
-                  },
-                ),
-                const SizedBox(height: 10),
-
-                // --------------------------
-                // Customer
-                // --------------------------
-                DropdownButtonFormField<String>(
-                  decoration: _inputDecoration("Select Citizen (optional)"),
-                  value: customerId,
-                  items: customers
-                      .map((c) =>
-                          DropdownMenuItem(value: c.id, child: Text(c.name)))
-                      .toList(),
-                  onChanged: (val) => setState(() => customerId = val),
-                ),
-                const SizedBox(height: 10),
-
-                // --------------------------
-                // Driver
-                // --------------------------
-                DropdownButtonFormField<String>(
-                  decoration: _inputDecoration("Select Driver"),
-                  value: driverId,
-                  items: drivers
-                      .map((d) =>
-                          DropdownMenuItem(value: d.id, child: Text(d.name)))
-                      .toList(),
-                  onChanged: (val) => setState(() => driverId = val),
-                ),
-                const SizedBox(height: 10),
-
-                // --------------------------
-                // Operator
-                // --------------------------
-                DropdownButtonFormField<String>(
-                  decoration: _inputDecoration("Select Operator"),
-                  value: operatorId,
-                  items: operators
-                      .map((o) =>
-                          DropdownMenuItem(value: o.id, child: Text(o.name)))
-                      .toList(),
-                  onChanged: (val) => setState(() => operatorId = val),
-                ),
-                const SizedBox(height: 14),
-
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: wardId != null &&
-        driverId != null &&
-        operatorId != null &&
-        (_assignmentType != "primary" || customerId == null)
-    ? () async {
-        // 1. Pre-check conflict
-        final hasConflict = await _checkAssignmentConflict();
-
-        if (hasConflict) {
-          await _showConflictDialog();
-          return;
-        }
-
-        // 2. Proceed with POST
-        final ok = await _postAssignment();
-        if (ok && mounted) Navigator.pop(context);
-      }
-    : null,
-
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _primaryGreen,
-                      foregroundColor: Colors.white,
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Select Shift",
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
                     ),
-                    child: const Text("Assign"),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 12),
+                  Row(
+                    children: _shifts.map((s) {
+                      final isSelected = _shift == s.$1;
+                      return Expanded(
+                        child: GestureDetector(
+                          onTap: () => setState(() => _shift = s.$1),
+                          child: Container(
+                            margin: const EdgeInsets.only(right: 8),
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              color: isSelected ? _primaryGreen : Colors.white,
+                              borderRadius: BorderRadius.circular(14),
+                              border: Border.all(
+                                color: isSelected
+                                    ? _primaryGreen
+                                    : const Color(0xFFE0E0E0),
+                                width: 2,
+                              ),
+                            ),
+                            child: Column(
+                              children: [
+                                Icon(
+                                  s.$3,
+                                  color:
+                                      isSelected ? Colors.white : _primaryGreen,
+                                  size: 22,
+                                ),
+                                const SizedBox(height: 6),
+                                Text(
+                                  s.$2,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: isSelected
+                                        ? Colors.white
+                                        : const Color(0xFF616161),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 16),
+                  const Text(
+                    "Assignment Type",
+                    style: TextStyle(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  ..._assignmentTypes.map((type) {
+                    final isSelected = _assignmentType == type.$1;
+                    return GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _assignmentType = type.$1;
+                          if (_assignmentType == "primary") {
+                            customerId = null;
+                          }
+                        });
+                      },
+                      child: Container(
+                        margin: const EdgeInsets.only(bottom: 10),
+                        padding: const EdgeInsets.all(14),
+                        decoration: BoxDecoration(
+                          color:
+                              isSelected ? const Color(0xFFE8F5E9) : Colors.white,
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(
+                            color: isSelected
+                                ? _primaryGreen
+                                : const Color(0xFFE0E0E0),
+                            width: isSelected ? 2 : 1,
+                          ),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              type.$3,
+                              color: isSelected
+                                  ? _primaryGreen
+                                  : const Color(0xFF9E9E9E),
+                            ),
+                            const SizedBox(width: 12),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Text(
+                                    type.$2,
+                                    style: TextStyle(
+                                      fontSize: 15,
+                                      fontWeight: FontWeight.w700,
+                                      color: isSelected
+                                          ? _primaryGreen
+                                          : const Color(0xFF212121),
+                                    ),
+                                  ),
+                                  Text(
+                                    type.$4,
+                                    style: const TextStyle(
+                                      fontSize: 12,
+                                      color: Color(0xFF757575),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            if (isSelected)
+                              const Icon(
+                                Icons.check_circle,
+                                color: _primaryGreen,
+                              ),
+                          ],
+                        ),
+                      ),
+                    );
+                  }),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    decoration: _inputDecoration(
+                      "Select Ward",
+                      icon: Icons.location_on_outlined,
+                    ),
+                    initialValue: wardId,
+                    items: wards
+                        .map((w) =>
+                            DropdownMenuItem(value: w.id, child: Text(w.name)))
+                        .toList(),
+                    onChanged: (val) {
+                      setState(() => wardId = val);
+                      if (val != null) _loadCustomersForWard(val);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  if (_assignmentType != "primary") ...[
+                    DropdownButtonFormField<String>(
+                      decoration: _inputDecoration(
+                        "Select Customer (Optional)",
+                        icon: Icons.person_outline_rounded,
+                      ),
+                      initialValue: customerId,
+                      items: customers
+                          .map((c) =>
+                              DropdownMenuItem(value: c.id, child: Text(c.name)))
+                          .toList(),
+                      onChanged: (val) => setState(() => customerId = val),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                  DropdownButtonFormField<String>(
+                    decoration: _inputDecoration(
+                      "Select Driver",
+                      icon: Icons.drive_eta_rounded,
+                    ),
+                    initialValue: driverId,
+                    items: drivers
+                        .map((d) =>
+                            DropdownMenuItem(value: d.id, child: Text(d.name)))
+                        .toList(),
+                    onChanged: (val) => setState(() => driverId = val),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<String>(
+                    decoration: _inputDecoration(
+                      "Select Operator",
+                      icon: Icons.engineering_rounded,
+                    ),
+                    initialValue: operatorId,
+                    items: operators
+                        .map((o) =>
+                            DropdownMenuItem(value: o.id, child: Text(o.name)))
+                        .toList(),
+                    onChanged: (val) => setState(() => operatorId = val),
+                  ),
+                  const SizedBox(height: 24),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: wardId != null &&
+                              driverId != null &&
+                              operatorId != null &&
+                              (_assignmentType != "primary" || customerId == null) &&
+                              !submitting
+                          ? () async {
+                              setState(() => submitting = true);
+
+                              final hasConflict =
+                                  await _checkAssignmentConflict();
+
+                              if (hasConflict) {
+                                setState(() => submitting = false);
+                                await _showConflictDialog();
+                                return;
+                              }
+
+                              final ok = await _postAssignment();
+
+                              if (!mounted) return;
+
+                              if (ok) {
+                                Navigator.pop(context, true);
+                                return;
+                              }
+
+                              setState(() => submitting = false);
+                              if (!mounted) return;
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Failed to create assignment'),
+                                ),
+                              );
+                            }
+                          : null,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _primaryGreen,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 18),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        elevation: 0,
+                      ),
+                      child: submitting
+                          ? const SizedBox(
+                              height: 20,
+                              width: 20,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Colors.white,
+                              ),
+                            )
+                          : const Text(
+                              "Create Assignment",
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w700,
+                              ),
+                            ),
+                    ),
+                  ),
+                ],
+              ),
             ),
+    ));
+        },
+      ),
     );
   }
 }

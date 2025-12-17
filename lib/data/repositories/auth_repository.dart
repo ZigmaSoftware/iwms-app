@@ -230,7 +230,11 @@ Future<UserModel> loginCitizen({
     await _prefs.setString(_userKey, user.userId);
     await _prefs.setString(_roleKey, user.role);
     await _prefs.setString(_nameKey, user.userName);
-    await _prefs.setString(_emp_idKey, user.emp_id!);
+    if (user.emp_id != null && user.emp_id!.isNotEmpty) {
+      await _prefs.setString(_emp_idKey, user.emp_id!);
+    } else {
+      await _prefs.remove(_emp_idKey);
+    }
 
     if (user.authToken != null && user.authToken!.isNotEmpty) {
       await _prefs.setString(_tokenKey, user.authToken!);
