@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
+import '../../../../core/api_config.dart';
+import '../models/waste_period.dart';
 import '../models/waste_reports.dart';
 import '../models/waste_summary.dart';
 
@@ -12,11 +14,13 @@ class TrackService {
         'https://zigma.in/d2d/folders/waste_collected_summary_report/test_waste_collected_data_api.php',
     this.apiKey = 'ZIGMA-DELHI-WEIGHMENT-2025-SECURE',
     http.Client? client,
-  }) : _client = client ?? http.Client();
+  })  : _client = client ?? http.Client(),
+        citizenSummaryEndpoint = ApiConfig.wasteSummaryEndpoint;
 
   final String baseUrl;
   final String apiKey;
   final http.Client _client;
+  final String citizenSummaryEndpoint;
 
   Uri _buildUri(String action, Map<String, String> params) {
     return Uri.parse(baseUrl).replace(
@@ -101,4 +105,36 @@ class TrackService {
 
   String _dateKey(DateTime date) =>
       '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+
+  Future<WasteSummary?> fetchCitizenSummary({
+    required WastePeriod period,
+    required DateTime referenceDate,
+  }) async {
+    final normalized = DateTime(referenceDate.year, referenceDate.month, referenceDate.day);
+    final uri = Uri.parse(citizenSummaryEndpoint).replace(
+      queryParameters: {
+        'period': period.name,
+        'date': _dateKey(normalized),
+      },
+    );
+
+    final response = await _client.get(uri).timeout(const Duration(seconds: 12));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to fetch waste summary (${response.statusCode})');
+    }
+
+    final decoded = jsonDecode(response.body);
+    if (decoded is! Map<String, dynamic>) {
+      throw Exception('Unexpected response payload');
+    }
+    if (decoded['status'] != 'success') {
+      throw Exception('Backend returned error');
+    }
+
+    final data = decoded['data'];
+    if (data is Map<String, dynamic>) {
+      return WasteSummary.fromJson(data);
+    }
+    return null;
+  }
 }

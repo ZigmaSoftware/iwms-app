@@ -14,7 +14,6 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/splashscreen.da
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/citizen_intro_slides.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/auth_intro.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/login.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/register.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/home.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/calender.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/track_waste.dart';
@@ -23,7 +22,6 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/profile.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/personal_map.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/alloted_vehicle_map.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/grievance_chat.dart';
 
 // Operator Modules
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/main_operator_tabbar.dart';
@@ -40,7 +38,6 @@ import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/dri
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/dashboard_screen.dart';
 
 // Route Observer
-import 'route_observer.dart';
 
 class AppRoutePaths {
   static const String splash = '/';

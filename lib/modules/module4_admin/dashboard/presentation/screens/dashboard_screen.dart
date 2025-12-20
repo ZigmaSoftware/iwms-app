@@ -14,7 +14,13 @@ import 'package:iwms_citizen_app/features/citizen_dashboard/track/models/waste_s
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/services/track_service.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/assignment_details_screen.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/citizen_collection_screen.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/staff_management_screen.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
+import 'assign_form_sheet.dart';
+import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
 
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart'
     as citizen_map;
@@ -58,21 +64,39 @@ class _DashboardShell extends StatefulWidget {
 }
 
 class _DashboardShellState extends State<_DashboardShell> {
+  int _currentIndex = 0; // ✅ ADD THIS
+  int _assignmentsReloadToken = 0;
+
   late final TrackService _trackService;
   late final VehicleRepository _vehicleRepository;
+  late final AssignmentRepository _assignmentRepository;
   late Future<_DashboardData> _dashboardFuture;
-
-  int _currentIndex = 0;
 
   @override
   void initState() {
     super.initState();
     _trackService = TrackService();
     _vehicleRepository = getIt<VehicleRepository>();
+    _assignmentRepository = getIt<AssignmentRepository>(); // ✅ ADD THIS
     _dashboardFuture = _loadDashboardData();
   }
 
+  void _reloadDashboard() {
+    setState(() {
+      _dashboardFuture = _loadDashboardData();
+    });
+  }
+
   Future<_DashboardData> _loadDashboardData() async {
+    final assignmentsFuture =
+        _assignmentRepository.fetchTodayAssignments().then((list) {
+      debugPrint('ASSIGNMENTS COUNT: ${list.length}');
+      return list;
+    }).catchError((e) {
+      debugPrint('ASSIGNMENTS ERROR: $e');
+      return <DailyAssignmentModel>[];
+    });
+
     final today = DateTime.now();
     final todayKey = DateFormat('yyyy-MM-dd').format(today);
     final fromDate = DateTime(today.year, today.month, 1);
@@ -82,8 +106,9 @@ class _DashboardShellState extends State<_DashboardShell> {
     final dateRangeFuture = _trackService
         .fetchDateWiseSummaries(fromDate, today)
         .catchError((_) => <WasteSummary>[]);
-    final dayTicketsFuture =
-        _trackService.fetchDayWiseTickets(today).catchError((_) => <DayWiseTicket>[]);
+    final dayTicketsFuture = _trackService
+        .fetchDayWiseTickets(today)
+        .catchError((_) => <DayWiseTicket>[]);
     final vehicleWeightsFuture = _trackService
         .fetchVehicleWiseReport(today)
         .catchError((_) => <VehicleWeightReport>[]);
@@ -103,6 +128,7 @@ class _DashboardShellState extends State<_DashboardShell> {
     final dateRangeSummaries = await dateRangeFuture;
     final dayTickets = await dayTicketsFuture;
     final vehicleWeights = await vehicleWeightsFuture;
+    final assignments = await assignmentsFuture;
 
     return _DashboardData(
       summary: summary,
@@ -111,6 +137,7 @@ class _DashboardShellState extends State<_DashboardShell> {
       dateRangeSummaries: dateRangeSummaries,
       dayTickets: dayTickets,
       vehicleWeights: vehicleWeights,
+      assignments: assignments,
     );
   }
 
@@ -128,16 +155,25 @@ class _DashboardShellState extends State<_DashboardShell> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          _buildHome(context),
-          const AdminMapScreen(),
-          const _ApprovalsScreen(),
-          VehiclesScreen(vehicleRepository: _vehicleRepository),
-          const MoreScreen(),
+          _buildHome(context), // 0
+          AssignmentsScreen(key: ValueKey(_assignmentsReloadToken)), // 1
+          const _ApprovalsScreen(), // 2
+          VehiclesScreen(vehicleRepository: _vehicleRepository), // 3
+          const MoreScreen(), // 4
         ],
       ),
       bottomNavigationBar: _DashboardNavBar(
         currentIndex: _currentIndex,
-        onChanged: (index) => setState(() => _currentIndex = index),
+        onChanged: (index) {
+          setState(() {
+            _currentIndex = index;
+            if (index == 0) {
+              _dashboardFuture = _loadDashboardData();
+            } else if (index == 1) {
+              _assignmentsReloadToken++;
+            }
+          });
+        },
       ),
     );
   }
@@ -212,66 +248,228 @@ class _DashboardHomeContent extends StatelessWidget {
     final rangeSummaries = data.dateRangeSummaries;
     final wasteSlices = [
       _WasteSlice('Wet Waste', summary?.wetWeight ?? 0, _primaryGreen),
-      _WasteSlice('Dry Waste', summary?.dryWeight ?? 0, const Color(0xFF2979FF)),
-      _WasteSlice('Mixed Waste', summary?.mixWeight ?? 0, const Color(0xFFFFB74D)),
+      _WasteSlice(
+        'Dry Waste',
+        summary?.dryWeight ?? 0,
+        const Color(0xFF2979FF),
+      ),
+      _WasteSlice(
+        'Mixed Waste',
+        summary?.mixWeight ?? 0,
+        const Color(0xFFFFB74D),
+      ),
     ];
     final statusCounts = data.statusCounts;
-    final pendingApprovals = _mockApprovalRequests
-        .where((r) => r.status == _ApprovalStatus.pending)
-        .length;
-    final acceptedApprovals = _mockApprovalRequests
-        .where((r) => r.status == _ApprovalStatus.approved)
-        .length;
 
     return Column(
       children: [
         _HeaderHero(maxWidth: maxWidth),
-        Transform.translate(
-          offset: const Offset(0, -20),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: Container(
-              width: double.infinity,
-              decoration: BoxDecoration(
-                color: _bgWhite,
-                borderRadius: BorderRadius.circular(24),
-                boxShadow: _softCardShadow(),
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
-              child: Column(
-                children: [
-                  _DailyWasteCard(summary: summary, slices: wasteSlices),
-                  const SizedBox(height: 12),
-                  _NotificationsCard(
-                    pendingApprovals: pendingApprovals,
-                    acceptedApprovals: acceptedApprovals,
-                  ),
-                  const SizedBox(height: 16),
-                  _AttendanceRow(
-                    statusCounts: statusCounts,
-                    totalVehicles: data.vehicles.length,
-                  ),
-                  const SizedBox(height: 16),
-                  _ActivityAndVehicleRow(
-                    vehicles: data.vehicles,
-                    statusCounts: statusCounts,
-                    summary: summary,
-                  ),
-                  if (monthSeries.isNotEmpty ||
-                      vehicleWeights.isNotEmpty ||
-                      dayTickets.isNotEmpty)
-                    ...[
-                      const SizedBox(height: 16),
-                      _WeighbridgeInsights(
-                        monthSeries: monthSeries,
-                        rangeSummaries: rangeSummaries,
-                        dayTickets: dayTickets,
-                        vehicleWeights: vehicleWeights,
-                      ),
-                    ],
-                ],
-              ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Container(
+            width: double.infinity,
+            decoration: BoxDecoration(
+              color: _bgWhite,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: _softCardShadow(),
             ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 22),
+            child: Column(
+              children: [
+                _DailyWasteCard(summary: summary, slices: wasteSlices),
+                const SizedBox(height: 12),
+                const _AssignCard(),
+                const SizedBox(height: 16),
+                _AttendanceRow(
+                  statusCounts: statusCounts,
+                  totalVehicles: data.vehicles.length,
+                ),
+                const SizedBox(height: 16),
+                const _CitizenCollectionCard(),
+                const SizedBox(height: 16),
+//                 const SizedBox(height: 16),
+// Container(
+//   padding: const EdgeInsets.all(12),
+//   color: Colors.redAccent,
+//   child: Text(
+//     'Assignments length = ${data.assignments.length}',
+//     style: const TextStyle(color: Colors.white),
+//   ),
+// ),
+                if (data.assignments.isNotEmpty)
+                  _TodayAssignmentsCarousel(
+                    assignments: data.assignments,
+                    onCancelled: () {
+                      (context.findAncestorStateOfType<_DashboardShellState>())
+                          ?._reloadDashboard();
+                    },
+                  ),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _TodayAssignmentsCarousel extends StatelessWidget {
+  const _TodayAssignmentsCarousel({
+    required this.assignments,
+    required this.onCancelled,
+  });
+
+  final List<DailyAssignmentModel> assignments;
+  final VoidCallback onCancelled;
+
+  Color _typeBg(String type) {
+    switch (type.toLowerCase()) {
+      case 'temporary':
+        return const Color(0xFFFFF3E0);
+      case 'emergency':
+        return const Color(0xFFFFEBEE);
+      default:
+        return const Color(0xFFE8F5E9);
+    }
+  }
+
+  Color _typeFg(String type) {
+    switch (type.toLowerCase()) {
+      case 'temporary':
+        return const Color(0xFFF57C00);
+      case 'emergency':
+        return const Color(0xFFC62828);
+      default:
+        return _primaryGreen;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            "Today’s Assignments",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(height: 10),
+        SizedBox(
+          height: 180,
+          width: 400,
+          child: ListView.separated(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            itemCount: assignments.length,
+            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            itemBuilder: (context, i) {
+              final a = assignments[i];
+              final statusColor = a.statusColor;
+              return Container(
+                width: 260,
+                padding: const EdgeInsets.all(14),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: _softCardShadow(),
+                  border: Border.all(color: statusColor.withOpacity(0.25)),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: statusColor.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            a.statusLabel,
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              color: statusColor,
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          DateFormat('MMM d').format(a.date),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: _iconGray,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      a.ward,
+                      style: const TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 16,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 6),
+                    Text("Driver: ${a.driver}",
+                        style: const TextStyle(fontSize: 13)),
+                    Text("Operator: ${a.operatorName}",
+                        style: const TextStyle(fontSize: 13)),
+                    const Spacer(),
+                    Row(
+                      children: [
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: _typeBg(a.assignmentType),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: Text(
+                            a.assignmentType.toUpperCase(),
+                            style: TextStyle(
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                              color: _typeFg(a.assignmentType),
+                            ),
+                          ),
+                        ),
+                        const Spacer(),
+                        Text(
+                          a.shift.replaceAll('_', ' ').toUpperCase(),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            color: _iconGray,
+                          ),
+                        ),
+                        TextButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AssignmentDetailsScreen(
+                                  assignment: a,
+                                  onCancelled: onCancelled,
+                                ),
+                              ),
+                            );
+                          },
+                          child: const Text('Details'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              );
+            },
           ),
         ),
       ],
@@ -286,61 +484,87 @@ class _HeaderHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 140,
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xCCFFFFFF), Color(0x99FFFFFF)],
-        ),
-        image: DecorationImage(
-          image: AssetImage('assets/images/admin_header.png'),
-          fit: BoxFit.cover,
-          alignment: Alignment.centerRight,
-        ),
-      ),
-      padding: const EdgeInsets.symmetric(horizontal: 20),
-      child: Row(
-        children: [
-          Expanded(
-            child: Row(
-              children: [
-                Container(
-                  width: 38,
-                  height: 38,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: Colors.white,
-                    boxShadow: _softCardShadow(),
-                  ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(6),
-                    child: Image.asset(
-                      'asset/images/logo.png',
-                      fit: BoxFit.contain,
-                      errorBuilder: (_, __, ___) => const Icon(Icons.eco, color: _primaryGreen),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                const Text(
-                  'IWMS',
-                  style: TextStyle(
-                    fontSize: 24,
-                    fontWeight: FontWeight.w700,
-                    color: Color.fromARGB(255, 255, 255, 255),
-                  ),
-                ),
-              ],
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Container(
+          height: 140,
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [Color(0xCCFFFFFF), Color(0x99FFFFFF)],
+            ),
+            image: DecorationImage(
+              image: AssetImage('assets/images/admin_header.png'),
+              fit: BoxFit.cover,
+              alignment: Alignment.centerRight,
             ),
           ),
-        ],
-      ),
+          padding: const EdgeInsets.symmetric(horizontal: 20),
+          child: Row(
+            children: [
+              Expanded(
+                child: Row(
+                  children: [
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white,
+                        boxShadow: _softCardShadow(),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.all(6),
+                        child: Image.asset(
+                          'asset/images/logo.png',
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, __, ___) =>
+                              const Icon(Icons.eco, color: _primaryGreen),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    const Text(
+                      'IWMS',
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w700,
+                        color: Color.fromARGB(255, 255, 255, 255),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+      ],
     );
   }
 }
+
+void _showAssignSheet(BuildContext context) {
+  showModalBottomSheet<bool>(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    backgroundColor: Colors.white,
+    shape: const RoundedRectangleBorder(
+      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+    ),
+    builder: (ctx) => const AssignFormSheet(),
+  ).then((created) {
+    if (created == true) {
+      final shell = context.findAncestorStateOfType<_DashboardShellState>();
+      shell?._reloadDashboard();
+      shell?._assignmentsReloadToken++;
+    }
+  });
+}
+
 class _DailyWasteCard extends StatelessWidget {
   const _DailyWasteCard({required this.summary, required this.slices});
 
@@ -369,25 +593,25 @@ class _DailyWasteCard extends StatelessWidget {
                   children: [
                     Text(
                       'Daily Waste Collection',
-                      style: Theme.of(context)
-                          .textTheme
-                          .titleMedium
-                          ?.copyWith(fontWeight: FontWeight.w700),
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                     const SizedBox(height: 4),
                     Text(
                       subtitle,
-                      style: Theme.of(context)
-                          .textTheme
-                          .bodySmall
-                          ?.copyWith(color: _iconGray),
+                      style: Theme.of(
+                        context,
+                      ).textTheme.bodySmall?.copyWith(color: _iconGray),
                     ),
                   ],
                 ),
               ),
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 8,
+                ),
                 decoration: BoxDecoration(
                   color: _primaryGreen.withValues(alpha: 0.08),
                   borderRadius: BorderRadius.circular(12),
@@ -396,16 +620,19 @@ class _DailyWasteCard extends StatelessWidget {
                   children: [
                     const Icon(Icons.autorenew, size: 16, color: _primaryGreen),
                     const SizedBox(width: 6),
-                    Text(
-                      'Live',
-                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
-                            color: _primaryGreen,
-                            fontWeight: FontWeight.w700,
-                          ),
+                    Container(
+                      child: Text(
+                        'Live',
+                        style:
+                            Theme.of(context).textTheme.labelMedium?.copyWith(
+                                  color: _primaryGreen,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                      ),
                     ),
                   ],
                 ),
-              )
+              ),
             ],
           ),
           const SizedBox(height: 16),
@@ -419,8 +646,9 @@ class _DailyWasteCard extends StatelessWidget {
                   alignment: Alignment.center,
                   children: [
                     CustomPaint(
-                        size: const Size.square(140),
-                        painter: _WasteDonutPainter(slices: slices)),
+                      size: const Size.square(140),
+                      painter: _WasteDonutPainter(slices: slices),
+                    ),
                     Column(
                       mainAxisSize: MainAxisSize.min,
                       children: [
@@ -451,7 +679,7 @@ class _DailyWasteCard extends StatelessWidget {
                         child: Row(
                           children: [
                             Container(
-                              width: 12,
+                              width: 17,
                               height: 12,
                               decoration: BoxDecoration(
                                 color: slice.color,
@@ -496,10 +724,7 @@ class _DailyWasteCard extends StatelessWidget {
                       children: [
                         chart,
                         const SizedBox(width: 16),
-                        Flexible(
-                          fit: FlexFit.loose,
-                          child: legendContent,
-                        ),
+                        Flexible(fit: FlexFit.loose, child: legendContent),
                       ],
                     );
             },
@@ -508,10 +733,9 @@ class _DailyWasteCard extends StatelessWidget {
             const SizedBox(height: 12),
             Text(
               'Average per trip: ${summary!.averageWeightPerTrip.toStringAsFixed(2)} tons across ${summary!.totalTrip} trips',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodySmall
-                  ?.copyWith(color: _iconGray),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: _iconGray),
             ),
           ],
         ],
@@ -520,9 +744,113 @@ class _DailyWasteCard extends StatelessWidget {
   }
 }
 
+class _AssignCard extends StatelessWidget {
+  const _AssignCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: _cardDecoration(),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.assignment_ind_rounded, color: _primaryGreen),
+              const SizedBox(width: 8),
+              Text(
+                'Assign Driver & Operator',
+                style: Theme.of(
+                  context,
+                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Select ward (e.g., Gamma), then pick available driver and operator from the database.',
+            style: TextStyle(color: _iconGray),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: ElevatedButton(
+              onPressed: () => _showAssignSheet(context),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: _primaryGreen,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Assign'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CitizenCollectionCard extends StatelessWidget {
+  const _CitizenCollectionCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: double.infinity,
+      decoration: _cardDecoration(),
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.people_alt_outlined, color: _primaryGreen),
+              const SizedBox(width: 8),
+              Text(
+                'Citizen Collection Status',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w800),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Review completed, pending, or skipped pickups ward-wise.',
+            style: TextStyle(color: _iconGray),
+          ),
+          const SizedBox(height: 12),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton(
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const CitizenCollectionScreen(),
+                  ),
+                );
+              },
+              style: OutlinedButton.styleFrom(
+                foregroundColor: _primaryGreen,
+                side: const BorderSide(color: _primaryGreen),
+              ),
+              child: const Text('View citizens'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _NotificationsCard extends StatelessWidget {
-  const _NotificationsCard(
-      {required this.pendingApprovals, required this.acceptedApprovals});
+  const _NotificationsCard({
+    required this.pendingApprovals,
+    required this.acceptedApprovals,
+  });
 
   final int pendingApprovals;
   final int acceptedApprovals;
@@ -545,8 +873,10 @@ class _NotificationsCard extends StatelessWidget {
                   shape: BoxShape.circle,
                   boxShadow: _softCardShadow(),
                 ),
-                child: const Icon(Icons.notifications_active,
-                    color: _primaryGreen),
+                child: const Icon(
+                  Icons.notifications_active,
+                  color: _primaryGreen,
+                ),
               ),
               const SizedBox(width: 10),
               Expanded(
@@ -556,17 +886,19 @@ class _NotificationsCard extends StatelessWidget {
                     Text(
                       'Approval notifications',
                       style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                          color: _primaryGreen),
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: _primaryGreen,
+                      ),
                     ),
                     SizedBox(height: 2),
                     Text(
                       'Review leave requests from drivers and operators.',
                       style: TextStyle(
-                          fontSize: 12,
-                          color: _iconGray,
-                          fontWeight: FontWeight.w500),
+                        fontSize: 12,
+                        color: _iconGray,
+                        fontWeight: FontWeight.w500,
+                      ),
                     ),
                   ],
                 ),
@@ -596,8 +928,11 @@ class _NotificationsCard extends StatelessWidget {
 }
 
 class _NotificationChip extends StatelessWidget {
-  const _NotificationChip(
-      {required this.label, required this.value, required this.color});
+  const _NotificationChip({
+    required this.label,
+    required this.value,
+    required this.color,
+  });
 
   final String label;
   final int value;
@@ -625,14 +960,20 @@ class _NotificationChip extends StatelessWidget {
               child: Text(
                 label,
                 style: TextStyle(
-                    fontWeight: FontWeight.w700, color: color, fontSize: 13),
+                  fontWeight: FontWeight.w700,
+                  color: color,
+                  fontSize: 13,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
             Text(
               '$value',
               style: TextStyle(
-                  fontWeight: FontWeight.w800, color: color, fontSize: 16),
+                fontWeight: FontWeight.w800,
+                color: color,
+                fontSize: 16,
+              ),
             ),
           ],
         ),
@@ -654,6 +995,7 @@ class _AttendanceRow extends StatelessWidget {
   Widget build(BuildContext context) {
     final running = statusCounts[_VehicleState.running] ?? 0;
     final idle = statusCounts[_VehicleState.idle] ?? 0;
+
     final present = running + idle;
     final onLeave = statusCounts[_VehicleState.parked] ?? 0;
     final absent = statusCounts[_VehicleState.nodata] ?? 0;
@@ -661,38 +1003,38 @@ class _AttendanceRow extends StatelessWidget {
     return Row(
       children: [
         Expanded(
-          child: _AttendanceTile(
-            label: 'Total',
+          child: _Tile(
+            label: "Total",
             count: totalVehicles,
-            background: const Color(0xFFE8F5E9),
+            background: Colors.white,
+            textColor: Colors.black87,
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _Tile(
+            label: "Present",
+            count: present,
+            background: const Color(0xFFE8F5E9), // light green
             textColor: _primaryGreen,
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
-          child: _AttendanceTile(
-            label: 'Present',
-            count: present,
-            background: const Color(0xFFFFEBEE),
+          child: _Tile(
+            label: "Absent",
+            count: absent,
+            background: const Color(0xFFFFEBEE), // light red
             textColor: const Color(0xFFB71C1C),
           ),
         ),
-        const SizedBox(width: 10),
+        const SizedBox(width: 8),
         Expanded(
-          child: _AttendanceTile(
-            label: 'Absent',
-            count: absent,
-            background: const Color(0xFFFFF3E0),
-            textColor: const Color(0xFFE65100),
-          ),
-        ),
-        const SizedBox(width: 10),
-        Expanded(
-          child: _AttendanceTile(
-            label: 'Leave',
+          child: _Tile(
+            label: "Leave",
             count: onLeave,
-            background: const Color(0xFFE3F2FD),
-            textColor: const Color(0xFF1565C0),
+            background: const Color(0xFFFFF9C4), // light yellow
+            textColor: const Color(0xFFF57F17),
           ),
         ),
       ],
@@ -700,8 +1042,8 @@ class _AttendanceRow extends StatelessWidget {
   }
 }
 
-class _AttendanceTile extends StatelessWidget {
-  const _AttendanceTile({
+class _Tile extends StatelessWidget {
+  const _Tile({
     required this.label,
     required this.count,
     required this.background,
@@ -716,31 +1058,149 @@ class _AttendanceTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 70,
-      padding: const EdgeInsets.all(12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
       decoration: BoxDecoration(
         color: background,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Text(
-            '$count',
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.w700,
-              color: textColor,
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        alignment: Alignment.centerLeft,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "$count",
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w800,
+                color: textColor,
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          Text(label, style: const TextStyle(fontSize: 12)),
-        ],
+            const SizedBox(height: 3),
+            Text(
+              label,
+              style: const TextStyle(
+                fontSize: 12,
+                color: Colors.black87,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
+
+// class _AttendanceRow extends StatelessWidget {
+//   const _AttendanceRow({
+//     required this.statusCounts,
+//     required this.totalVehicles,
+//   });
+
+//   final Map<_VehicleState, int> statusCounts;
+//   final int totalVehicles;
+
+//   @override
+//   Widget build(BuildContext context) {
+//     final running = statusCounts[_VehicleState.running] ?? 0;
+//     final idle = statusCounts[_VehicleState.idle] ?? 0;
+
+//     final present = running + idle;
+//     final onLeave = statusCounts[_VehicleState.parked] ?? 0;
+//     final absent = statusCounts[_VehicleState.nodata] ?? 0;
+
+//     return Row(
+//       children: [
+//         Expanded(
+//           child: _Tile(
+//             label: "Total",
+//             count: totalVehicles,
+//             background: const Color.fromARGB(255, 241, 255, 221),
+//             textColor: Colors.black87,
+//           ),
+//         ),
+//         const SizedBox(width: 8),
+//         Expanded(
+//           child: _Tile(
+//             label: "Present",
+//             count: present,
+//             background: const Color(0xFFE8F5E9), // light green
+//             textColor: _primaryGreen,
+//           ),
+//         ),
+//         const SizedBox(width: 8),
+//         Expanded(
+//           child: _Tile(
+//             label: "Absent",
+//             count: absent,
+//             background: const Color(0xFFFFEBEE), // light red
+//             textColor: const Color(0xFFB71C1C),
+//           ),
+//         ),
+//         const SizedBox(width: 8),
+//         Expanded(
+//           child: _Tile(
+//             label: "Leave",
+//             count: onLeave,
+//             background: const Color(0xFFFFF9C4), // light yellow
+//             textColor: const Color(0xFFF57F17),
+//           ),
+//         ),
+//       ],
+//     );
+//   }
+// }
+
+// class _Tile extends StatelessWidget {
+//   const _Tile({
+//     required this.label,
+//     required this.count,
+//     required this.background,
+//     required this.textColor,
+//   });
+
+//   final String label;
+//   final int count;
+//   final Color background;
+//   final Color textColor;
+
+//   @override
+//   Widget build(BuildContext context) {
+//     return Container(
+//       padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 20),
+//       decoration: BoxDecoration(
+//         color: background,
+//         borderRadius: BorderRadius.circular(14),
+//       ),
+//       child: FittedBox(
+//         fit: BoxFit.scaleDown,
+//         alignment: Alignment.centerLeft,
+//         child: Column(
+//           crossAxisAlignment: CrossAxisAlignment.start,
+//           children: [
+//             Text(
+//               "$count",
+//               style: TextStyle(
+//                 fontSize: 22,
+//                 fontWeight: FontWeight.w800,
+//                 color: textColor,
+//               ),
+//             ),
+//             const SizedBox(height: 3),
+//             Text(
+//               label,
+//               style: const TextStyle(
+//                 fontSize: 12,
+//                 color: Colors.black87,
+//               ),
+//             ),
+//           ],
+//         ),
+//       ),
+//     );
+//   }
+// }
 
 class _ActivityAndVehicleRow extends StatelessWidget {
   const _ActivityAndVehicleRow({
@@ -785,7 +1245,9 @@ class _ActivityAndVehicleRow extends StatelessWidget {
       ),
       _ActivityEntry(
         'Latest update',
-        lastUpdate != null ? 'Last seen ${_formatRelative(lastUpdate)}' : 'Awaiting telemetry',
+        lastUpdate != null
+            ? 'Last seen ${_formatRelative(lastUpdate)}'
+            : 'Awaiting telemetry',
         lastUpdate != null ? ActivityTone.success : ActivityTone.warning,
       ),
     ];
@@ -811,9 +1273,13 @@ class _WeighbridgeInsights extends StatelessWidget {
     final totalsSource =
         rangeSummaries.isNotEmpty ? rangeSummaries : monthSeries;
     final double mtdNet = totalsSource.fold<double>(
-        0, (sum, item) => sum + item.totalNetWeight);
-    final int mtdTrips =
-        totalsSource.fold<int>(0, (sum, item) => sum + item.totalTrip);
+      0,
+      (sum, item) => sum + item.totalNetWeight,
+    );
+    final int mtdTrips = totalsSource.fold<int>(
+      0,
+      (sum, item) => sum + item.totalTrip,
+    );
 
     final topVehicles = List<VehicleWeightReport>.from(vehicleWeights)
       ..sort((a, b) => b.totalWeight.compareTo(a.totalWeight));
@@ -828,10 +1294,9 @@ class _WeighbridgeInsights extends StatelessWidget {
         children: [
           Text(
             'Weighbridge Insights',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 4),
           const Text(
@@ -865,28 +1330,26 @@ class _WeighbridgeInsights extends StatelessWidget {
             const SizedBox(height: 14),
             Text(
               'Top vehicles (weight)',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             ...topVehicles.take(3).map(
-              (v) => _insightRow(
-                icon: Icons.local_shipping,
-                leading: v.vehicleNo,
-                trailing: '${weightFormat.format(v.totalWeight)} kg',
-              ),
-            ),
+                  (v) => _insightRow(
+                    icon: Icons.local_shipping,
+                    leading: v.vehicleNo,
+                    trailing: '${weightFormat.format(v.totalWeight)} kg',
+                  ),
+                ),
           ],
           if (latestTickets.isNotEmpty) ...[
             const SizedBox(height: 14),
             Text(
               'Latest weighbridge tickets',
-              style: Theme.of(context)
-                  .textTheme
-                  .bodyLarge
-                  ?.copyWith(fontWeight: FontWeight.w700),
+              style: Theme.of(
+                context,
+              ).textTheme.bodyLarge?.copyWith(fontWeight: FontWeight.w700),
             ),
             const SizedBox(height: 8),
             ...latestTickets.map(
@@ -987,10 +1450,7 @@ class _WeighbridgeInsights extends StatelessWidget {
                 if (subtitle != null)
                   Text(
                     subtitle,
-                    style: const TextStyle(
-                      color: _iconGray,
-                      fontSize: 12,
-                    ),
+                    style: const TextStyle(color: _iconGray, fontSize: 12),
                   ),
               ],
             ),
@@ -1025,10 +1485,9 @@ class _RecentActivityCard extends StatelessWidget {
         children: [
           Text(
             'Recent Activity',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 12),
           ...entries.map(
@@ -1062,7 +1521,7 @@ class _RecentActivityCard extends StatelessWidget {
                 ],
               ),
             ),
-          )
+          ),
         ],
       ),
     );
@@ -1082,21 +1541,25 @@ class _VehicleStatusCard extends StatelessWidget {
   Widget build(BuildContext context) {
     final cards = <_StatusCount>[
       _StatusCount(
-          label: 'Running',
-          value: statusCounts[_VehicleState.running] ?? 0,
-          color: _primaryGreen),
+        label: 'Running',
+        value: statusCounts[_VehicleState.running] ?? 0,
+        color: _primaryGreen,
+      ),
       _StatusCount(
-          label: 'Idle',
-          value: statusCounts[_VehicleState.idle] ?? 0,
-          color: _softYellow),
+        label: 'Idle',
+        value: statusCounts[_VehicleState.idle] ?? 0,
+        color: _softYellow,
+      ),
       _StatusCount(
-          label: 'Stopped',
-          value: statusCounts[_VehicleState.parked] ?? 0,
-          color: _softRed),
+        label: 'Stopped',
+        value: statusCounts[_VehicleState.parked] ?? 0,
+        color: _softRed,
+      ),
       _StatusCount(
-          label: 'No Data',
-          value: statusCounts[_VehicleState.nodata] ?? 0,
-          color: _iconGray),
+        label: 'No Data',
+        value: statusCounts[_VehicleState.nodata] ?? 0,
+        color: _iconGray,
+      ),
     ];
 
     final highlighted =
@@ -1111,10 +1574,9 @@ class _VehicleStatusCard extends StatelessWidget {
         children: [
           Text(
             'Vehicle Status',
-            style: Theme.of(context)
-                .textTheme
-                .titleMedium
-                ?.copyWith(fontWeight: FontWeight.w700),
+            style: Theme.of(
+              context,
+            ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700),
           ),
           const SizedBox(height: 10),
           ...cards.map(
@@ -1186,10 +1648,7 @@ class _VehicleStatusCard extends StatelessWidget {
                         highlighted.address ?? 'Live telemetry',
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          color: _iconGray,
-                          fontSize: 12,
-                        ),
+                        style: const TextStyle(color: _iconGray, fontSize: 12),
                       ),
                     ],
                   ),
@@ -1205,10 +1664,7 @@ class _VehicleStatusCard extends StatelessWidget {
 }
 
 class _DashboardNavBar extends StatelessWidget {
-  const _DashboardNavBar({
-    required this.currentIndex,
-    required this.onChanged,
-  });
+  const _DashboardNavBar({required this.currentIndex, required this.onChanged});
 
   final int currentIndex;
   final ValueChanged<int> onChanged;
@@ -1225,26 +1681,14 @@ class _DashboardNavBar extends StatelessWidget {
       selectedFontSize: 11,
       unselectedFontSize: 11,
       items: const [
+        BottomNavigationBarItem(icon: Icon(Icons.home_outlined), label: 'Home'),
         BottomNavigationBarItem(
-          icon: Icon(Icons.home_outlined),
-          label: 'Home',
-        ),
+            icon: Icon(Icons.assignment_outlined), label: 'Assignments'),
         BottomNavigationBarItem(
-          icon: Icon(Icons.map_outlined),
-          label: 'Map',
-        ),
+            icon: Icon(Icons.fact_check_outlined), label: 'Approvals'),
         BottomNavigationBarItem(
-          icon: Icon(Icons.fact_check_outlined),
-          label: 'Approvals',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.directions_bus_outlined),
-          label: 'Vehicles',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.more_horiz),
-          label: 'More',
-        ),
+            icon: Icon(Icons.directions_bus_outlined), label: 'Vehicles'),
+        BottomNavigationBarItem(icon: Icon(Icons.more_horiz), label: 'More'),
       ],
     );
   }
@@ -1259,9 +1703,7 @@ class AdminMapScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     // Reuse the production map experience (live vehicles, polygons, filters).
-    return const citizen_map.MapScreen(
-      showBackButton: false,
-    );
+    return const citizen_map.MapScreen(showBackButton: false);
   }
 }
 // ---------------------------------------------------------------------------
@@ -1288,8 +1730,10 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
   void initState() {
     super.initState();
     _fetchVehicles();
-    _poller =
-        Timer.periodic(const Duration(seconds: 30), (_) => _fetchVehicles(silent: true));
+    _poller = Timer.periodic(
+      const Duration(seconds: 30),
+      (_) => _fetchVehicles(silent: true),
+    );
   }
 
   @override
@@ -1333,8 +1777,10 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                     physics: const AlwaysScrollableScrollPhysics(),
                     padding: const EdgeInsets.fromLTRB(16, 16, 16, 90),
                     children: const [
-                      Text('Unable to load vehicle list.',
-                          style: TextStyle(color: _iconGray)),
+                      Text(
+                        'Unable to load vehicle list.',
+                        style: TextStyle(color: _iconGray),
+                      ),
                     ],
                   )
                 : ListView(
@@ -1348,34 +1794,57 @@ class _VehiclesScreenState extends State<VehiclesScreen> {
                       const SizedBox(height: 12),
                       _VehicleStatusCard(
                         vehicles: _vehicles,
-                        statusCounts:
-                            _DashboardData.countByStatus(_vehicles),
+                        statusCounts: _DashboardData.countByStatus(_vehicles),
                       ),
                       const SizedBox(height: 12),
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: ElevatedButton.icon(
-                          icon: Icon(
-                            _showList
-                                ? Icons.list_alt
-                                : Icons.directions_bus,
-                          ),
-                          label: Text(_showList ? 'Hide vehicles' : 'All vehicles'),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _primaryGreen,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
+                      Row(
+                        children: [
+                          ElevatedButton.icon(
+                            icon: Icon(
+                              _showList ? Icons.list_alt : Icons.directions_bus,
                             ),
+                            label: Text(
+                                _showList ? 'Hide vehicles' : 'All vehicles'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _primaryGreen,
+                              foregroundColor: Colors.white,
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () =>
+                                setState(() => _showList = !_showList),
                           ),
-                          onPressed: () =>
-                              setState(() => _showList = !_showList),
-                        ),
+                          const SizedBox(width: 12),
+
+                          // 🔽 NEW VIEW MAP BUTTON
+                          OutlinedButton.icon(
+                            icon: const Icon(Icons.map_outlined),
+                            label: const Text('View Map'),
+                            style: OutlinedButton.styleFrom(
+                              foregroundColor: _primaryGreen,
+                              side: BorderSide(
+                                  color: _primaryGreen.withOpacity(0.6)),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => const AdminMapScreen(),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 8),
                       if (_showList)
-                        ..._vehicles
-                            .map((vehicle) => _VehicleTile(vehicle: vehicle)),
+                        ..._vehicles.map(
+                          (vehicle) => _VehicleTile(vehicle: vehicle),
+                        ),
                     ],
                   ),
       ),
@@ -1404,10 +1873,7 @@ class _VehicleTile extends StatelessWidget {
               shape: BoxShape.circle,
               color: _softGreen.withValues(alpha: 0.45),
             ),
-            child: const Icon(
-              Icons.local_shipping,
-              color: _primaryGreen,
-            ),
+            child: const Icon(Icons.local_shipping, color: _primaryGreen),
           ),
           const SizedBox(width: 12),
           Expanded(
@@ -1493,20 +1959,23 @@ enum _ApprovalStatus { pending, approved, rejected }
 
 const _mockApprovalRequests = <_ApprovalRequest>[
   _ApprovalRequest(
-      title: 'Driver | Arun Menon',
-      subtitle: 'Annual leave - 3 days - requested by driver',
-      status: _ApprovalStatus.pending,
-      dateLabel: 'Dec 12, 2025'),
+    title: 'Driver | Arun Menon',
+    subtitle: 'Annual leave - 3 days - requested by driver',
+    status: _ApprovalStatus.pending,
+    dateLabel: 'Dec 12, 2025',
+  ),
   _ApprovalRequest(
-      title: 'Operator | Lata Fernandes',
-      subtitle: 'Sick leave - 1 day - requested by operator',
-      status: _ApprovalStatus.approved,
-      dateLabel: 'Dec 10, 2025'),
+    title: 'Operator | Lata Fernandes',
+    subtitle: 'Sick leave - 1 day - requested by operator',
+    status: _ApprovalStatus.approved,
+    dateLabel: 'Dec 10, 2025',
+  ),
   _ApprovalRequest(
-      title: 'Driver | Naveen Pillai',
-      subtitle: 'Shift swap fallback - requested by driver',
-      status: _ApprovalStatus.rejected,
-      dateLabel: 'Dec 08, 2025'),
+    title: 'Driver | Naveen Pillai',
+    subtitle: 'Shift swap fallback - requested by driver',
+    status: _ApprovalStatus.rejected,
+    dateLabel: 'Dec 08, 2025',
+  ),
 ];
 
 // ---------------------------------------------------------------------------
@@ -1533,25 +2002,29 @@ class _ApprovalsScreen extends StatelessWidget {
 
     final tiles = [
       _ApprovalGridTile(
-          title: 'Driver',
-          count: driverCount,
-          color: _primaryGreen,
-          icon: Icons.local_shipping_outlined),
+        title: 'Driver',
+        count: driverCount,
+        color: _primaryGreen,
+        icon: Icons.local_shipping_outlined,
+      ),
       _ApprovalGridTile(
-          title: 'Operator',
-          count: operatorCount,
-          color: const Color(0xFF1565C0),
-          icon: Icons.support_agent),
+        title: 'Operator',
+        count: operatorCount,
+        color: const Color(0xFF1565C0),
+        icon: Icons.support_agent,
+      ),
       _ApprovalGridTile(
-          title: 'Pending',
-          count: pendingCount,
-          color: const Color(0xFFF9A825),
-          icon: Icons.schedule_outlined),
+        title: 'Pending',
+        count: pendingCount,
+        color: const Color(0xFFF9A825),
+        icon: Icons.schedule_outlined,
+      ),
       _ApprovalGridTile(
-          title: 'Accepted',
-          count: acceptedCount,
-          color: const Color(0xFF2E7D32),
-          icon: Icons.check_circle_outline),
+        title: 'Accepted',
+        count: acceptedCount,
+        color: const Color(0xFF2E7D32),
+        icon: Icons.check_circle_outline,
+      ),
     ];
 
     return SafeArea(
@@ -1566,27 +2039,30 @@ class _ApprovalsScreen extends StatelessWidget {
               subtitle: 'Leave approvals from drivers and operators',
             ),
             const SizedBox(height: 12),
-            LayoutBuilder(builder: (context, constraints) {
-              const spacing = 12.0;
-              final width = constraints.maxWidth;
-              const columns = 2;
-              final tileWidth =
-                  (width - spacing * (columns - 1)) / columns;
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const spacing = 12.0;
+                final width = constraints.maxWidth;
+                const columns = 2;
+                final tileWidth = (width - spacing * (columns - 1)) / columns;
 
-              return Wrap(
-                spacing: spacing,
-                runSpacing: spacing,
-                children: tiles
-                    .map(
-                      (tile) => ConstrainedBox(
-                        constraints: BoxConstraints(
-                            minWidth: tileWidth, maxWidth: tileWidth),
-                        child: tile,
-                      ),
-                    )
-                    .toList(),
-              );
-            }),
+                return Wrap(
+                  spacing: spacing,
+                  runSpacing: spacing,
+                  children: tiles
+                      .map(
+                        (tile) => ConstrainedBox(
+                          constraints: BoxConstraints(
+                            minWidth: tileWidth,
+                            maxWidth: tileWidth,
+                          ),
+                          child: tile,
+                        ),
+                      )
+                      .toList(),
+                );
+              },
+            ),
           ],
         ),
       ),
@@ -1595,11 +2071,12 @@ class _ApprovalsScreen extends StatelessWidget {
 }
 
 class _ApprovalGridTile extends StatelessWidget {
-  const _ApprovalGridTile(
-      {required this.title,
-      required this.count,
-      required this.color,
-      required this.icon});
+  const _ApprovalGridTile({
+    required this.title,
+    required this.count,
+    required this.color,
+    required this.icon,
+  });
 
   final String title;
   final int count;
@@ -1632,18 +2109,16 @@ class _ApprovalGridTile extends StatelessWidget {
               children: [
                 Text(
                   title,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                      ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '$count',
-                  style: Theme.of(context)
-                      .textTheme
-                      .bodySmall
-                      ?.copyWith(color: _iconGray),
+                  style: Theme.of(
+                    context,
+                  ).textTheme.bodySmall?.copyWith(color: _iconGray),
                 ),
               ],
             ),
@@ -1665,6 +2140,18 @@ class MoreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_MoreItem>[
       _MoreItem(Icons.person_outline, 'Profile'),
+      _MoreItem(
+        Icons.people_alt_outlined,
+        'Staffs',
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const StaffManagementScreen(),
+            ),
+          );
+        },
+      ),
       _MoreItem(Icons.notifications_none, 'Notifications'),
       _MoreItem(Icons.settings_outlined, 'Settings'),
       _MoreItem(Icons.support_agent, 'Support'),
@@ -1731,10 +2218,10 @@ class _MoreItem {
   final String label;
   final VoidCallback? onTap;
 }
+
 // ---------------------------------------------------------------------------
 // HELPERS & MODELS
 // ---------------------------------------------------------------------------
-
 class _DashboardData {
   const _DashboardData({
     this.summary,
@@ -1743,6 +2230,7 @@ class _DashboardData {
     this.dateRangeSummaries = const [],
     this.dayTickets = const [],
     this.vehicleWeights = const [],
+    this.assignments = const [],
   });
 
   const _DashboardData.empty() : this();
@@ -1753,6 +2241,9 @@ class _DashboardData {
   final List<WasteSummary> dateRangeSummaries;
   final List<DayWiseTicket> dayTickets;
   final List<VehicleWeightReport> vehicleWeights;
+
+  // 🔽 NEW
+  final List<DailyAssignmentModel> assignments;
 
   Map<_VehicleState, int> get statusCounts => countByStatus(vehicles);
 
@@ -1911,8 +2402,7 @@ class _ActivityEntry {
   final String subtitle;
   final ActivityTone tone;
 
-  Color get color =>
-      tone == ActivityTone.success ? _primaryGreen : _softYellow;
+  Color get color => tone == ActivityTone.success ? _primaryGreen : _softYellow;
   IconData get icon => tone == ActivityTone.success
       ? Icons.check_circle_outline
       : Icons.warning_amber_outlined;
@@ -1933,18 +2423,16 @@ class _SectionHeader extends StatelessWidget {
       children: [
         Text(
           title,
-          style: Theme.of(context)
-              .textTheme
-              .titleLarge
-              ?.copyWith(fontWeight: FontWeight.w800),
+          style: Theme.of(
+            context,
+          ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800),
         ),
         const SizedBox(height: 4),
         Text(
           subtitle,
-          style: Theme.of(context)
-              .textTheme
-              .bodySmall
-              ?.copyWith(color: _iconGray),
+          style: Theme.of(
+            context,
+          ).textTheme.bodySmall?.copyWith(color: _iconGray),
         ),
       ],
     );
@@ -1968,5 +2456,269 @@ String _formatRelative(String? raw) {
     return '${difference.inDays}d ago';
   } catch (_) {
     return raw;
+  }
+}
+
+class AssignmentsScreen extends StatefulWidget {
+  const AssignmentsScreen({super.key});
+
+  @override
+  State<AssignmentsScreen> createState() => _AssignmentsScreenState();
+}
+
+class _AssignmentsScreenState extends State<AssignmentsScreen> {
+  late final AssignmentRepository _assignmentRepository; // ✅ ADD THIS
+
+  late Future<List<DailyAssignmentModel>> _future;
+  @override
+  void initState() {
+    super.initState();
+    _assignmentRepository = getIt<AssignmentRepository>(); // ✅ ADD THIS
+    _load();
+  }
+
+  void _load() {
+    _future = _assignmentRepository.fetchTodayAssignments(); // ✅ FIXED
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: const Color(0xFFF5F5F7),
+      body: SafeArea(
+        child: FutureBuilder<List<DailyAssignmentModel>>(
+          future: _future,
+          builder: (context, snapshot) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
+              return const Center(child: CircularProgressIndicator());
+            }
+
+            final list = snapshot.data ?? [];
+
+            return RefreshIndicator(
+              onRefresh: () async {
+                setState(_load);
+                await _future;
+              },
+              child: CustomScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 14),
+                      child: Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(10),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(12),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: Colors.black.withOpacity(0.06),
+                                  blurRadius: 10,
+                                  offset: const Offset(0, 4),
+                                ),
+                              ],
+                            ),
+                            child: const Icon(
+                              Icons.assignment_outlined,
+                              color: _primaryGreen,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Assignments',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                              Text(
+                                '${list.length} active ${list.length == 1 ? "assignment" : "assignments"}',
+                                style: const TextStyle(
+                                  fontSize: 13,
+                                  color: _iconGray,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (list.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          children: const [
+                            Icon(Icons.inbox_outlined,
+                                size: 42, color: _iconGray),
+                            SizedBox(height: 8),
+                            Text('No assignments'),
+                          ],
+                        ),
+                      ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+                      sliver: SliverList.separated(
+                        itemCount: list.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 12),
+                        itemBuilder: (context, i) {
+                          final a = list[i];
+                          return _AssignmentTile(
+                            assignment: a,
+                            onCancelled: () => setState(_load),
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
+class _AssignmentTile extends StatelessWidget {
+  const _AssignmentTile({
+    required this.assignment,
+    required this.onCancelled,
+  });
+
+  final DailyAssignmentModel assignment;
+  final VoidCallback onCancelled;
+
+  @override
+  Widget build(BuildContext context) {
+    final statusColor = assignment.statusColor;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 6),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  assignment.statusLabel,
+                  style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    fontSize: 11,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+              const Spacer(),
+              Text(
+                DateFormat('MMM d').format(assignment.date),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: _iconGray,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Ward
+          Text(
+            assignment.ward,
+            style: const TextStyle(
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 6),
+
+          // Driver / Operator
+          Text('Driver: ${assignment.driver}',
+              style: const TextStyle(fontSize: 13)),
+          Text('Operator: ${assignment.operatorName}',
+              style: const TextStyle(fontSize: 13)),
+
+          const SizedBox(height: 10),
+
+          Row(
+            children: [
+              // Assignment type pill
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: assignment.typeBgColor,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Text(
+                  assignment.assignmentType.toUpperCase(),
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    color: assignment.typeColor,
+                  ),
+                ),
+              ),
+
+              const Spacer(),
+
+              // Shift
+              Text(
+                assignment.shift.replaceAll('_', ' ').toUpperCase(),
+                style: const TextStyle(
+                  fontSize: 11,
+                  color: Colors.grey,
+                ),
+              ),
+
+              const SizedBox(width: 8),
+
+              // Details CTA
+              TextButton(
+                onPressed: () {
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => AssignmentDetailsScreen(
+                        assignment: assignment,
+                        onCancelled: onCancelled,
+                      ),
+                    ),
+                  );
+                },
+                child: const Text('Details'),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 }

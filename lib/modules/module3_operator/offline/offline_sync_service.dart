@@ -75,7 +75,7 @@ class OfflineSyncService {
   // -------------------------------------------------------------
   Future<bool> _syncSubRecord(PendingRecord r) async {
     final isUpdate = r.isUpdate == true;
-    final hasBackendUID = r.uniqueId != null && r.uniqueId!.startsWith("wcs");
+    final hasBackendUID = r.uniqueId.startsWith("wcs");
 
     // If backend UID exists → always UPDATE
     final endpoint =
@@ -94,14 +94,24 @@ class OfflineSyncService {
 
     // *********** For UPDATE ONLY ***********
     if (hasBackendUID) {
-      req.fields["unique_id"] = r.uniqueId!;
+      req.fields["unique_id"] = r.uniqueId;
     }
 
     req.files.add(
       await http.MultipartFile.fromPath("image", r.imagePath),
     );
 
-    final resp = await req.send();
+    http.StreamedResponse resp;
+    try {
+      resp = await req.send();
+    } on SocketException catch (_) {
+      return false;
+    } on HttpException catch (_) {
+      return false;
+    } on http.ClientException catch (_) {
+      return false;
+    }
+
     final body = await http.Response.fromStream(resp);
 
     try {
@@ -142,7 +152,17 @@ class OfflineSyncService {
       ..fields["entry_type"] = r.entryType
       ..fields["total_waste_collected"] = r.totalWeight.toString();
 
-    final resp = await req.send();
+    http.StreamedResponse resp;
+    try {
+      resp = await req.send();
+    } on SocketException catch (_) {
+      return false;
+    } on HttpException catch (_) {
+      return false;
+    } on http.ClientException catch (_) {
+      return false;
+    }
+
     final body = await http.Response.fromStream(resp);
 
     try {

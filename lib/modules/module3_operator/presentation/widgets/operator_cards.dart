@@ -1,5 +1,14 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+
+const BorderRadius _cardRadius = BorderRadius.all(Radius.circular(24));
+const List<BoxShadow> _softShadow = [
+  BoxShadow(
+    color: Color(0x1A000000),
+    blurRadius: 18,
+    offset: Offset(0, 10),
+  ),
+];
 
 class OperatorInfoCard extends StatelessWidget {
   const OperatorInfoCard({
@@ -11,6 +20,7 @@ class OperatorInfoCard extends StatelessWidget {
     this.onTap,
     this.padding,
     this.backgroundColor,
+    this.titleStyle,
   });
 
   final String title;
@@ -20,19 +30,20 @@ class OperatorInfoCard extends StatelessWidget {
   final VoidCallback? onTap;
   final EdgeInsetsGeometry? padding;
   final Color? backgroundColor;
+  final TextStyle? titleStyle;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      borderRadius: OperatorTheme.cardRadius,
+      borderRadius: _cardRadius,
       onTap: onTap,
       child: Container(
         width: double.infinity,
         padding: padding ?? const EdgeInsets.all(20),
         decoration: BoxDecoration(
-          color: backgroundColor ?? OperatorTheme.surface,
-          borderRadius: OperatorTheme.cardRadius,
-          boxShadow: OperatorTheme.softShadow,
+          color: backgroundColor ?? AppColors.surface,
+          borderRadius: _cardRadius,
+          boxShadow: _softShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -46,9 +57,9 @@ class OperatorInfoCard extends StatelessWidget {
                     children: [
                       Text(
                         title,
-                        style:
+                        style: titleStyle ??
                             Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: OperatorTheme.strongText,
+                                  color: AppColors.textPrimary,
                                   fontWeight: FontWeight.w600,
                                 ),
                       ),
@@ -58,7 +69,7 @@ class OperatorInfoCard extends StatelessWidget {
                           subtitle!,
                           style:
                               Theme.of(context).textTheme.bodySmall?.copyWith(
-                                    color: OperatorTheme.mutedText,
+                                    color: AppColors.textSecondary,
                                   ),
                         ),
                       ],
@@ -68,7 +79,7 @@ class OperatorInfoCard extends StatelessWidget {
                 if (trailing != null) trailing!,
               ],
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 4),
             child,
           ],
         ),
@@ -100,7 +111,7 @@ class OperatorQuickStat extends StatelessWidget {
         if (icon != null)
           Icon(
             icon,
-            color: OperatorTheme.primary,
+            color: AppColors.primary,
             size: 20,
           ),
         const SizedBox(height: 6),
@@ -108,13 +119,13 @@ class OperatorQuickStat extends StatelessWidget {
           value,
           style: textTheme.titleMedium?.copyWith(
             fontWeight: emphasis ? FontWeight.w700 : FontWeight.w600,
-            color: emphasis ? OperatorTheme.primary : OperatorTheme.strongText,
+            color: emphasis ? AppColors.primary : AppColors.textPrimary,
           ),
         ),
         const SizedBox(height: 4),
         Text(
           label,
-          style: textTheme.bodySmall?.copyWith(color: OperatorTheme.mutedText),
+          style: textTheme.bodySmall?.copyWith(color: AppColors.textSecondary),
         ),
       ],
     );

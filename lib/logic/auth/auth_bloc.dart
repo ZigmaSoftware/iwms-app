@@ -1,10 +1,12 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_login.dart';
 import '../../data/repositories/auth_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
-
+import 'package:crypto/crypto.dart';
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository _authRepository;
   final Future<void> initialization;
@@ -37,32 +39,87 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthStateAuthenticated(
       userName: user.userName,
       role: user.role.toLowerCase(),
+      userId: user.userId,
+      emp_id: user.emp_id,
     ));
   }
 
-  Future<void> _onCitizenLoginRequested(
-    AuthCitizenLoginRequested event,
-    Emitter<AuthState> emit,
-  ) async {
-    emit(const AuthStateLoading());
+  // Future<void> _onCitizenLoginRequested(
+  //   AuthCitizenLoginRequested event,
+  //   Emitter<AuthState> emit,
+  // ) async {
+  //   emit(const AuthStateLoading());
 
-    try {
-      final user = await _authRepository.loginCitizen(
-        username: event.username,
-        password: event.password,
-      );
+  //   try {
+  //     final user = await _authRepository.loginCitizen(
+  //       username: event.username,
+  //       password: event.password,
+  //     );
 
-      await _authRepository.saveUser(user);
+  //     await _authRepository.saveUser(user);
 
-      emit(AuthStateAuthenticated(
-        userName: user.userName,
-        role: user.role.toLowerCase(),
-      ));
-    } catch (e) {
-      emit(AuthStateFailure(message: e.toString()));
+  //     emit(AuthStateAuthenticated(
+  //       userName: user.userName,
+  //       role: user.role.toLowerCase(),
+  //       emp_id:user.emp_id
+  //     ));
+  //   } catch (e) {
+  //     emit(AuthStateFailure(message: e.toString()));
+  //     emit(const AuthStateUnauthenticated());
+  //   }
+  // }
+Future<void> _onCitizenLoginRequested(
+  AuthCitizenLoginRequested event,
+  Emitter<AuthState> emit,
+) async {
+  emit(const AuthStateLoading());
+
+  try {
+    // Try ONLINE login first
+    final user = await _authRepository.loginCitizen(
+      username: event.username,
+      password: event.password,
+    );
+
+    // Save user to local DB for offline access
+    await saveOperatorToDB(user.toJson(), event.password);
+
+    emit(AuthStateAuthenticated(
+      userName: user.userName,
+      role: user.role.toLowerCase(),
+      userId: user.userId,
+      emp_id: user.emp_id,
+    ));
+  } catch (e) {
+    // ----------------------------------------------------
+    // FALLBACK TO OFFLINE DB LOGIN
+    // ----------------------------------------------------
+    final localUser = await getOperatorFromDB(event.username);
+
+    if (localUser == null) {
+      emit(AuthStateFailure(message: "Invalid credentials (Offline mode)."));
       emit(const AuthStateUnauthenticated());
+      return;
     }
+
+    // Validate password hash offline
+    final hash = sha256.convert(utf8.encode(event.password)).toString();
+
+    if (localUser["password_hash"] != hash) {
+      emit(AuthStateFailure(message: "Incorrect password (Offline mode)."));
+      emit(const AuthStateUnauthenticated());
+      return;
+    }
+
+    // OFFLINE LOGIN SUCCESS
+    emit(AuthStateAuthenticated(
+      userName: localUser["name"],
+      role: localUser["role"],
+      userId: (localUser["unique_id"] ?? "").toString(),
+      emp_id: localUser["emp_id"],
+    ));
   }
+}
 
   Future<void> _onCitizenRegisterRequested(
     AuthCitizenRegisterRequested event,
@@ -86,6 +143,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthStateAuthenticated(
       userName: user.userName,
       role: "citizen",
+      userId: user.userId,
     ));
   }
 
@@ -107,6 +165,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
     emit(AuthStateAuthenticated(
       userName: user.userName,
       role: "operator",
+      userId: user.userId,
     ));
   }
 

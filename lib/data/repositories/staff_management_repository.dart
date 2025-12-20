@@ -1,0 +1,116 @@
+import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
+import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
+import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
+
+class StaffManagementRepository {
+  const StaffManagementRepository();
+
+  Future<List<StaffMember>> fetchStaff({String? role}) async {
+    try {
+      final dio = getIt<Dio>();
+      final response = await dio.get(
+        '${ApiConfig.desktopBase}users-creation/',
+        options: Options(headers: {'Authorization': null}),
+      );
+
+      final List items = response.data is List
+          ? response.data
+          : (response.data['results'] ?? []);
+
+      final staff = items
+          .map((json) => StaffMember.fromJson(
+                Map<String, dynamic>.from(json as Map),
+              ))
+          .where((s) {
+        if (role == null) return true;
+        return s.role.toLowerCase() == role.toLowerCase();
+      }).toList();
+
+      return staff;
+    } catch (e, st) {
+      debugPrint('❌ FETCH STAFF ERROR: $e\n$st');
+      return [];
+    }
+  }
+
+  Future<List<EnhancedAssignmentModel>> fetchStaffAssignmentHistory({
+    required String staffId,
+    String? status,
+    DateTime? dateFrom,
+    DateTime? dateTo,
+  }) async {
+    try {
+      final dio = getIt<Dio>();
+
+      final params = <String, dynamic>{
+        'staff_id': staffId,
+      };
+      if (status != null) params['status'] = status;
+      if (dateFrom != null) {
+        params['date_from'] = dateFrom.toIso8601String().split('T').first;
+      }
+      if (dateTo != null) {
+        params['date_to'] = dateTo.toIso8601String().split('T').first;
+      }
+
+      final response = await dio.get(
+        ApiConfig.staffAssignments,
+        queryParameters: params,
+        options: Options(headers: {'Authorization': null}),
+      );
+
+      final List items = response.data is List
+          ? response.data
+          : (response.data['results'] ?? []);
+
+      return items
+          .map((json) => EnhancedAssignmentModel.fromJson(
+                Map<String, dynamic>.from(json as Map),
+              ))
+          .toList();
+    } catch (e, st) {
+      debugPrint('❌ FETCH ASSIGNMENT HISTORY ERROR: $e\n$st');
+      return [];
+    }
+  }
+
+  Future<StaffAssignmentSummary?> fetchStaffSummary(String staffId) async {
+    try {
+      final dio = getIt<Dio>();
+
+      final response = await dio.get(
+        '${ApiConfig.staffAssignments}summary/',
+        queryParameters: {'staff_id': staffId},
+        options: Options(headers: {'Authorization': null}),
+      );
+
+      return StaffAssignmentSummary.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
+    } catch (e, st) {
+      debugPrint('❌ FETCH STAFF SUMMARY ERROR: $e\n$st');
+      return null;
+    }
+  }
+
+  Future<EnhancedAssignmentModel?> fetchAssignmentDetails(
+    String uniqueId,
+  ) async {
+    try {
+      final dio = getIt<Dio>();
+      final response = await dio.get(
+        '${ApiConfig.staffAssignments}$uniqueId/',
+        options: Options(headers: {'Authorization': null}),
+      );
+      return EnhancedAssignmentModel.fromJson(
+        Map<String, dynamic>.from(response.data as Map),
+      );
+    } catch (e, st) {
+      debugPrint('❌ FETCH ASSIGNMENT DETAILS ERROR: $e\n$st');
+      return null;
+    }
+  }
+}

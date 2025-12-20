@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+
+const LinearGradient _qrGradient = LinearGradient(
+  colors: [AppColors.primary, AppColors.primaryVariant],
+  begin: Alignment.topCenter,
+  end: Alignment.bottomCenter,
+);
 
 class OperatorQRButton extends StatelessWidget {
   const OperatorQRButton({
@@ -19,7 +25,7 @@ class OperatorQRButton extends StatelessWidget {
         padding: const EdgeInsets.all(22),
         decoration: const BoxDecoration(
           shape: BoxShape.circle,
-          gradient: OperatorTheme.quickActionGradient,
+          gradient: _qrGradient,
           boxShadow: [
             BoxShadow(
               color: Color(0x332E7D5A),
@@ -36,7 +42,7 @@ class OperatorQRButton extends StatelessWidget {
           child: Center(
             child: Icon(
               Icons.qr_code_scanner_rounded,
-              color: OperatorTheme.primary,
+              color: AppColors.primary,
               size: 64,
             ),
           ),

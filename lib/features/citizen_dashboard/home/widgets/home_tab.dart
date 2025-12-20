@@ -12,6 +12,7 @@ import 'package:iwms_citizen_app/features/citizen_dashboard/track/models/waste_s
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/widgets/radial_chart.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/notifications/controllers/notification_controller.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/notifications/widgets/notification_tile.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 class HomeTab extends StatelessWidget {
   const HomeTab({
@@ -28,6 +29,7 @@ class HomeTab extends StatelessWidget {
     required this.textColor,
     required this.secondaryTextColor,
     required this.highlightColor,
+    required this.onStatsTap,
   });
 
   final BannerController bannerController;
@@ -42,27 +44,7 @@ class HomeTab extends StatelessWidget {
   final Color textColor;
   final Color secondaryTextColor;
   final Color highlightColor;
-
-  List<RadialBarData> get _collectionProgressItems => const [
-        RadialBarData(
-          label: 'Wet',
-          value: 40,
-          valueLabel: 'Wet 40%',
-          color: Color(0xFF1976D2),
-        ),
-        RadialBarData(
-          label: 'Dry',
-          value: 32,
-          valueLabel: 'Dry 32%',
-          color: Color(0xFF2E7D32),
-        ),
-        RadialBarData(
-          label: 'Mixed',
-          value: 28,
-          valueLabel: 'Mixed 28%',
-          color: Color(0xFFF57F17),
-        ),
-      ];
+  final VoidCallback onStatsTap;
 
   @override
   Widget build(BuildContext context) {
@@ -70,10 +52,7 @@ class HomeTab extends StatelessWidget {
     final responsive = MediaQuery.of(context).size;
     final double headerHeight = (responsive.height * 0.32).clamp(260, 360);
     final double bannerHeight = (headerHeight * 0.55).clamp(140, 190);
-
-    final WasteSummary? activeSummary = trackController.currentSummary;
-    final stats =
-        _Stats.fallback(trackController, activeSummary, _collectionProgressItems);
+    final localizations = AppLocalizations.of(context);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -86,6 +65,7 @@ class HomeTab extends StatelessWidget {
           textColor: textColor,
           secondaryTextColor: secondaryTextColor,
           notificationController: notificationController,
+          localizations: localizations,
         ),
         const SizedBox(height: DashboardThemeTokens.spacing12),
         AnimatedBuilder(
@@ -106,21 +86,34 @@ class HomeTab extends StatelessWidget {
           },
         ),
         const SizedBox(height: DashboardThemeTokens.spacing12),
-        Padding(
-          padding: const EdgeInsets.symmetric(
-            horizontal: DashboardThemeTokens.spacing16,
-          ),
-          child: SectionCard(
-            surfaceColor: surfaceColor,
-            outlineColor: outlineColor,
-            isDarkMode: isDarkMode,
-            child: _CollectionStatsCard(
-              stats: stats,
-              highlightColor: highlightColor,
-              textColor: textColor,
-              secondaryTextColor: secondaryTextColor,
-            ),
-          ),
+        AnimatedBuilder(
+          animation: trackController,
+          builder: (context, _) {
+              final stats = _Stats.fromSummary(
+                trackController,
+                trackController.currentSummary,
+                localizations,
+              );
+            return Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: DashboardThemeTokens.spacing16,
+              ),
+              child: GestureDetector(
+                onTap: onStatsTap,
+                child: SectionCard(
+                  surfaceColor: surfaceColor,
+                  outlineColor: outlineColor,
+                  isDarkMode: isDarkMode,
+                  child: _CollectionStatsCard(
+                    stats: stats,
+                    highlightColor: highlightColor,
+                    textColor: textColor,
+                    secondaryTextColor: secondaryTextColor,
+                  ),
+                ),
+              ),
+            );
+          },
         ),
         const SizedBox(height: DashboardThemeTokens.spacing16),
         Expanded(
@@ -135,7 +128,7 @@ class HomeTab extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Quick Actions',
+                  localizations.quickActions,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.bold,
                     color: textColor,
@@ -166,6 +159,7 @@ class _Header extends StatelessWidget {
     required this.textColor,
     required this.secondaryTextColor,
     required this.notificationController,
+    required this.localizations,
   });
 
   final String userName;
@@ -175,6 +169,7 @@ class _Header extends StatelessWidget {
   final Color textColor;
   final Color secondaryTextColor;
   final NotificationController notificationController;
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context) {
@@ -211,14 +206,14 @@ class _Header extends StatelessWidget {
           ),
           const SizedBox(width: DashboardThemeTokens.spacing12),
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Home',
-                  style: theme.textTheme.headlineSmall?.copyWith(
-                    color: textColor,
-                    fontSize: 20,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    localizations.homeTitle,
+                    style: theme.textTheme.headlineSmall?.copyWith(
+                      color: textColor,
+                      fontSize: 20,
                     fontWeight: FontWeight.w900,
                     letterSpacing: 0.4,
                   ),
@@ -243,6 +238,7 @@ class _Header extends StatelessWidget {
                 isDarkMode ? Colors.white.withValues(alpha: 0.15) : Colors.black.withValues(alpha: 0.05),
             borderColor:
                 isDarkMode ? Colors.white.withValues(alpha: 0.25) : Colors.black.withValues(alpha: 0.1),
+            localizations: localizations,
           ),
         ],
       ),
@@ -260,51 +256,46 @@ class _Stats {
   final double primaryValue;
   final String primaryLabel;
   final List<RadialBarData> progressItems;
-  final WasteSummary? summary;
+  final WasteSummary summary;
 
-  factory _Stats.fallback(
+  factory _Stats.fromSummary(
     TrackController controller,
     WasteSummary? summary,
-    List<RadialBarData> fallback,
+    AppLocalizations localizations,
   ) {
     final weightFormatter = controller.weightFormatter;
-    if (summary != null) {
-      final dry = summary.dryWeight;
-      final wet = summary.wetWeight;
-      final mixed = summary.mixWeight;
-      return _Stats(
-        primaryValue: summary.totalNetWeight,
-        primaryLabel: 'Total waste collected',
-        summary: summary,
-        progressItems: [
-          RadialBarData(
-            label: 'Wet',
-            value: wet,
-            valueLabel: 'Wet ${weightFormatter.format(summary.wetWeight)} kg',
-            color: const Color(0xFF1976D2),
-          ),
-          RadialBarData(
-            label: 'Dry',
-            value: dry,
-            valueLabel: 'Dry ${weightFormatter.format(summary.dryWeight)} kg',
-            color: const Color(0xFF2E7D32),
-          ),
-          RadialBarData(
-            label: 'Mixed',
-            value: mixed,
-            valueLabel:
-                'Mixed ${weightFormatter.format(summary.mixWeight)} kg',
-            color: const Color(0xFFF57F17),
-          ),
-        ],
-      )..primaryValue;
-    }
+    final data = summary ?? WasteSummary.zero(controller.selectedDate);
+    final hasData = data.totalNetWeight > 0;
+    final String periodLabel = controller.periodLabel(controller.selectedPeriod);
+    final String primaryLabel = hasData
+        ? localizations.wasteCollectedLabel(periodLabel)
+        : localizations.noWasteRecorded;
 
     return _Stats(
-      primaryValue: 100,
-      primaryLabel: 'Average waste saving this month',
-      progressItems: fallback,
-      summary: null,
+      primaryValue: data.totalNetWeight,
+      primaryLabel: primaryLabel,
+      summary: data,
+      progressItems: [
+        RadialBarData(
+          label: 'Wet',
+          value: data.wetWeight,
+          valueLabel: 'Wet ${weightFormatter.format(data.wetWeight)} kg',
+          color: const Color(0xFF1976D2),
+        ),
+        RadialBarData(
+          label: 'Dry',
+          value: data.dryWeight,
+          valueLabel: 'Dry ${weightFormatter.format(data.dryWeight)} kg',
+          color: const Color(0xFF2E7D32),
+        ),
+        RadialBarData(
+          label: 'Mixed',
+          value: data.mixWeight,
+          valueLabel:
+              'Mixed ${weightFormatter.format(data.mixWeight)} kg',
+          color: const Color(0xFFF57F17),
+        ),
+      ],
     );
   }
 }
@@ -327,9 +318,9 @@ class _CollectionStatsCard extends StatelessWidget {
     final theme = Theme.of(context);
     final summary = stats.summary;
     final weightFormatter = NumberFormat.decimalPattern();
-    final double dryValue = summary?.dryWeight ?? 40;
-    final double wetValue = summary?.wetWeight ?? 32;
-    final double mixedValue = summary?.mixWeight ?? 28;
+    final double dryValue = summary.dryWeight;
+    final double wetValue = summary.wetWeight;
+    final double mixedValue = summary.mixWeight;
     final double computedTotal = dryValue + wetValue + mixedValue;
 
     Widget buildSwatch(RadialBarData item) {
@@ -383,7 +374,7 @@ class _CollectionStatsCard extends StatelessWidget {
               const SizedBox(height: DashboardThemeTokens.spacing6),
               Container(
                 decoration: BoxDecoration(
-                  color: Colors.white,
+                  color: theme.colorScheme.surface,
                   borderRadius:
                       BorderRadius.circular(DashboardThemeTokens.radiusLarge),
                 ),
@@ -408,9 +399,9 @@ class _CollectionStatsCard extends StatelessWidget {
           height: 120,
           child: WasteRadialBreakdown(
             items: stats.progressItems,
-            totalValue: summary != null ? computedTotal : 100,
+            totalValue: computedTotal,
             textColor: textColor,
-            backgroundColor: Colors.white,
+            backgroundColor: theme.colorScheme.surface,
           ),
         ),
       ],
@@ -424,11 +415,13 @@ class _NotificationBell extends StatelessWidget {
     required this.iconColor,
     required this.backgroundColor,
     required this.borderColor,
+    required this.localizations,
   });
   final NotificationController controller;
   final Color iconColor;
   final Color backgroundColor;
   final Color borderColor;
+  final AppLocalizations localizations;
 
   @override
   Widget build(BuildContext context) {
@@ -455,7 +448,7 @@ class _NotificationBell extends StatelessWidget {
                       : Icons.notifications_none_rounded,
                 ),
                 color: iconColor,
-                tooltip: 'Notifications',
+                tooltip: localizations.notificationsLabel,
                 padding: EdgeInsets.zero,
                 constraints: BoxConstraints.tightFor(
                   width: bellButtonSize,
@@ -493,30 +486,29 @@ class _NotificationBell extends StatelessWidget {
       await showModalBottomSheet<void>(
         context: context,
         showDragHandle: true,
-        builder: (sheetContext) => Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(
-                Icons.notifications_none_rounded,
-                color: theme.colorScheme.primary,
-                size: 48,
+      builder: (sheetContext) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.notifications_none_rounded,
+              color: theme.colorScheme.primary,
+              size: 48,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              localizations.notificationsCaughtUp,
+              style: theme.textTheme.titleMedium?.copyWith(
+                fontWeight: FontWeight.w700,
               ),
-              const SizedBox(height: 16),
-              Text(
-                'You are all caught up!',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'We will alert you as soon as a collection vehicle enters '
-                'your geofence.',
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
+              textAlign: TextAlign.center,
+            ),
+            const SizedBox(height: 8),
+            Text(
+              localizations.notificationsWaiting,
+              style: theme.textTheme.bodyMedium?.copyWith(
+                color: theme.colorScheme.onSurface.withValues(alpha: 0.7),
                 ),
                 textAlign: TextAlign.center,
               ),
@@ -547,7 +539,7 @@ class _NotificationBell extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  'Notifications',
+                  localizations.notificationsLabel,
                   style: theme.textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
                   ),

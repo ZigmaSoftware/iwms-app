@@ -61,7 +61,7 @@ class AppTheme {
       ),
       inputDecorationTheme: InputDecorationTheme(
         filled: true,
-        fillColor: AppColors.accentLight,
+        fillColor: AppColors.darkOverlay,
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
@@ -154,7 +154,15 @@ class AppTheme {
           borderRadius: BorderRadius.circular(12),
           borderSide: const BorderSide(color: kPrimaryColor, width: 2),
         ),
-        labelStyle: AppTextStyles.subTitle.copyWith(color: AppColors.white),
+        labelStyle:
+            AppTextStyles.subTitle.copyWith(color: Colors.white70),
+        floatingLabelStyle:
+            AppTextStyles.subTitle.copyWith(color: Colors.white),
+        hintStyle:
+            AppTextStyles.subTitle.copyWith(color: Colors.white70),
+        prefixIconColor: Colors.white70,
+        suffixIconColor: Colors.white70,
+        iconColor: Colors.white70,
       ),
       cardColor: AppColors.darkCard,
       dividerColor: Colors.white12,

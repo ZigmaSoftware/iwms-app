@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:motion_tab_bar/MotionTabBar.dart';
 
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
@@ -8,14 +7,17 @@ import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_overview_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_profile_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendance_home_operator.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'package:go_router/go_router.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 enum OperatorNavTab { home, overview, attendance, profile }
 
@@ -57,9 +59,12 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         user?.userName.trim().isNotEmpty == true ? user!.userName : "Operator";
     final fallbackCode =
         user?.userId.trim().isNotEmpty == true ? user!.userId : "OP-000";
+       final fallbackemp_id =
+        user?.emp_id?.trim().isNotEmpty == true ? user!.emp_id : "000";  
     return OperatorSessionDetails(
       displayName: fallbackName,
       operatorCode: fallbackCode,
+      operatoremp_id:fallbackemp_id!,
       wardLabel: "Ward 12",
       zoneLabel: "Zone 3",
       contactInfo: OperatorContactInfo(
@@ -85,10 +90,16 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         bloc.state is AuthStateAuthenticated
             ? (bloc.state as AuthStateAuthenticated).userName
             : null);
+             final emp_idFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).emp_id
+            : null);
+            final localizations = AppLocalizations.of(context);
     final session = (_sessionDetails ??
             OperatorSessionDetails(
               displayName: nameFromState ?? "Operator",
               operatorCode: "OP-000",
+              operatoremp_id: emp_idFromState!
             ))
         .copyWith(displayName: nameFromState ?? _sessionDetails?.displayName);
 
@@ -101,7 +112,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         return true;
       },
       child: Scaffold(
-        backgroundColor: OperatorTheme.background,
+        backgroundColor: AppColors.background,
         body: SafeArea(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 280),
@@ -114,26 +125,33 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
           ),
         ),
         bottomNavigationBar: SafeArea(
-          child: MotionTabBar(
-            labels: const ["Home", "Overview", "Attendance", "Profile"],
-            icons: const [
-              Icons.home_rounded,
-              Icons.dashboard_customize_outlined,
-              Icons.fact_check_outlined,
-              Icons.person_outline_rounded,
+          child: BottomNavigationBar(
+            type: BottomNavigationBarType.fixed,
+            currentIndex: _activeTab.index,
+            onTap: (index) => _setTab(OperatorNavTab.values[index]),
+            selectedItemColor: AppColors.primary,
+            unselectedItemColor: Colors.black54,
+            showUnselectedLabels: true,
+            selectedFontSize: 11,
+            unselectedFontSize: 11,
+            items: [
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.home_rounded),
+                label: localizations.operatorNavHome,
+              ),
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.dashboard_customize_outlined),
+                label: localizations.operatorNavOverview,
+              ),
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.fact_check_outlined),
+                label: localizations.operatorNavAttendance,
+              ),
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.person_outline_rounded),
+                label: localizations.operatorNavProfile,
+              ),
             ],
-            initialSelectedTab: _labelForTab(_activeTab),
-            tabBarColor: Colors.white,
-            tabSelectedColor: OperatorTheme.primary,
-            tabIconColor: Colors.black54,
-            tabBarHeight: 64,
-            tabSize: 52,
-            tabIconSize: 22,
-            tabIconSelectedSize: 24,
-            onTabItemSelected: (value) {
-              final tab = _tabFromValue(value);
-              if (tab != null) _setTab(tab);
-            },
           ),
         ),
       ),
@@ -146,22 +164,41 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         return OperatorHomeScreen(
           operatorName: session.displayName,
           operatorCode: session.operatorCode,
+          emp_id: session.operatoremp_id,
           wardLabel: session.wardLabel,
           zoneLabel: session.zoneLabel,
           onScanPressed: () => context.push(AppRoutePaths.operatorQR),
           onLogout: _logout,
           onOpenAttendance: () => _setTab(OperatorNavTab.attendance),
           onOpenProfile: () => _setTab(OperatorNavTab.profile),
+          onOpenHistory: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AttendanceHistory(empId: session.operatoremp_id),
+              ),
+            );
+          },
+          onOpenAttendanceSummary: () {
+            Navigator.of(context).push(
+              MaterialPageRoute(
+                builder: (_) => AttendancePage(
+                  operatorName: session.displayName,
+                  operatorCode: session.operatorCode,
+                ),
+              ),
+            );
+          },
         );
       case OperatorNavTab.overview:
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
-          child: OperatorOverviewScreen(),
-        );
+        return const OperatorOverviewScreen();
       case OperatorNavTab.attendance:
-        return const OperatorAttendanceScreenIntegration();
+        return OperatorAttendanceScreenIntegration(
+          operatorName: session.displayName,
+          operatorCode: session.operatorCode,
+        );
       case OperatorNavTab.profile:
         return OperatorProfileScreen(
+          emp_id: session.operatoremp_id,
           operatorName: session.displayName,
           operatorCode: session.operatorCode,
           wardLabel: session.wardLabel,

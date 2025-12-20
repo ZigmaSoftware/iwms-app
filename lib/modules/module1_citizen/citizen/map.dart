@@ -4,6 +4,7 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 import '../../../core/constants.dart';
 import '../../../core/di.dart';
@@ -239,6 +240,7 @@ class _MapScreenState extends State<MapScreen> {
             },
             builder: (context, state) {
               final size = MediaQuery.of(context).size;
+              final localizations = AppLocalizations.of(context);
               final headerHeight = size.height * 0.20;
 
               final int totalVehicles =
@@ -247,15 +249,17 @@ class _MapScreenState extends State<MapScreen> {
               final VehicleModel? selectedVehicle =
                   state is VehicleLoaded ? state.selectedVehicle : null;
 
+              final vehicleName =
+                  selectedVehicle?.registrationNumber ?? localizations.mapUnknownVehicle;
               final headline = selectedVehicle != null
-                  ? 'Tracking ${selectedVehicle.registrationNumber ?? 'vehicle'}'
-                  : 'Live Vehicle Tracking';
+                  ? localizations.mapVehicleHeadline(vehicleName)
+                  : localizations.mapLiveHeadline;
 
               final statusPrimary =
-                  selectedVehicle?.lastUpdated ?? 'Refreshing telemetry…';
+                  selectedVehicle?.lastUpdated ?? localizations.mapRefreshingTelemetry;
 
               final statusSecondary =
-                  '$totalVehicles vehicle${totalVehicles == 1 ? '' : 's'} active';
+                  localizations.vehiclesActive(totalVehicles);
 
               return Column(
                 children: [
@@ -267,13 +271,13 @@ class _MapScreenState extends State<MapScreen> {
                 width: double.infinity,
                 child: TrackingHeroHeader(
                   contextLabel:
-                      widget.vehicleNumber ?? 'Gamma Collection Zone',
+                      widget.vehicleNumber ?? localizations.mapGammaCollectionZone,
                   headline: headline,
                   statusPrimary: statusPrimary,
                   statusSecondary: statusSecondary,
                   statusContent: Padding(
                     padding: const EdgeInsets.only(top: 8.0),
-                    child: _buildSearchBar(),
+                    child: _buildSearchBar(localizations),
                   ),
                   onBack: widget.showBackButton
                       ? () {
@@ -294,7 +298,8 @@ class _MapScreenState extends State<MapScreen> {
                   const SizedBox(height: 8),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: _buildHeaderFilterSection(context, state),
+                    child:
+                        _buildHeaderFilterSection(context, state, localizations),
                   ),
                   const SizedBox(height: 8),
 
@@ -322,7 +327,7 @@ class _MapScreenState extends State<MapScreen> {
                             children: [
                               _buildMap(context, state),
 
-                              _buildMapStyleSelector(state),
+                              _buildMapStyleSelector(state, localizations),
                               _buildZoomControls(state),
 
                               AnimatedSwitcher(
@@ -333,8 +338,10 @@ class _MapScreenState extends State<MapScreen> {
                                             'selectedVehicleBubble'),
                                         alignment: Alignment.center,
                                         child: TrackingSpeechBubble(
-                                          message:
-                                              '${selectedVehicle.registrationNumber ?? 'Vehicle'} en route',
+                                          message: localizations.mapVehicleEnRoute(
+                                            selectedVehicle.registrationNumber ??
+                                                localizations.mapUnknownVehicle,
+                                          ),
                                           icon:
                                               Icons.local_shipping_rounded,
                                         ),
@@ -362,7 +369,7 @@ class _MapScreenState extends State<MapScreen> {
                                   ),
                                 ),
 
-                              _buildVehicleInfoPanel(context, state),
+                              _buildVehicleInfoPanel(context, state, localizations),
                             ],
                           ),
                         ),
@@ -524,7 +531,8 @@ class _MapScreenState extends State<MapScreen> {
   // ---------------------------------------------------------------------------
   // HEADER FILTER SECTION
   // ---------------------------------------------------------------------------
-  Widget _buildHeaderFilterSection(BuildContext context, VehicleState state) {
+  Widget _buildHeaderFilterSection(
+      BuildContext context, VehicleState state, AppLocalizations localizations) {
     final bloc = context.read<VehicleBloc>();
     VehicleFilter activeFilter = VehicleFilter.all;
 
@@ -539,7 +547,7 @@ class _MapScreenState extends State<MapScreen> {
           final isSelected = activeFilter == filter;
           final count = bloc.countVehiclesByFilter(filter);
           final label =
-              '${filter.name[0].toUpperCase()}${filter.name.substring(1)} ($count)';
+              '${localizations.vehicleFilterLabel(filter)} ($count)';
           final color = _filterColor(filter);
           final textColor =
               filter == VehicleFilter.all ? Colors.black87 : Colors.white;
@@ -582,7 +590,7 @@ class _MapScreenState extends State<MapScreen> {
     );
   }
 
-  Widget _buildSearchBar() {
+  Widget _buildSearchBar(AppLocalizations localizations) {
     return Container(
       height: 37,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
@@ -602,13 +610,13 @@ class _MapScreenState extends State<MapScreen> {
           const Icon(Icons.search, color: Colors.black54, size: 18),
           const SizedBox(width: 7),
           Expanded(
-            child: TextField(
-              decoration: const InputDecoration(
-                contentPadding: EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-                hintText: 'Search vehicle / ward / driver',
-                hintStyle: TextStyle(color: Colors.black54),
-                border: InputBorder.none,
-              ),
+          child: TextField(
+            decoration: InputDecoration(
+              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+              hintText: localizations.mapSearchHint,
+              hintStyle: const TextStyle(color: Color.fromARGB(137, 0, 0, 0)),
+              border: InputBorder.none,
+            ),
               onChanged: (value) => setState(() => _searchQuery = value.trim()),
             ),
           ),
@@ -625,7 +633,10 @@ class _MapScreenState extends State<MapScreen> {
   // ---------------------------------------------------------------------------
   // MAP STYLE SELECTOR
   // ---------------------------------------------------------------------------
-  Widget _buildMapStyleSelector(VehicleState state) {
+  Widget _buildMapStyleSelector(
+    VehicleState state,
+    AppLocalizations localizations,
+  ) {
     final theme = Theme.of(context);
     final double safeBottom = MediaQuery.of(context).padding.bottom;
     final double bottomOffset = 12.0 + safeBottom;
@@ -657,7 +668,7 @@ class _MapScreenState extends State<MapScreen> {
               final bool isSelected = _selectedTheme == option;
 
               return ChoiceChip(
-                label: Text(config.label),
+                label: Text(_mapThemeLabel(option, localizations)),
                 selected: isSelected,
                 onSelected: (selected) {
                   if (selected) {
@@ -682,6 +693,18 @@ class _MapScreenState extends State<MapScreen> {
         ),
       ),
     );
+  }
+
+  String _mapThemeLabel(
+    _MapThemeOption option,
+    AppLocalizations localizations,
+  ) {
+    switch (option) {
+      case _MapThemeOption.standard:
+        return localizations.mapThemeStandard;
+      case _MapThemeOption.light:
+        return localizations.mapThemeLight;
+    }
   }
 
   // ---------------------------------------------------------------------------
@@ -715,7 +738,11 @@ class _MapScreenState extends State<MapScreen> {
   // ---------------------------------------------------------------------------
   // VEHICLE INFO PANEL
   // ---------------------------------------------------------------------------
-  Widget _buildVehicleInfoPanel(BuildContext context, VehicleState state) {
+  Widget _buildVehicleInfoPanel(
+    BuildContext context,
+    VehicleState state,
+    AppLocalizations localizations,
+  ) {
     if (state is! VehicleLoaded || state.selectedVehicle == null) {
       return const SizedBox.shrink();
     }
@@ -746,8 +773,8 @@ class _MapScreenState extends State<MapScreen> {
               Row(
                 children: [
                   Expanded(
-                    child: Text(
-                      vehicle.registrationNumber ?? 'Unknown Vehicle',
+              child: Text(
+                vehicle.registrationNumber ?? localizations.mapUnknownVehicle,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
@@ -761,7 +788,7 @@ class _MapScreenState extends State<MapScreen> {
                       borderRadius: BorderRadius.circular(12),
                     ),
                     child: Text(
-                      (vehicle.status ?? 'No Data').toUpperCase(),
+                      (vehicle.status ?? localizations.mapNoData).toUpperCase(),
                       style: TextStyle(
                         fontWeight: FontWeight.w700,
                         color: statusColor,
@@ -808,12 +835,12 @@ class _MapScreenState extends State<MapScreen> {
                 runSpacing: 8,
                 children: [
                   _InfoTag(
-                    label: 'Estimated Load',
+                    label: localizations.mapEstimatedLoad,
                     value:
                         '${(vehicle.wasteCapacityKg ?? 0).toStringAsFixed(1)} kg',
                   ),
                   _InfoTag(
-                    label: 'Last update',
+                    label: localizations.mapLastUpdate,
                     value: vehicle.lastUpdated ?? 'N/A',
                   ),
                 ],
@@ -845,7 +872,7 @@ class _VehicleMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusColor = getVehicleStatusColor(vehicle.status);
-    final size = isSelected ? 45.0 : 30.0;
+    final size = isSelected ? 30.0 : 22.0;
 
     return Column(
       children: [
@@ -853,24 +880,11 @@ class _VehicleMarker extends StatelessWidget {
           duration: const Duration(milliseconds: 200),
           height: size,
           width: size,
-          decoration: BoxDecoration(
+          child: Image.asset(
+            'assets/images/arrow.png',
             color: statusColor,
-            shape: BoxShape.circle,
-            border: Border.all(
-              color: isSelected ? Colors.white : Colors.transparent,
-              width: 2,
-            ),
-            boxShadow: isSelected
-                ? [
-                    BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.4),
-                      blurRadius: 10,
-                      offset: const Offset(0, 4),
-                    ),
-                  ]
-                : null,
+            fit: BoxFit.contain,
           ),
-          child: const Icon(Icons.local_shipping, color: Colors.white),
         ),
 
         if (isSelected)

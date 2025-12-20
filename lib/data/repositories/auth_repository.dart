@@ -1,6 +1,11 @@
 // lib/data/repositories/auth_repository.dart
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:crypto/crypto.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_login.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iwms_citizen_app/core/api_config.dart';
@@ -24,6 +29,7 @@ class AuthRepository {
   static const String _roleKey = 'user_role';
   static const String _nameKey = 'user_name';
   static const String _tokenKey = 'auth_token';
+  static const String _emp_idKey = 'emp_id';
 
   AuthRepository(this._dio, this._prefs);
 
@@ -125,6 +131,9 @@ Future<UserModel> loginCitizen({
   }
 
   try {
+    // ----------------------------------------------------
+    // ONLINE LOGIN ATTEMPT
+    // ----------------------------------------------------
     final response = await _dio.post(
       ApiConfig.citizenLogin,
       data: {
@@ -133,10 +142,6 @@ Future<UserModel> loginCitizen({
       },
     );
 
-    debugPrint("API Login Response: ${response.data}");
-
-    // The server returns SUCCESS always with no "status" flag.
-    // Validate essential fields manually.
     final data = response.data;
 
     if (data["unique_id"] == null ||
@@ -146,14 +151,40 @@ Future<UserModel> loginCitizen({
       throw AuthRepositoryException("Invalid login response from server.");
     }
 
-    // Convert to model
     final user = UserModel.fromApi(data);
 
-    // Save user to SharedPreferences
+    // Save to SQLite for offline login
+    await saveOperatorToDB(data, password);
+
+    // Save to shared prefs
     await saveUser(user);
 
     return user;
+
+  } on SocketException catch (_) {
+    // ----------------------------------------------------
+    // OFFLINE LOGIN FALLBACK
+    // ----------------------------------------------------
+    final local = await getOperatorFromDB(username);
+
+    if (local == null) {
+      throw AuthRepositoryException(
+        "No offline data found for this user.",
+      );
+    }
+
+    // Validate password hash
+    final hash = sha256.convert(utf8.encode(password)).toString();
+
+    if (hash != local["password_hash"]) {
+      throw AuthRepositoryException("Incorrect password (offline mode).");
+    }
+
+    // UserModel.fromJson() should handle DB model properly
+    return UserModel.fromJson(local);
+
   } catch (e) {
+    // Any other error
     throw AuthRepositoryException("Login failed. Please try again.");
   }
 }
@@ -168,6 +199,7 @@ Future<UserModel> loginCitizen({
     final userId = _prefs.getString(_userKey);
     final role = _prefs.getString(_roleKey);
     final userName = _prefs.getString(_nameKey);
+    final emp_id = _prefs.getString(_emp_idKey);
 
     if (userId != null && role != null && userName != null) {
       final token = _prefs.getString(_tokenKey);
@@ -176,6 +208,7 @@ Future<UserModel> loginCitizen({
         userName: userName,
         role: role,
         authToken: token,
+        emp_id: emp_id
       );
     }
     return null;
@@ -184,6 +217,7 @@ Future<UserModel> loginCitizen({
   Future<void> logout() async {
     await _prefs.remove(_userKey);
     await _prefs.remove(_roleKey);
+    await _prefs.remove(_emp_idKey);
     await _prefs.remove(_nameKey);
     await _prefs.remove(_tokenKey);
   }
@@ -196,6 +230,11 @@ Future<UserModel> loginCitizen({
     await _prefs.setString(_userKey, user.userId);
     await _prefs.setString(_roleKey, user.role);
     await _prefs.setString(_nameKey, user.userName);
+    if (user.emp_id != null && user.emp_id!.isNotEmpty) {
+      await _prefs.setString(_emp_idKey, user.emp_id!);
+    } else {
+      await _prefs.remove(_emp_idKey);
+    }
 
     if (user.authToken != null && user.authToken!.isNotEmpty) {
       await _prefs.setString(_tokenKey, user.authToken!);

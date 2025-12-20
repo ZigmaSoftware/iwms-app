@@ -17,6 +17,19 @@ class WasteSummary {
   final double totalNetWeight;
   final double averageWeightPerTrip;
 
+  factory WasteSummary.zero(DateTime date) {
+    final normalized = DateTime(date.year, date.month, date.day);
+    return WasteSummary(
+      date: normalized,
+      totalTrip: 0,
+      dryWeight: 0,
+      wetWeight: 0,
+      mixWeight: 0,
+      totalNetWeight: 0,
+      averageWeightPerTrip: 0,
+    );
+  }
+
   factory WasteSummary.fromJson(Map<String, dynamic> json) {
     final isoDate = json['date'] as String?;
     final parsedDate = isoDate != null ? DateTime.tryParse(isoDate) : null;

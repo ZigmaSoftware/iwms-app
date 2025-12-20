@@ -1,1 +1,1 @@
-enum WastePeriod { daily, monthly, yearly }
+enum WastePeriod { daily, monthly, total }

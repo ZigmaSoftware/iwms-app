@@ -1,166 +1,90 @@
-import 'package:animations/animations.dart';
+// ============================================================
+// PART 1: Imports, Constants, Enums, and Main Widget Classes
+// ============================================================
+
+import 'dart:convert';
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:go_router/go_router.dart';
+import 'package:animations/animations.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:motion_tab_bar/MotionTabBar.dart';
+import 'package:dio/dio.dart';
 
 import '../../../../core/di.dart';
 import '../../../../core/geofence_config.dart';
 import 'package:iwms_citizen_app/data/models/vehicle_model.dart';
 import '../../../../logic/vehicle_tracking/vehicle_bloc.dart';
 import '../../../../logic/vehicle_tracking/vehicle_event.dart';
-import '../../../../router/app_router.dart';
-import 'package:iwms_citizen_app/shared/widgets/tracking_view_shell.dart';
-import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
+import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_citizen_app/core/ors_service.dart';
+import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
 
 const Color _driverPrimary = Color(0xFF1B5E20);
 const Color _driverAccent = Color(0xFF66BB6A);
 const Duration _kHeaderTransitionDuration = Duration(milliseconds: 320);
-const Duration _kStartButtonAnimationDuration = Duration(milliseconds: 280);
-const double _kBottomNavigationHeight = 10;
-const double _kStopMarkerDiameter = 32;
+const Duration _kNavigationTransitionDuration = Duration(milliseconds: 600);
 
-enum _DriverMapThemeOption { light, standard }
-
-class _DriverMapThemeConfig {
-  const _DriverMapThemeConfig({
-    required this.label,
-    required this.urlTemplate,
-    required this.subdomains,
-    required this.attribution,
-  });
-
-  final String label;
-  final String urlTemplate;
-  final List<String> subdomains;
-  final String attribution;
-}
-
-const Map<_DriverMapThemeOption, _DriverMapThemeConfig> _driverMapThemes = {
-  _DriverMapThemeOption.light: _DriverMapThemeConfig(
-    label: 'Light',
-    urlTemplate:
-        'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
-    subdomains: ['a', 'b', 'c', 'd'],
-    attribution: '© OpenStreetMap, © CARTO',
-  ),
-  _DriverMapThemeOption.standard: _DriverMapThemeConfig(
-    label: 'Standard',
-    urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-    subdomains: ['a', 'b', 'c'],
-    attribution: '© OpenStreetMap contributors',
-  ),
-};
-
-String _formatMetricValue(double? value, String unit, {int decimals = 1}) {
-  if (value == null) return '--';
-  return '${value.toStringAsFixed(decimals)} $unit';
-}
-
-Widget _tripLiveVehicleSummary(VehicleModel? liveVehicle) {
-  if (liveVehicle == null) {
-    return const Text(
-      'Live telemetry will appear once your truck starts transmitting data.',
-      style: TextStyle(color: Colors.black54),
-    );
-  }
-
-  return Column(
-    crossAxisAlignment: CrossAxisAlignment.start,
-    children: [
-      Text(
-        liveVehicle.registrationNumber ?? 'Live vehicle',
-        style: const TextStyle(
-          fontWeight: FontWeight.w700,
-          fontSize: 16,
-        ),
-      ),
-      const SizedBox(height: 8),
-      Row(
-        children: [
-          Expanded(
-            child: _StatCard(
-              label: 'Speed',
-              value: _formatMetricValue(liveVehicle.speedKmh, 'km/h'),
-              icon: Icons.speed_rounded,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _StatCard(
-              label: 'Fuel',
-              value: _formatMetricValue(
-                liveVehicle.fuelLevel,
-                'L',
-                decimals: 0,
-              ),
-              icon: Icons.local_gas_station_rounded,
-            ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: _StatCard(
-              label: 'Distance',
-              value: _formatMetricValue(liveVehicle.distanceKm, 'km'),
-              icon: Icons.route_outlined,
-            ),
-          ),
-        ],
-      ),
-      const SizedBox(height: 6),
-      Text(
-        'Last update: ${liveVehicle.lastUpdated ?? 'N/A'}',
-        style: const TextStyle(color: Colors.black54),
-      ),
-    ],
-  );
-}
-
-enum _DriverTab { home, history, profile }
-
-class _DemoStop {
-  final String label;
-  final LatLng location;
-  final String? detail;
-
-  const _DemoStop({
-    required this.label,
-    required this.location,
-    this.detail,
-  });
-}
-
-const List<_DemoStop> _demoStops = [
-  _DemoStop(
-    label: 'Gate 2 Entry',
-    detail: 'Gamma 1 driver yard',
-    location: LatLng(28.4871, 77.5019),
-  ),
-  _DemoStop(
-    label: 'Sector 4',
-    detail: 'Collection lane',
-    location: LatLng(28.4879, 77.5031),
-  ),
-  _DemoStop(
-    label: 'Service Loop',
-    detail: 'Maintenance access point',
-    location: LatLng(28.4892, 77.5044),
-  ),
-  _DemoStop(
-    label: 'Dry Waste Depot',
-    detail: 'Holding area',
-    location: LatLng(28.4910, 77.5058),
-  ),
-  _DemoStop(
-    label: 'Gamma 2 Facility',
-    detail: 'Final delivery',
-    location: LatLng(28.4936, 77.5072),
-  ),
+const List<String> _skipReasons = [
+  'No one at home',
+  'Access blocked / gate locked',
+  'Customer requested later collection',
+  'Waste already collected',
+  'Unsafe conditions',
+  'Incorrect address',
+  'Other operational issue',
 ];
+
+enum _NavigationMode { overview, navigating }
+
+enum _CustomerStatus { pending, collected, skipped, navigating }
+
+class _DriverAssignmentStop {
+  final String assignmentId;
+  final String? wardId;
+  final String wardName;
+  final String? customerName;
+  final LatLng location;
+  final String assignmentType;
+  final String shift;
+
+  _CustomerStatus status;
+  String? skipReason;
+
+  _DriverAssignmentStop({
+    required this.assignmentId,
+    required this.wardId,
+    required this.wardName,
+    required this.location,
+    required this.assignmentType,
+    required this.shift,
+    this.customerName,
+    this.status = _CustomerStatus.pending,
+    this.skipReason,
+  });
+
+  // =====================
+  // BACKWARD COMPATIBILITY
+  // =====================
+
+  String get id => assignmentId;
+
+  String get name => (customerName != null && customerName!.trim().isNotEmpty)
+      ? customerName!
+      : wardName;
+
+  String get address => wardName; // placeholder until API adds address
+
+  String get baseAssignmentId => assignmentId.split('-').first;
+}
+
+enum _DriverTab { home, history, profile, attendance }
 
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({super.key});
@@ -172,15 +96,17 @@ class DriverHomePage extends StatefulWidget {
 class _DriverHomePageState extends State<DriverHomePage> {
   _DriverTab _activeTab = _DriverTab.home;
   final MapController _mapController = MapController();
-
-  final List<LatLng> _routePoints =
-      _demoStops.map((stop) => stop.location).toList();
+  List<_DriverAssignmentStop> _customers = [];
+  bool _loadingCustomers = true;
+  String? _customerError;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback(
-        (_) => _centerOnDriver(GammaGeofenceConfig.center));
+      (_) => _centerOnDriver(GammaGeofenceConfig.center),
+    );
+    _loadAssignmentsForDriver();
   }
 
   VehicleModel? _selectedVehicleFrom(VehicleState state) {
@@ -205,6 +131,16 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final nameFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).userName
+            : null);
+
+    final empIdFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).emp_id
+            : null);
+
     return BlocProvider(
       create: (_) => getIt<VehicleBloc>(),
       child: BlocListener<VehicleBloc, VehicleState>(
@@ -222,95 +158,82 @@ class _DriverHomePageState extends State<DriverHomePage> {
           builder: (context, state) {
             final selectedVehicle = _selectedVehicleFrom(state);
             final driverLocation = _resolveDriverLocation(selectedVehicle);
-            final origin = driverLocation;
+
             return Scaffold(
-              backgroundColor: const Color(0xFFF0F6F1),
+              backgroundColor: const Color(0xFFF7FBF8),
               body: SafeArea(
-                child: Stack(
-                  fit: StackFit.expand,
-                  clipBehavior: Clip.none,
+                child: Column(
                   children: [
-                    Column(
-                      children: [
-                        _DriverHeader(
-                          key: ValueKey<_DriverTab>(_activeTab),
-                          title: _headerTitle(_activeTab),
-                          subtitle: _headerSubtitle(_activeTab),
-                          activeTab: _activeTab,
-                          routeStops: _routePoints.length,
-                          onLogoutTapped: () => _logout(context),
-                          speed: selectedVehicle?.speedKmh,
-                          fuel: selectedVehicle?.fuelLevel,
-                          distance: selectedVehicle?.distanceKm,
-                        ),
-                        Expanded(
-                          child: PageTransitionSwitcher(
-                            duration: const Duration(milliseconds: 320),
-                            transitionBuilder: (
-                              child,
-                              animation,
-                              secondaryAnimation,
-                            ) {
-                              return SharedAxisTransition(
-                                animation: animation,
-                                secondaryAnimation: secondaryAnimation,
-                                transitionType:
-                                    SharedAxisTransitionType.horizontal,
-                                child: child,
-                              );
-                            },
-                            child: KeyedSubtree(
-                              key: ValueKey<_DriverTab>(_activeTab),
-                              child: _buildTab(_activeTab, driverLocation),
-                            ),
-                          ),
-                        ),
-                      ],
+                    AnimatedSwitcher(
+                      duration: const Duration(milliseconds: 250),
+                      child: _DriverHeader(
+                        activeTab: _activeTab,
+                        onLogoutTapped: () => _logout(context),
+                        empId: empIdFromState ?? '',
+                        driverName: nameFromState ?? 'Driver',
+                      ),
                     ),
-                    _StartButtonOverlay(
-                      visible: _activeTab == _DriverTab.home,
-                      onPressed: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(
-                            builder: (_) => _FullMapPage(
-                              origin: origin,
-                              routePoints: _routePoints,
-                              stops: _demoStops,
-                              vehicle: selectedVehicle,
-                            ),
+                    Expanded(
+                      child: PageTransitionSwitcher(
+                        duration: const Duration(milliseconds: 320),
+                        transitionBuilder:
+                            (child, animation, secondaryAnimation) {
+                          return SharedAxisTransition(
+                            animation: animation,
+                            secondaryAnimation: secondaryAnimation,
+                            transitionType: SharedAxisTransitionType.horizontal,
+                            child: child,
+                          );
+                        },
+                        child: KeyedSubtree(
+                          key: ValueKey<_DriverTab>(_activeTab),
+                          child: _buildTab(
+                            _activeTab,
+                            driverLocation,
+                            nameFromState ?? 'Driver',
+                            empIdFromState ?? '',
+                            selectedVehicle,
                           ),
-                        );
-                      },
+                        ),
+                      ),
                     ),
                   ],
                 ),
               ),
               bottomNavigationBar: SafeArea(
-                child: MotionTabBar(
-                  labels: const ['Home', 'History', 'Profile'],
-                  icons: const [
-                    Icons.home_rounded,
-                    Icons.history_rounded,
-                    Icons.person_outline_rounded,
-                  ],
-                  initialSelectedTab: _tabLabel(_activeTab),
-                  tabBarColor: Colors.white,
-                  tabSelectedColor: _driverPrimary,
-                  tabIconColor: Colors.black54,
-                  tabBarHeight: 66,
-                  tabSize: 52,
-                  tabIconSize: 24,
-                  tabIconSelectedSize: 24,
-                  onTabItemSelected: (value) {
-                    final tab = value is String
-                        ? _tabFromLabel(value)
-                        : value is int
-                            ? _tabFromIndex(value)
-                            : null;
-                    if (tab != null && tab != _activeTab) {
+                child: BottomNavigationBar(
+                  type: BottomNavigationBarType.fixed,
+                  currentIndex: _activeTab.index,
+                  selectedItemColor: _driverPrimary,
+                  unselectedItemColor: Colors.black54,
+                  selectedLabelStyle:
+                      const TextStyle(fontWeight: FontWeight.w700),
+                  unselectedLabelStyle:
+                      const TextStyle(fontWeight: FontWeight.w500),
+                  onTap: (index) {
+                    final tab = _tabFromIndex(index);
+                    if (tab != _activeTab) {
                       setState(() => _activeTab = tab);
                     }
                   },
+                  items: const [
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.home_rounded),
+                      label: 'Home',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.history_rounded),
+                      label: 'History',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person_outline_rounded),
+                      label: 'Profile',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.event_available_rounded),
+                      label: 'Attendance',
+                    ),
+                  ],
                 ),
               ),
             );
@@ -320,43 +243,282 @@ class _DriverHomePageState extends State<DriverHomePage> {
     );
   }
 
-  Widget _buildTab(_DriverTab tab, LatLng driverLocation) {
+  Future<void> _loadAssignmentsForDriver() async {
+    setState(() {
+      _loadingCustomers = true;
+      _customerError = null;
+    });
+
+    try {
+      // 🔹 GET AUTH STATE SAFELY
+      final authState = context.read<AuthBloc>().state;
+
+      if (authState is! AuthStateAuthenticated) {
+        setState(() {
+          _loadingCustomers = false;
+          _customerError = 'User not authenticated';
+        });
+        return;
+      }
+
+      final driverId = authState.userId.trim();
+
+      if (driverId.isEmpty) {
+        setState(() {
+          _loadingCustomers = false;
+          _customerError = 'Missing driver id';
+        });
+        return;
+      }
+
+      // Use plain client so invalid JWTs don't trigger 401 on open endpoint
+      final dio = getIt<Dio>();
+
+      final today = DateTime.now();
+      final dateStr =
+          "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
+
+      // 🔹 USE empId HERE
+      final resp = await dio.get(
+        "${ApiConfig.assignments}?date=$dateStr&driver_id=$driverId",
+      );
+
+      final List list =
+          resp.data is List ? resp.data : (resp.data['results'] ?? []);
+
+      final stops = <_DriverAssignmentStop>[];
+
+      // Helper to decode customer list for a ward
+      Future<void> _hydrateWardCustomers({
+        required String wardId,
+        required Map m,
+        required String assignmentId,
+        required String assignmentType,
+        required String shift,
+      }) async {
+        List wardList = [];
+
+        Future<void> _fetchWithParam(String paramKey) async {
+          final wardResp = await dio.get(
+            ApiConfig.customerList,
+            queryParameters: {paramKey: wardId},
+          );
+          final decoded = wardResp.data;
+          wardList = decoded is List
+              ? decoded
+              : (decoded is Map ? (decoded['results'] ?? []) : []);
+        }
+
+        try {
+          await _fetchWithParam('ward');
+          if (wardList.isEmpty) {
+            await _fetchWithParam('ward_id');
+          }
+        } catch (_) {
+          // ignore, fall back below
+        }
+
+        if (wardList.isEmpty) {
+          stops.add(
+            _DriverAssignmentStop(
+              assignmentId: assignmentId,
+              wardId: wardId,
+              wardName: m['ward_name']?.toString() ?? 'Ward',
+              customerName: m['customer_name'],
+              assignmentType: assignmentType,
+              shift: shift,
+              location: GammaGeofenceConfig.center,
+            ),
+          );
+          return;
+        }
+
+        for (final entry in wardList) {
+          if (entry is! Map) continue;
+          final pos = _safeLatLng(
+                entry['latitude'] ?? entry['customer_latitude'],
+                entry['longitude'] ?? entry['customer_longitude'],
+              ) ??
+              GammaGeofenceConfig.center;
+
+          final customerId =
+              (entry['unique_id'] ?? entry['customer_id'] ?? '').toString();
+          final customerName =
+              (entry['customer_name'] ?? entry['name'] ?? '').toString();
+
+          stops.add(
+            _DriverAssignmentStop(
+              assignmentId: customerId.isNotEmpty
+                  ? '$assignmentId-$customerId'
+                  : assignmentId,
+              wardId: wardId,
+              wardName: m['ward_name']?.toString() ?? 'Ward',
+              customerName: customerName.isNotEmpty ? customerName : null,
+              assignmentType: assignmentType,
+              shift: shift,
+              location: pos,
+            ),
+          );
+        }
+      }
+
+      for (final m in list) {
+        final assignmentId = (m['unique_id'] ?? '').toString();
+        final wardId = (m['ward'] ?? '').toString();
+        final assignmentType = m['assignment_type']?.toString() ?? 'primary';
+        final shift = m['shift']?.toString() ?? 'full_day';
+
+        final directPos =
+            _safeLatLng(m['customer_latitude'], m['customer_longitude']);
+
+        if (directPos != null) {
+          stops.add(
+            _DriverAssignmentStop(
+              assignmentId: assignmentId,
+              wardId: wardId.isNotEmpty ? wardId : null,
+              wardName: m['ward_name']?.toString() ?? 'Ward',
+              customerName: m['customer_name'],
+              assignmentType: assignmentType,
+              shift: shift,
+              location: directPos,
+            ),
+          );
+          continue;
+        }
+
+        // If assignment has no specific customer point, hydrate ward customers
+        if (wardId.isNotEmpty) {
+          await _hydrateWardCustomers(
+            wardId: wardId,
+            m: m,
+            assignmentId: assignmentId,
+            assignmentType: assignmentType,
+            shift: shift,
+          );
+        } else {
+          // Fallback single stop at center
+          stops.add(
+            _DriverAssignmentStop(
+              assignmentId: assignmentId,
+              wardId: null,
+              wardName: m['ward_name']?.toString() ?? 'Ward',
+              customerName: m['customer_name'],
+              assignmentType: assignmentType,
+              shift: shift,
+              location: GammaGeofenceConfig.center,
+            ),
+          );
+        }
+      }
+
+      setState(() {
+        _customers = stops;
+        _loadingCustomers = false;
+      });
+    } catch (e) {
+      setState(() {
+        _loadingCustomers = false;
+        _customerError = 'Failed to load assignments';
+      });
+    }
+  }
+
+  LatLng? _safeLatLng(dynamic latRaw, dynamic lonRaw) {
+    if (latRaw == null || lonRaw == null) return null;
+    final lat = double.tryParse(latRaw.toString());
+    final lon = double.tryParse(lonRaw.toString());
+    if (lat == null || lon == null) return null;
+    return LatLng(lat, lon);
+  }
+
+  // List<_DriverAssignmentStop> _decodeCustomerList(String body,
+  //     {bool fromAssignments = false}) {
+  //   final List<_DriverAssignmentStop> out = [];
+
+  //   try {
+  //     final decoded = jsonDecode(body);
+  //     final list = decoded is List
+  //         ? decoded
+  //         : (decoded is Map && decoded['results'] is List
+  //             ? decoded['results']
+  //             : []);
+
+  //     if (list is! List) return out;
+
+  //     for (final entry in list) {
+  //       if (entry is! Map) continue;
+  //       final map = Map<String, dynamic>.from(entry);
+
+  //       final id = (map['unique_id'] ?? map['customer_id'] ?? '').toString();
+  //       if (id.trim().isEmpty) continue;
+
+  //       final latRaw =
+  //           fromAssignments ? map['customer_latitude'] : map['latitude'];
+  //       final lonRaw =
+  //           fromAssignments ? map['customer_longitude'] : map['longitude'];
+
+  //       final position = _safeLatLng(latRaw, lonRaw);
+  //       if (position == null) continue;
+
+  //       final name = (map['customer_name'] ??
+  //               map['ward_name'] ??
+  //               map['driver_name'] ??
+  //               'Unknown')
+  //           .toString();
+
+  //       final addressParts = [
+  //         map['building_no'],
+  //         map['street'],
+  //         map['area'],
+  //         map['pincode'],
+  //       ].whereType<String>().where((v) => v.trim().isNotEmpty).toList();
+
+  //       out.add(_DriverAssignmentStop(
+  //         assignmentId: id,
+  //         wardName: name,
+  //         assignmentType: 'primary',
+  //         shift: 'morning',
+  //         location: position,
+  //       ));
+  //     }
+  //   } catch (_) {}
+
+  //   return out;
+  // }
+
+  Widget _buildTab(_DriverTab tab, LatLng driverLocation, String nameFromState,
+      String empIdFromState, VehicleModel? vehicle) {
     switch (tab) {
       case _DriverTab.home:
         return _HomeTab(
           mapController: _mapController,
           driverLocation: driverLocation,
-          routePoints: _routePoints,
           onCenter: () => _centerOnDriver(driverLocation),
-          stops: _demoStops,
+          customers: _customers,
+          loading: _loadingCustomers,
+          error: _customerError,
+          onRefresh: _loadAssignmentsForDriver,
+          onStatusChanged: _updateCustomerStatus,
         );
       case _DriverTab.history:
-        return const _HistoryTab();
+        return _HistoryTab(
+          customers: _customers,
+          loading: _loadingCustomers,
+          error: _customerError,
+          onRefresh: _loadAssignmentsForDriver,
+        );
       case _DriverTab.profile:
-        return _ProfileTab(onLogout: () => _logout(context));
-    }
-  }
-
-  String _tabLabel(_DriverTab tab) {
-    switch (tab) {
-      case _DriverTab.home:
-        return 'Home';
-      case _DriverTab.history:
-        return 'History';
-      case _DriverTab.profile:
-        return 'Profile';
-    }
-  }
-
-  _DriverTab _tabFromLabel(String label) {
-    switch (label) {
-      case 'History':
-        return _DriverTab.history;
-      case 'Profile':
-        return _DriverTab.profile;
-      case 'Home':
-      default:
-        return _DriverTab.home;
+        return _ProfileTab(
+          onLogout: () => _logout(context),
+          driverName: nameFromState,
+          empId: empIdFromState,
+          vehicle: vehicle,
+        );
+      case _DriverTab.attendance:
+        return AttendancePageDriver(
+          operatorName: nameFromState,
+          operatorCode: empIdFromState,
+        );
     }
   }
 
@@ -366,33 +528,11 @@ class _DriverHomePageState extends State<DriverHomePage> {
         return _DriverTab.history;
       case 2:
         return _DriverTab.profile;
+      case 3:
+        return _DriverTab.attendance;
       case 0:
       default:
         return _DriverTab.home;
-    }
-  }
-
-  String _headerTitle(_DriverTab tab) {
-    switch (tab) {
-      case _DriverTab.history:
-        return 'Trip history';
-      case _DriverTab.profile:
-        return 'Driver profile';
-      case _DriverTab.home:
-      default:
-        return 'Driver Console';
-    }
-  }
-
-  String _headerSubtitle(_DriverTab tab) {
-    switch (tab) {
-      case _DriverTab.history:
-        return 'Recent collection runs';
-      case _DriverTab.profile:
-        return 'Your shift, vehicle, and contact';
-      case _DriverTab.home:
-      default:
-        return 'Live stats - Keep moving safely';
     }
   }
 
@@ -401,41 +541,39 @@ class _DriverHomePageState extends State<DriverHomePage> {
     context.read<AuthBloc>().add(AuthLogoutRequested());
   }
 
+  void _updateCustomerStatus(String id, _CustomerStatus status) {
+    setState(() {
+      for (final c in _customers) {
+        if (c.assignmentId == id) {
+          c.status = status;
+        }
+      }
+    });
+  }
 }
+// ============================================================
+// PART 2: Header, Stats, and Avatar Widgets
+// ============================================================
 
 class _DriverHeader extends StatelessWidget {
   const _DriverHeader({
     super.key,
-    required this.title,
-    required this.subtitle,
     required this.activeTab,
-    required this.routeStops,
     required this.onLogoutTapped,
-    this.speed,
-    this.fuel,
-    this.distance,
+    required this.empId,
+    required this.driverName,
   });
 
-  final String title;
-  final String subtitle;
   final _DriverTab activeTab;
-  final int routeStops;
   final VoidCallback onLogoutTapped;
-  final double? speed;
-  final double? fuel;
-  final double? distance;
+  final String empId;
+  final String driverName;
 
   @override
   Widget build(BuildContext context) {
-    final bool showStats = activeTab != _DriverTab.profile;
-
-    return AnimatedContainer(
-      duration: _kHeaderTransitionDuration,
-      curve: Curves.easeInOut,
+    return Container(
       width: double.infinity,
-      padding: showStats
-          ? const EdgeInsets.fromLTRB(20, 10, 20, 10)
-          : const EdgeInsets.fromLTRB(20, 10, 20, 6),
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
       decoration: const BoxDecoration(
         gradient: LinearGradient(
           colors: [_driverPrimary, _driverAccent],
@@ -443,356 +581,44 @@ class _DriverHeader extends StatelessWidget {
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(26),
-          bottomRight: Radius.circular(26),
+          bottomLeft: Radius.circular(18),
+          bottomRight: Radius.circular(18),
         ),
         boxShadow: [
           BoxShadow(
             color: Colors.black26,
-            blurRadius: 24,
-            offset: Offset(0, 10),
+            blurRadius: 14,
+            offset: Offset(0, 6),
           ),
         ],
       ),
-      child: Stack(
+      child: Row(
         children: [
-          Positioned(
-            right: -32,
-            top: -18,
-            child: Container(
-              width: 140,
-              height: 140,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.06),
-                shape: BoxShape.circle,
-              ),
+          Text(
+            driverName,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.w800,
             ),
           ),
-          AnimatedSize(
-            duration: _kHeaderTransitionDuration,
-            curve: Curves.easeInOut,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          title,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 0.4,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          subtitle,
-                          style: const TextStyle(
-                            color: Colors.white70,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const Spacer(),
-                    IconButton(
-                      onPressed: onLogoutTapped,
-                      icon: const Icon(Icons.power_settings_new_rounded,
-                          color: Colors.white),
-                      tooltip: 'Logout',
-                    ),
-                  ],
-                ),
-                AnimatedSwitcher(
-                  duration: _kHeaderTransitionDuration,
-                  switchInCurve: Curves.easeOut,
-                  switchOutCurve: Curves.easeIn,
-                  child: _buildStatsContent(showStats),
-                ),
-              ],
+          const Spacer(),
+          if (activeTab == _DriverTab.attendance)
+            DriverAvatar(empId: empId)
+          else
+            IconButton(
+              onPressed: onLogoutTapped,
+              icon: const Icon(Icons.power_settings_new_rounded,
+                  color: Colors.white),
             ),
-          ),
         ],
       ),
     );
   }
-
-  Widget _buildStatsContent(bool showStats) {
-    if (!showStats) {
-      return const SizedBox(
-        key: ValueKey('header-no-stats'),
-        height: 0,
-      );
-    }
-
-    if (activeTab == _DriverTab.history) {
-      return _HistoryDistanceCard(
-        key: const ValueKey('header-history-distance'),
-        stops: routeStops,
-      );
-    }
-
-    return _HeaderStatsRow(
-      key: const ValueKey('header-stats-row'),
-      speed: speed,
-      fuel: fuel,
-      distance: distance,
-    );
-  }
 }
 
-class _HeaderStatsRow extends StatelessWidget {
-  const _HeaderStatsRow({
-    super.key,
-    this.speed,
-    this.fuel,
-    this.distance,
-  });
-
-  final double? speed;
-  final double? fuel;
-  final double? distance;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: Colors.white.withOpacity(0.12),
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: Colors.white.withOpacity(0.18)),
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _StatCard(
-                  label: 'Speed',
-                  value: _formatMetricValue(speed, 'km/h'),
-                  icon: Icons.speed_rounded,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _StatCard(
-                  label: 'Fuel',
-                  value: _formatMetricValue(fuel, 'L', decimals: 0),
-                  icon: Icons.local_gas_station_rounded,
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: _StatCard(
-                  label: 'Distance',
-                  value: _formatMetricValue(distance, 'km'),
-                  icon: Icons.route_outlined,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _HistoryDistanceCard extends StatelessWidget {
-  const _HistoryDistanceCard({
-    super.key,
-    required this.stops,
-  });
-
-  final int stops;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 8),
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: Colors.white,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: _driverPrimary.withOpacity(0.15)),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.08),
-                blurRadius: 18,
-                offset: const Offset(0, 8),
-              ),
-            ],
-          ),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  const Icon(Icons.route_outlined, color: _driverPrimary),
-                  const SizedBox(width: 12),
-                  const Text(
-                    'Distance overview',
-                    style: TextStyle(
-                      fontWeight: FontWeight.w700,
-                      fontSize: 16,
-                    ),
-                  ),
-                  const Spacer(),
-                  Text(
-                    '20 km',
-                    style: TextStyle(
-                      color: _driverPrimary,
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Stops scheduled: $stops',
-                style: TextStyle(
-                  color: Colors.black.withOpacity(0.7),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Expanded(
-                    child: Container(
-                      height: 6,
-                      decoration: BoxDecoration(
-                        color: _driverPrimary.withOpacity(0.12),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: FractionallySizedBox(
-                        widthFactor: 0.68,
-                        alignment: Alignment.centerLeft,
-                        child: Container(
-                          margin: const EdgeInsets.symmetric(vertical: 1),
-                          decoration: BoxDecoration(
-                            color: _driverPrimary,
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: const [
-                      Text(
-                        'ETA',
-                        style: TextStyle(
-                          color: Colors.black54,
-                          fontWeight: FontWeight.w500,
-                          fontSize: 12,
-                        ),
-                      ),
-                      Text(
-                        '02:15 PM',
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
-                        ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-class _HomeTab extends StatelessWidget {
-  const _HomeTab({
-    required this.mapController,
-    required this.driverLocation,
-    required this.routePoints,
-    required this.onCenter,
-    required this.stops,
-  });
-
-  final MapController mapController;
-  final LatLng driverLocation;
-  final List<LatLng> routePoints;
-  final VoidCallback onCenter;
-  final List<_DemoStop> stops;
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 140),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          _MapCard(
-            mapController: mapController,
-            driverLocation: driverLocation,
-            routePoints: routePoints,
-            onCenter: onCenter,
-            stops: stops,
-          ),
-          const SizedBox(height: 16),
-          _RecentHistorySection(entries: _weeklyHistory),
-        ],
-      ),
-    );
-  }
-
-}
-
-class _RecentHistorySection extends StatelessWidget {
-  const _RecentHistorySection({
-    required this.entries,
-  });
-
-  final List<_CollectionEntry> entries;
-
-  @override
-  Widget build(BuildContext context) {
-    final recent = entries.reversed.toList();
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Text(
-          'Recent collections',
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        const SizedBox(height: 10),
-        ...List.generate(recent.length, (index) {
-          final entry = recent[index];
-          return Padding(
-            padding:
-                EdgeInsets.only(bottom: index == recent.length - 1 ? 0 : 10),
-            child: _HistoryCard(entry: entry),
-          );
-        }),
-      ],
-    );
-  }
-}
-
-class _StatCard extends StatelessWidget {
-  const _StatCard({
+class _StatItem extends StatelessWidget {
+  const _StatItem({
     required this.label,
     required this.value,
     required this.icon,
@@ -804,46 +630,1415 @@ class _StatCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+    return Column(
+      children: [
+        Icon(icon, color: Colors.white70, size: 18),
+        const SizedBox(height: 4),
+        Text(
+          value,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        Text(
+          label,
+          style: const TextStyle(
+            color: Colors.white70,
+            fontSize: 11,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class DriverAvatar extends StatefulWidget {
+  final String empId;
+  const DriverAvatar({super.key, required this.empId});
+
+  @override
+  State<DriverAvatar> createState() => _DriverAvatarState();
+}
+
+class _DriverAvatarState extends State<DriverAvatar> {
+  bool hasProfile = false;
+  bool imageLoading = true;
+  String? imageName;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchEmployeeImage();
+  }
+
+  Future<void> fetchEmployeeImage() async {
+    try {
+      final url =
+          "http://10.164.86.186:8000/api/mobile/staff-profile/?staff_id_id=${widget.empId}";
+
+      final request = await HttpClient().getUrl(Uri.parse(url));
+      final response = await request.close();
+      final body = await response.transform(utf8.decoder).join();
+      final json = jsonDecode(body);
+
+      if (json["status"] == "success") {
+        setState(() {
+          imageName = json["data"]["photo"] ?? "";
+          hasProfile = imageName != null && imageName!.isNotEmpty;
+          imageLoading = false;
+        });
+      } else {
+        setState(() {
+          hasProfile = false;
+          imageLoading = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        hasProfile = false;
+        imageLoading = false;
+      });
+    }
+  }
+
+  String convertToUrl(String path) {
+    final clean = path.replaceAll("\\", "/");
+    final filename = clean.split("/").last;
+    return "http://10.164.86.186:8000/media/emp_image/$filename";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProfilePage(empId: widget.empId),
+          ),
+        );
+        fetchEmployeeImage();
+      },
+      child: CircleAvatar(
+        radius: 30,
+        backgroundColor: Colors.white,
+        backgroundImage: (hasProfile && imageName != null)
+            ? NetworkImage(convertToUrl(imageName!))
+            : null,
+        child: imageLoading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.green,
+                ),
+              )
+            : (!hasProfile)
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.person_add_alt_1,
+                          size: 26, color: Colors.green),
+                      SizedBox(height: 2),
+                      Text(
+                        "Register",
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
+                  )
+                : null,
+      ),
+    );
+  }
+}
+
+// ============================================================
+// PART 3: HomeTab Widget with Map and Navigation
+// ============================================================
+class _HomeTab extends StatefulWidget {
+  const _HomeTab({
+    required this.mapController,
+    required this.driverLocation,
+    required this.onCenter,
+    required this.customers, // ✅ DECLARED
+    required this.loading,
+    required this.error,
+    required this.onRefresh,
+    required this.onStatusChanged,
+  });
+
+  final MapController mapController;
+  final LatLng driverLocation;
+  final VoidCallback onCenter;
+  final List<_DriverAssignmentStop> customers; // ✅ ADD THIS
+  final bool loading;
+  final String? error;
+  final Future<void> Function() onRefresh;
+  final void Function(String id, _CustomerStatus status) onStatusChanged;
+
+  @override
+  State<_HomeTab> createState() => _HomeTabState();
+}
+
+class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
+  List<LatLng> _orsRoute = [];
+  double _driverBearing = 0.0;
+  List<_DriverAssignmentStop> _customers = [];
+  _NavigationMode _navMode = _NavigationMode.overview;
+  String? _activeNavigationId;
+  late AnimationController _navAnimController;
+
+  @override
+  void initState() {
+    super.initState();
+    _customers = widget.customers
+        .where((c) =>
+            c.status == _CustomerStatus.pending ||
+            c.status == _CustomerStatus.navigating)
+        .toList();
+    _navAnimController = AnimationController(
+      vsync: this,
+      duration: _kNavigationTransitionDuration,
+    );
+    _computeRoute();
+  }
+
+  @override
+  void dispose() {
+    _navAnimController.dispose();
+    super.dispose();
+  }
+
+  @override
+  void didUpdateWidget(covariant _HomeTab oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.customers != widget.customers ||
+        oldWidget.driverLocation != widget.driverLocation) {
+      _customers = widget.customers
+          .where((c) =>
+              c.status == _CustomerStatus.pending ||
+              c.status == _CustomerStatus.navigating)
+          .toList();
+      _computeRoute();
+    }
+  }
+
+  Future<void> _computeRoute() async {
+    if (_customers.isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        _orsRoute = [];
+        _driverBearing = 0.0;
+      });
+      return;
+    }
+
+    final List<List<double>> coords = [
+      [widget.driverLocation.longitude, widget.driverLocation.latitude],
+      ..._customers.map((c) => [c.location.longitude, c.location.latitude]),
+    ];
+
+    try {
+      final route = await ORSService.fetchMultiRoute(coords);
+
+      if (!mounted) return;
+
+      setState(() {
+        _orsRoute = route;
+
+        if (route.length > 1) {
+          _driverBearing = ORSService.calculateBearing(route.first, route[1]);
+        } else {
+          _driverBearing = 0.0;
+        }
+      });
+
+      if (_navMode == _NavigationMode.overview) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (!mounted) return;
+          _fitDriverAndNextCustomer();
+        });
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _orsRoute = [];
+        _driverBearing = 0.0;
+      });
+    }
+  }
+
+  void _fitDriverAndNextCustomer() {
+    if (_customers.isEmpty) return;
+
+    final nextCustomer = _customers.first;
+
+    final bounds = LatLngBounds.fromPoints([
+      widget.driverLocation,
+      nextCustomer.location,
+    ]);
+
+    widget.mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.all(80),
+      ),
+    );
+  }
+
+  void _startNavigation(String customerId) {
+    final customer = _customers.firstWhere((c) => c.id == customerId);
+
+    setState(() {
+      _activeNavigationId = customerId;
+      _navMode = _NavigationMode.navigating;
+      customer.status = _CustomerStatus.navigating;
+    });
+
+    widget.onStatusChanged(customerId, _CustomerStatus.navigating);
+    _navAnimController.forward();
+    _animateToNavigationView();
+  }
+
+  void _stopNavigation() {
+    setState(() {
+      if (_activeNavigationId != null) {
+        final customer =
+            _customers.firstWhere((c) => c.id == _activeNavigationId);
+        customer.status = _CustomerStatus.pending;
+        widget.onStatusChanged(_activeNavigationId!, _CustomerStatus.pending);
+      }
+      _activeNavigationId = null;
+      _navMode = _NavigationMode.overview;
+    });
+
+    _navAnimController.reverse();
+    _animateToOverview();
+  }
+
+  void _recenterNavigation() {
+    if (_navMode == _NavigationMode.navigating) {
+      _animateToNavigationView();
+    } else {
+      _fitDriverAndNextCustomer();
+    }
+  }
+
+  void _animateToNavigationView() {
+    if (_orsRoute.isEmpty) return;
+
+    // Position driver at bottom third of screen, facing up
+    final driverPos = _orsRoute.first;
+
+    // Calculate offset to position driver marker at bottom third
+    final screenHeight = MediaQuery.of(context).size.height;
+    final mapHeight = screenHeight - 200; // approximate map height
+    final offsetLat = 0.003; // Adjust this value based on zoom level
+
+    final targetCenter = LatLng(
+      driverPos.latitude + offsetLat,
+      driverPos.longitude,
+    );
+
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (!mounted) return;
+      widget.mapController.move(targetCenter, 17.5);
+      widget.mapController.rotate(0); // North-up orientation
+    });
+  }
+
+  void _animateToOverview() {
+    if (_customers.isEmpty) {
+      widget.mapController.move(widget.driverLocation, 15.0);
+      widget.mapController.rotate(0);
+      return;
+    }
+
+    final allPoints = [
+      widget.driverLocation,
+      ..._customers.map((c) => c.location),
+    ];
+
+    final bounds = LatLngBounds.fromPoints(allPoints);
+
+    Future.delayed(const Duration(milliseconds: 100), () {
+      if (!mounted) return;
+      widget.mapController.fitCamera(
+        CameraFit.bounds(
+          bounds: bounds,
+          padding: const EdgeInsets.all(80),
+        ),
+      );
+      widget.mapController.rotate(0);
+    });
+  }
+
+  Future<void> _reportCompletion(_DriverAssignmentStop customer) async {
+    try {
+      final dio = getIt<Dio>();
+      final assignmentId = customer.baseAssignmentId;
+
+      await dio.post(
+        '${ApiConfig.assignments}$assignmentId/complete/',
+        options: Options(headers: {'Authorization': null}),
+      );
+      await dio.post(
+        ApiConfig.collectionLogs,
+        data: {
+          'assignment': assignmentId,
+          'action': 'collection_completed',
+          'latitude': widget.driverLocation.latitude,
+          'longitude': widget.driverLocation.longitude,
+        },
+        options: Options(headers: {'Authorization': null}),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to sync completion'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Future<void> _reportSkip(
+    _DriverAssignmentStop customer,
+    String reason,
+  ) async {
+    try {
+      final dio = getIt<Dio>();
+      final assignmentId = customer.baseAssignmentId;
+
+      await dio.post(
+        '${ApiConfig.assignments}$assignmentId/skip/',
+        data: {'reason': reason},
+        options: Options(headers: {'Authorization': null}),
+      );
+
+      await dio.post(
+        ApiConfig.collectionLogs,
+        data: {
+          'assignment': assignmentId,
+          'action': 'skipped',
+          'skip_reason': reason,
+          'latitude': widget.driverLocation.latitude,
+          'longitude': widget.driverLocation.longitude,
+        },
+        options: Options(headers: {'Authorization': null}),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to sync skip'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  Color _statusColor(_CustomerStatus status) {
+    switch (status) {
+      case _CustomerStatus.collected:
+        return Colors.green;
+      case _CustomerStatus.skipped:
+        return Colors.orange;
+      case _CustomerStatus.navigating:
+        return Colors.blue;
+      case _CustomerStatus.pending:
+        return Colors.red;
+    }
+  }
+
+  String _getDistanceToCustomer(_DriverAssignmentStop customer) {
+    final distance = const Distance().as(
+      LengthUnit.Meter,
+      widget.driverLocation,
+      customer.location,
+    );
+
+    if (distance < 1000) {
+      return '${distance.round()} m';
+    } else {
+      return '${(distance / 1000).toStringAsFixed(1)} km';
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isNavigating = _navMode == _NavigationMode.navigating;
+
+    return RefreshIndicator(
+      onRefresh: widget.onRefresh,
+      child: Stack(
+        children: [
+          // Map
+          Positioned.fill(
+            child: FlutterMap(
+              mapController: widget.mapController,
+              options: MapOptions(
+                initialCenter: widget.driverLocation,
+                initialZoom: 14.5,
+                minZoom: 10,
+                maxZoom: 18,
+                interactionOptions: const InteractionOptions(
+                  flags: InteractiveFlag.all,
+                ),
+              ),
+              children: [
+                TileLayer(
+                  urlTemplate:
+                      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                  subdomains: const ['a', 'b', 'c'],
+                  userAgentPackageName: 'com.iwms.citizen.app',
+                ),
+                if (_orsRoute.isNotEmpty)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: _orsRoute,
+                        color: isNavigating
+                            ? Colors.blueAccent
+                            : Colors.blue.shade300,
+                        strokeWidth: isNavigating ? 6.0 : 4.5,
+                      ),
+                    ],
+                  ),
+                if (_customers.isNotEmpty)
+                  MarkerLayer(
+                    markers: [
+                      Marker(
+                        width: 42,
+                        height: 42,
+                        point: _orsRoute.isNotEmpty
+                            ? _orsRoute.first
+                            : widget.driverLocation,
+                        child: _DriverMarker(
+                          isActive: true,
+                          rotation: _driverBearing,
+                        ),
+                      ),
+                      ..._customers.map(
+                        (c) => Marker(
+                          width: 36,
+                          height: 36,
+                          point: c.location,
+                          child: _HouseMarker(
+                            color: _statusColor(c.status),
+                            label: c.name.substring(0, 1).toUpperCase(),
+                            pulse: c.id == _activeNavigationId,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+              ],
+            ),
+          ),
+
+          // Top controls
+          Positioned(
+            top: 12,
+            right: 12,
+            child: Column(
+              children: [
+                if (isNavigating)
+                  _MapButton(
+                    icon: Icons.my_location_rounded,
+                    onPressed: _recenterNavigation,
+                    tooltip: 'Recenter',
+                  ),
+                if (!isNavigating) ...[
+                  _MapButton(
+                    icon: Icons.my_location_rounded,
+                    onPressed: widget.onCenter,
+                    tooltip: 'Center on me',
+                  ),
+                  const SizedBox(height: 8),
+                  _MapButton(
+                    icon: Icons.refresh_rounded,
+                    onPressed: () async {
+                      await widget.onRefresh();
+                      await _computeRoute();
+                    },
+                    tooltip: 'Refresh',
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Navigation header
+          if (isNavigating && _activeNavigationId != null)
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: _NavigationHeader(
+                customer:
+                    _customers.firstWhere((c) => c.id == _activeNavigationId),
+                distance: _getDistanceToCustomer(
+                  _customers.firstWhere((c) => c.id == _activeNavigationId),
+                ),
+                onStop: _stopNavigation,
+              ),
+            ),
+
+          // Bottom customer carousel - compact design
+          Positioned(
+            left: 0,
+            right: 0,
+            bottom: 12,
+            child: AnimatedContainer(
+              duration: _kNavigationTransitionDuration,
+              curve: Curves.easeInOut,
+              height: isNavigating ? 0 : 140, // Reduced from 180 to 140
+              child: widget.loading
+                  ? const Center(child: CircularProgressIndicator())
+                  : widget.error != null
+                      ? Center(
+                          child: Text(
+                            widget.error!,
+                            style: const TextStyle(
+                              color: Colors.red,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        )
+                      : _customers.isEmpty
+                          ? const Center(
+                              child: Text(
+                                'All customers completed!',
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.green,
+                                ),
+                              ),
+                            )
+                          : ListView.separated(
+                              padding:
+                                  const EdgeInsets.symmetric(horizontal: 16),
+                              scrollDirection: Axis.horizontal,
+                              itemBuilder: (context, index) {
+                                final customer = _customers[index];
+                                return _CustomerCard(
+                                  customer: customer,
+                                  distance: _getDistanceToCustomer(customer),
+                                  onComplete: () async {
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      builder: (_) => AlertDialog(
+                                        title: const Text('Confirm Collection'),
+                                        content: const Text(
+                                          'Have you completed waste collection for this customer?',
+                                        ),
+                                        actions: [
+                                          TextButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, false),
+                                            child: const Text('Cancel'),
+                                          ),
+                                          ElevatedButton(
+                                            onPressed: () =>
+                                                Navigator.pop(context, true),
+                                            child: const Text('Confirm'),
+                                          ),
+                                        ],
+                                      ),
+                                    );
+
+                                    if (confirmed != true) return;
+
+                                    setState(() {
+                                      customer.status =
+                                          _CustomerStatus.collected;
+                                    });
+
+                                    widget.onStatusChanged(
+                                        customer.id, _CustomerStatus.collected);
+                                    await _reportCompletion(customer);
+
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Collection completed'),
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+
+                                    await _computeRoute();
+                                  },
+                                  onSkip: () async {
+                                    String? selectedReason;
+
+                                    final confirmed = await showDialog<bool>(
+                                      context: context,
+                                      barrierDismissible: false,
+                                      builder: (dialogContext) {
+                                        return StatefulBuilder(
+                                          builder: (context, setStateDialog) {
+                                            return AlertDialog(
+                                              title: const Text(
+                                                  'Skip Waste Collection'),
+                                              content: Column(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  const Text(
+                                                      'Select a reason for skipping:'),
+                                                  const SizedBox(height: 12),
+                                                  DropdownButtonFormField<
+                                                      String>(
+                                                    value: selectedReason,
+                                                    isExpanded: true,
+                                                    dropdownColor: Colors.white,
+                                                    decoration:
+                                                        const InputDecoration(
+                                                      filled: true,
+                                                      fillColor: Colors.white,
+                                                      border:
+                                                          OutlineInputBorder(),
+                                                      hintText: 'Reason',
+                                                    ),
+                                                    items: _skipReasons
+                                                        .map(
+                                                          (r) =>
+                                                              DropdownMenuItem(
+                                                            value: r,
+                                                            child: Text(
+                                                              r,
+                                                              style: const TextStyle(
+                                                                  color: Colors
+                                                                      .black),
+                                                            ),
+                                                          ),
+                                                        )
+                                                        .toList(),
+                                                    onChanged: (val) {
+                                                      setStateDialog(() {
+                                                        selectedReason = val;
+                                                      });
+                                                    },
+                                                  ),
+                                                ],
+                                              ),
+                                              actions: [
+                                                TextButton(
+                                                  onPressed: () =>
+                                                      Navigator.pop(
+                                                          dialogContext, false),
+                                                  child: const Text('Cancel'),
+                                                ),
+                                                ElevatedButton(
+                                                  onPressed: selectedReason ==
+                                                          null
+                                                      ? null
+                                                      : () => Navigator.pop(
+                                                          dialogContext, true),
+                                                  child: const Text('Skip'),
+                                                ),
+                                              ],
+                                            );
+                                          },
+                                        );
+                                      },
+                                    );
+
+                                    if (confirmed != true ||
+                                        selectedReason == null) return;
+
+                                    setState(() {
+                                      customer.status = _CustomerStatus.skipped;
+                                      customer.skipReason = selectedReason;
+                                    });
+
+                                    widget.onStatusChanged(
+                                        customer.id, _CustomerStatus.skipped);
+                                    await _reportSkip(
+                                        customer, selectedReason!);
+
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context)
+                                          .showSnackBar(
+                                        const SnackBar(
+                                          content: Text('Skipped'),
+                                          duration: Duration(seconds: 2),
+                                        ),
+                                      );
+                                    }
+
+                                    await _computeRoute();
+                                  },
+                                  onStart: () => _startNavigation(customer.id),
+                                );
+                              },
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 10),
+                              itemCount: _customers.length,
+                            ),
+            ),
           ),
         ],
-        border: Border.all(color: _driverPrimary.withOpacity(0.08)),
+      ),
+    );
+  }
+}
+// ============================================================
+// PART 4: NavigationHeader, Cards, History, Profile, and Markers
+// ============================================================
+
+class _NavigationHeader extends StatelessWidget {
+  const _NavigationHeader({
+    required this.customer,
+    required this.distance,
+    required this.onStop,
+  });
+
+  final _DriverAssignmentStop customer;
+  final String distance;
+  final VoidCallback onStop;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.all(12),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(Icons.navigation_rounded,
+                    color: Colors.blue.shade700, size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      distance,
+                      style: TextStyle(
+                        fontSize: 24,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.blue.shade700,
+                      ),
+                    ),
+                    Text(
+                      customer.name,
+                      style: const TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: Colors.black87,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                onPressed: onStop,
+                icon: const Icon(Icons.close_rounded),
+                tooltip: 'Stop navigation',
+                style: IconButton.styleFrom(
+                  backgroundColor: Colors.grey.shade100,
+                ),
+              ),
+            ],
+          ),
+          if (customer.address.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Icon(Icons.location_on_outlined,
+                    size: 16, color: Colors.grey.shade600),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: Text(
+                    customer.address,
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _CustomerCard extends StatelessWidget {
+  const _CustomerCard({
+    required this.customer,
+    required this.distance,
+    required this.onComplete,
+    required this.onSkip,
+    required this.onStart,
+  });
+
+  final _DriverAssignmentStop customer;
+  final String distance;
+  final VoidCallback onComplete;
+  final VoidCallback onSkip;
+  final VoidCallback onStart;
+
+  Color get _statusColor {
+    switch (customer.status) {
+      case _CustomerStatus.collected:
+        return Colors.green;
+      case _CustomerStatus.skipped:
+        return Colors.orange;
+      case _CustomerStatus.navigating:
+        return Colors.blue;
+      case _CustomerStatus.pending:
+      default:
+        return Colors.red;
+    }
+  }
+
+  Color get _assignmentBg {
+    switch (customer.assignmentType.toLowerCase()) {
+      case 'emergency':
+        return Colors.red.shade100;
+      case 'temporary':
+        return Colors.orange.shade100;
+      default:
+        return Colors.green.shade100;
+    }
+  }
+
+  Color get _assignmentFg {
+    switch (customer.assignmentType.toLowerCase()) {
+      case 'emergency':
+        return Colors.red.shade700;
+      case 'temporary':
+        return Colors.orange.shade700;
+      default:
+        return Colors.green.shade700;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = customer.customerName?.trim().isNotEmpty == true
+        ? customer.customerName!
+        : customer.wardName;
+
+    return SizedBox(
+      width: 240,
+      child: Card(
+        elevation: 6,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(10),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ================= HEADER =================
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  CircleAvatar(
+                    radius: 16,
+                    backgroundColor: _statusColor.withOpacity(0.15),
+                    child: Text(
+                      displayName[0].toUpperCase(),
+                      style: TextStyle(
+                        color: _statusColor,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 13,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          displayName,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w800,
+                            fontSize: 13,
+                          ),
+                        ),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Icon(
+                              Icons.near_me_rounded,
+                              size: 11,
+                              color: Colors.grey.shade600,
+                            ),
+                            const SizedBox(width: 3),
+                            Text(
+                              distance,
+                              style: TextStyle(
+                                color: Colors.grey.shade600,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ===== ASSIGNMENT TYPE BADGE =====
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: _assignmentBg,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      customer.assignmentType.toUpperCase(),
+                      style: TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        color: _assignmentFg,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 10),
+
+              // ================= ACTION BUTTONS =================
+              Row(
+                children: [
+                  Expanded(
+                    child: SizedBox(
+                      height: 32,
+                      child: ElevatedButton(
+                        onPressed: customer.status == _CustomerStatus.collected
+                            ? null
+                            : onComplete,
+                        style: ElevatedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          backgroundColor: Colors.green.shade700,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Complete',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: SizedBox(
+                      height: 32,
+                      child: OutlinedButton(
+                        onPressed: customer.status == _CustomerStatus.skipped
+                            ? null
+                            : onSkip,
+                        style: OutlinedButton.styleFrom(
+                          padding: EdgeInsets.zero,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        child: const Text(
+                          'Skip',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              const SizedBox(height: 8),
+
+              // ================= NAVIGATE =================
+              SizedBox(
+                width: double.infinity,
+                height: 32,
+                child: ElevatedButton.icon(
+                  onPressed: customer.status == _CustomerStatus.navigating
+                      ? null
+                      : onStart,
+                  icon: const Icon(Icons.navigation_rounded, size: 13),
+                  label: const Text(
+                    'Navigate',
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  style: ElevatedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    backgroundColor: Colors.blue.shade700,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _HistoryTab extends StatelessWidget {
+  const _HistoryTab({
+    required this.customers,
+    required this.loading,
+    required this.error,
+    required this.onRefresh,
+  });
+
+  final List<_DriverAssignmentStop> customers;
+  final bool loading;
+  final String? error;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final completedCustomers = customers
+        .where((c) =>
+            c.status == _CustomerStatus.collected ||
+            c.status == _CustomerStatus.skipped)
+        .toList();
+
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Collection History',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                decoration: BoxDecoration(
+                  color: _driverPrimary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '${completedCustomers.length} completed',
+                  style: const TextStyle(
+                    color: _driverPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 12,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          if (loading)
+            const Center(child: CircularProgressIndicator())
+          else if (error != null)
+            Center(
+              child: Text(error!, style: const TextStyle(color: Colors.red)),
+            )
+          else if (completedCustomers.isEmpty)
+            Center(
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.history_rounded,
+                      size: 64, color: Colors.grey.shade300),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No collection history yet',
+                    style: TextStyle(
+                      fontSize: 16,
+                      color: Colors.grey.shade600,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
+            )
+          else
+            ...completedCustomers.map((c) {
+              final isCollected = c.status == _CustomerStatus.collected;
+              final color = isCollected ? Colors.green : Colors.orange;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: color, width: 1.5),
+                  color: color.withValues(alpha: 0.08),
+                ),
+                child: ListTile(
+                  leading: CircleAvatar(
+                    backgroundColor: color.withValues(alpha: 0.2),
+                    child: Icon(
+                      isCollected ? Icons.check_circle : Icons.warning_rounded,
+                      color: color,
+                    ),
+                  ),
+                  title: Text(
+                    c.name,
+                    style: const TextStyle(fontWeight: FontWeight.w700),
+                  ),
+                  subtitle: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (c.address.isNotEmpty) Text(c.address),
+                      if (c.status == _CustomerStatus.skipped &&
+                          c.skipReason != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4),
+                          child: Text(
+                            'Reason: ${c.skipReason}',
+                            style: TextStyle(
+                              color: color,
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                  trailing: Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: color.withValues(alpha: 0.2),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      isCollected ? 'Collected' : 'Skipped',
+                      style: TextStyle(
+                        color: color,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }),
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileTab extends StatelessWidget {
+  const _ProfileTab({
+    required this.onLogout,
+    required this.driverName,
+    required this.empId,
+    required this.vehicle,
+  });
+
+  final VoidCallback onLogout;
+  final String driverName;
+  final String empId;
+  final VehicleModel? vehicle;
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16),
+      child: Column(
+        children: [
+          // Profile Header
           Container(
-            padding: const EdgeInsets.all(6),
+            padding: const EdgeInsets.all(20),
             decoration: BoxDecoration(
-              color: _driverPrimary.withOpacity(0.08),
-              shape: BoxShape.circle,
+              gradient: const LinearGradient(
+                colors: [_driverPrimary, _driverAccent],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(20),
             ),
-            child: Icon(icon, color: _driverPrimary, size: 18),
-          ),
-          const SizedBox(height: 10),
-          Text(
-            label,
-            style: TextStyle(
-              color: Colors.black.withOpacity(0.6),
-              fontSize: 12,
+            child: Column(
+              children: [
+                const CircleAvatar(
+                  radius: 50,
+                  backgroundColor: Colors.white,
+                  child: Icon(Icons.person, size: 50, color: _driverPrimary),
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  driverName,
+                  style: const TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w800,
+                    color: Colors.white,
+                  ),
+                ),
+                Text(
+                  'Employee ID: $empId',
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.white70,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 6),
-          Text(
-            value,
-            style: const TextStyle(
-              color: _driverPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
+
+          const SizedBox(height: 20),
+
+          // Vehicle Information
+          if (vehicle != null) ...[
+            _ProfileSection(
+              title: 'Vehicle Information',
+              icon: Icons.local_shipping_rounded,
+              children: [
+                _ProfileItem(
+                  label: 'Vehicle Number',
+                  value: vehicle!.vehicleNumber ?? 'N/A',
+                  icon: Icons.confirmation_number_outlined,
+                ),
+                _ProfileItem(
+                  label: 'Vehicle Type',
+                  value: vehicle!.vehicleType ?? 'N/A',
+                  icon: Icons.category_outlined,
+                ),
+                _ProfileItem(
+                  label: 'Status',
+                  value: vehicle!.status ?? 'N/A',
+                  icon: Icons.circle,
+                  valueColor: (vehicle!.status ?? '').toLowerCase() == 'running'
+                      ? Colors.green
+                      : Colors.orange,
+                ),
+                _ProfileItem(
+                  label: 'Driver Name',
+                  value: vehicle!.driverName ?? 'N/A',
+                  icon: Icons.person_outline,
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Work Information
+          _ProfileSection(
+            title: 'Work Information',
+            icon: Icons.work_outline_rounded,
+            children: [
+              _ProfileItem(
+                label: 'Role',
+                value: 'Waste Collection Driver',
+                icon: Icons.badge_outlined,
+              ),
+              _ProfileItem(
+                label: 'Department',
+                value: 'Waste Management',
+                icon: Icons.business_outlined,
+              ),
+              _ProfileItem(
+                label: 'Shift',
+                value: 'Morning (6:00 AM - 2:00 PM)',
+                icon: Icons.access_time_outlined,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Contact Information
+          _ProfileSection(
+            title: 'Contact Information',
+            icon: Icons.contact_phone_outlined,
+            children: [
+              _ProfileItem(
+                label: 'Phone',
+                value: '+91 XXXXX XXXXX',
+                icon: Icons.phone_outlined,
+              ),
+              _ProfileItem(
+                label: 'Emergency Contact',
+                value: '1800-XXX-XXXX',
+                icon: Icons.emergency_outlined,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 24),
+
+          // Logout Button
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              onPressed: onLogout,
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text(
+                'Logout',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
+              ),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade600,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
             ),
           ),
         ],
@@ -852,1202 +2047,183 @@ class _StatCard extends StatelessWidget {
   }
 }
 
-class _MapCard extends StatelessWidget {
-  const _MapCard({
-    required this.mapController,
-    required this.driverLocation,
-    required this.routePoints,
-    required this.onCenter,
-    required this.stops,
+class _ProfileSection extends StatelessWidget {
+  const _ProfileSection({
+    required this.title,
+    required this.icon,
+    required this.children,
   });
 
-  final MapController mapController;
-  final LatLng driverLocation;
-  final List<LatLng> routePoints;
-  final VoidCallback onCenter;
-  final List<_DemoStop> stops;
+  final String title;
+  final IconData icon;
+  final List<Widget> children;
 
   @override
   Widget build(BuildContext context) {
-    final routeLinePoints = <LatLng>[driverLocation, ...routePoints];
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: _driverPrimary.withOpacity(0.25), width: 1.2),
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 18,
-            offset: const Offset(0, 10),
+            color: Colors.black.withValues(alpha: 0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(18),
-        child: Container(
-          color: Colors.white,
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Stack(
-                children: [
-                  SizedBox(
-                    height: 260,
-                    child: FlutterMap(
-                      mapController: mapController,
-                      options: MapOptions(
-                        initialCenter: driverLocation,
-                        initialZoom: 14.5,
-                        minZoom: 10,
-                        maxZoom: 18,
-                        interactionOptions: const InteractionOptions(
-                          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
-                        ),
-                      ),
-                      children: [
-                        TileLayer(
-                          urlTemplate:
-                              'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                          subdomains: const ['a', 'b', 'c'],
-                          userAgentPackageName: 'com.iwms.citizen.app',
-                        ),
-                        PolylineLayer(
-                          polylines: [
-                            Polyline(
-                              points: routeLinePoints,
-                              color: _driverPrimary.withOpacity(0.7),
-                              strokeWidth: 4,
-                            ),
-                          ],
-                        ),
-                        MarkerLayer(
-                          markers: [
-                            Marker(
-                              width: 42,
-                              height: 42,
-                              point: driverLocation,
-                              child: _DriverMarker(isActive: true),
-                            ),
-                            ...stops.asMap().entries.map((entry) {
-                              final idx = entry.key;
-                              final stop = entry.value;
-                              return Marker(
-                                width: _kStopMarkerDiameter,
-                                height: _kStopMarkerDiameter,
-                                point: stop.location,
-                                child: _StopMarker(
-                                  index: idx + 1,
-                                  label: stop.label,
-                                  isDestination: idx == stops.length - 1,
-                                ),
-                              );
-                            }),
-                          ],
-                        ),
-                      ],
-                    ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Row(
+              children: [
+                Icon(icon, color: _driverPrimary, size: 24),
+                const SizedBox(width: 8),
+                Text(
+                  title,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    color: _driverPrimary,
                   ),
-                  Positioned(
-                    top: 12,
-                    right: 12,
-                    child: Column(
-                      children: [
-                        _CircleIconButton(
-                          icon: Icons.gps_fixed_rounded,
-                          onPressed: onCenter,
-                        ),
-                        const SizedBox(height: 10),
-                        _CircleIconButton(
-                          icon: Icons.zoom_in_rounded,
-                          onPressed: () {
-                            final zoom = mapController.camera.zoom + 0.6;
-                            mapController.move(
-                                mapController.camera.center, zoom);
-                          },
-                        ),
-                        const SizedBox(height: 10),
-                        _CircleIconButton(
-                          icon: Icons.zoom_out_rounded,
-                          onPressed: () {
-                            final zoom = mapController.camera.zoom - 0.6;
-                            mapController.move(
-                                mapController.camera.center, zoom);
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-              Padding(
-                padding: const EdgeInsets.fromLTRB(16, 12, 16, 16),
-                child: _NextStopSummary(
-                  stop: stops.isNotEmpty ? stops.first : null,
-                  remainingStops: stops.isNotEmpty ? stops.length - 1 : 0,
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
-        ),
+          const Divider(height: 1),
+          ...children,
+        ],
+      ),
+    );
+  }
+}
+
+class _ProfileItem extends StatelessWidget {
+  const _ProfileItem({
+    required this.label,
+    required this.value,
+    required this.icon,
+    this.valueColor,
+  });
+
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color? valueColor;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      child: Row(
+        children: [
+          Icon(icon, size: 20, color: Colors.grey.shade600),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w700,
+                    color: valueColor ?? Colors.black87,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
 class _DriverMarker extends StatelessWidget {
-  const _DriverMarker({required this.isActive});
-
   final bool isActive;
+  final double rotation;
 
-  @override
-  Widget build(BuildContext context) {
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 240),
-      decoration: BoxDecoration(
-        color: isActive ? _driverPrimary : Colors.white,
-        border: Border.all(
-          color: isActive ? Colors.white : _driverPrimary.withOpacity(0.6),
-          width: 2,
-        ),
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.15),
-            blurRadius: 14,
-            offset: const Offset(0, 8),
-          ),
-        ],
-      ),
-      child: Icon(
-        isActive ? Icons.navigation_rounded : Icons.location_on_outlined,
-        color: isActive ? Colors.white : _driverPrimary,
-        size: isActive ? 20 : 18,
-      ),
-    );
-  }
-}
-
-class _NextStopSummary extends StatelessWidget {
-  const _NextStopSummary({
-    required this.stop,
-    required this.remainingStops,
+  const _DriverMarker({
+    required this.isActive,
+    required this.rotation,
   });
 
-  final _DemoStop? stop;
-  final int remainingStops;
+  @override
+  Widget build(BuildContext context) {
+    return const Icon(
+      Icons.navigation_rounded,
+      size: 38,
+      color: Colors.deepOrange,
+    );
+  }
+}
+
+class _HouseMarker extends StatelessWidget {
+  const _HouseMarker({
+    required this.color,
+    required this.label,
+    this.pulse = false,
+  });
+
+  final Color color;
+  final String label;
+  final bool pulse;
 
   @override
   Widget build(BuildContext context) {
-    if (stop == null) {
-      return Container(
-        padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: _driverPrimary.withOpacity(0.1)),
-        ),
-        child: const Center(
-          child: Text(
-            'No route stops available',
-            style: TextStyle(color: Colors.black54),
-          ),
-        ),
-      );
-    }
-
-    final statusText =
-        remainingStops <= 0 ? 'Final stop' : '$remainingStops stops left';
-
     return Container(
-      padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
       decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: _driverPrimary.withOpacity(0.1)),
+        color: color.withValues(alpha: 0.2),
+        shape: BoxShape.circle,
+        border: Border.all(color: color, width: 2),
       ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: _driverAccent.withOpacity(0.2),
-            child: Icon(Icons.navigation_rounded, color: _driverAccent),
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                const Text(
-                  'Next stop',
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-                ),
-                Text(
-                  stop!.label,
-                  style: const TextStyle(
-                      fontSize: 16, fontWeight: FontWeight.w700),
-                ),
-                if (stop!.detail != null)
-                  Text(
-                    stop!.detail!,
-                    style: const TextStyle(color: Colors.black54, fontSize: 12),
-                  ),
-              ],
-            ),
-          ),
-          Text(
-            statusText,
-            style: const TextStyle(
-                color: Colors.black54, fontWeight: FontWeight.w600),
-          ),
-        ],
+      alignment: Alignment.center,
+      child: Text(
+        label,
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w800,
+          fontSize: 12,
+        ),
       ),
     );
   }
 }
 
-class _CircleIconButton extends StatelessWidget {
-  const _CircleIconButton({
+class _MapButton extends StatelessWidget {
+  const _MapButton({
     required this.icon,
     required this.onPressed,
+    required this.tooltip,
   });
 
   final IconData icon;
   final VoidCallback onPressed;
+  final String tooltip;
 
   @override
   Widget build(BuildContext context) {
     return Material(
       color: Colors.white,
       shape: const CircleBorder(),
-      elevation: 3,
-      child: InkWell(
-        onTap: onPressed,
-        customBorder: const CircleBorder(),
-        child: SizedBox(
-          width: 40,
-          height: 40,
-          child: Icon(icon, color: _driverPrimary, size: 20),
-        ),
+      elevation: 4,
+      child: IconButton(
+        icon: Icon(icon, color: _driverPrimary),
+        onPressed: onPressed,
+        tooltip: tooltip,
       ),
-    );
-  }
-}
-
-class _StopMarker extends StatelessWidget {
-  const _StopMarker({
-    required this.index,
-    required this.label,
-    required this.isDestination,
-  });
-
-  final int index;
-  final String label;
-  final bool isDestination;
-
-  @override
-  Widget build(BuildContext context) {
-    final color = isDestination ? _driverAccent : _driverPrimary;
-    return Tooltip(
-      message: label,
-      child: Container(
-        width: _kStopMarkerDiameter,
-        height: _kStopMarkerDiameter,
-        decoration: BoxDecoration(
-          color: color,
-          shape: BoxShape.circle,
-          border: Border.all(color: Colors.white, width: 2),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.15),
-              blurRadius: 10,
-              offset: const Offset(0, 4),
-            ),
-          ],
-        ),
-        child: Center(
-          child: Text(
-            '$index',
-            style: const TextStyle(
-                color: Colors.white, fontWeight: FontWeight.bold),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _StopDropdown extends StatelessWidget {
-  const _StopDropdown({
-    required this.stops,
-  });
-
-  final List<_DemoStop> stops;
-
-  @override
-  Widget build(BuildContext context) {
-    if (stops.isEmpty) {
-      return const SizedBox.shrink();
-    }
-
-    return Card(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-      elevation: 2,
-      child: ExpansionTile(
-        title: const Text('Route stops'),
-        subtitle: Text('${stops.length} stops'),
-        leading: const Icon(Icons.list_alt_rounded),
-        childrenPadding: const EdgeInsets.symmetric(vertical: 4),
-        children: stops.asMap().entries.map((entry) {
-          final stop = entry.value;
-          final isDestination = entry.key == stops.length - 1;
-          return ListTile(
-            dense: true,
-            leading: CircleAvatar(
-              radius: 16,
-              backgroundColor: isDestination ? _driverAccent : _driverPrimary,
-              child: Text(
-                '${entry.key + 1}',
-                style: const TextStyle(
-                    color: Colors.white, fontWeight: FontWeight.w700),
-              ),
-            ),
-            title: Text(
-              stop.label,
-              style: const TextStyle(fontWeight: FontWeight.w600),
-            ),
-            subtitle: stop.detail != null ? Text(stop.detail!) : null,
-            trailing: Icon(
-              isDestination ? Icons.flag_rounded : Icons.location_on_rounded,
-              color: isDestination ? _driverAccent : Colors.black38,
-              size: 18,
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _StartButtonOverlay extends StatelessWidget {
-  const _StartButtonOverlay({
-    required this.visible,
-    required this.onPressed,
-  });
-
-  final bool visible;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned(
-      right: 16,
-      bottom: _kBottomNavigationHeight,
-      child: AnimatedSlide(
-        duration: _kStartButtonAnimationDuration,
-        curve: Curves.easeInOut,
-        offset: visible ? Offset.zero : const Offset(0, 0.4),
-        child: AnimatedOpacity(
-          duration: _kStartButtonAnimationDuration,
-          opacity: visible ? 1 : 0,
-          child: IgnorePointer(
-            ignoring: !visible,
-            child: ElevatedButton.icon(
-              onPressed: onPressed,
-              icon: const Icon(Icons.play_arrow_rounded, color: Colors.white),
-              label: const Text(
-                'Start',
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _driverPrimary,
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                elevation: 8,
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FullMapPage extends StatefulWidget {
-  const _FullMapPage({
-    required this.origin,
-    required this.routePoints,
-    required this.stops,
-    this.vehicle,
-  });
-
-  final LatLng origin;
-  final List<LatLng> routePoints;
-  final List<_DemoStop> stops;
-  final VehicleModel? vehicle;
-
-  @override
-  State<_FullMapPage> createState() => _FullMapPageState();
-}
-
-class _FullMapPageState extends State<_FullMapPage> {
-  final MapController _mapController = MapController();
-  _DriverMapThemeOption _selectedTheme = _DriverMapThemeOption.light;
-
-  void _setTheme(_DriverMapThemeOption option) {
-    if (_selectedTheme == option) return;
-    setState(() => _selectedTheme = option);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final routeLinePoints = <LatLng>[widget.origin, ...widget.routePoints];
-    final liveVehicle = widget.vehicle;
-    final nextStop = widget.stops.isNotEmpty ? widget.stops.first : null;
-    final remainingStops =
-        widget.stops.isNotEmpty ? widget.stops.length - 1 : 0;
-    final size = MediaQuery.of(context).size;
-    final headerHeight = size.height * 0.24;
-    final headerStatusContent = nextStop != null
-        ? _DriverHeaderNextStop(stop: nextStop, remainingStops: remainingStops)
-        : null;
-    final headline = widget.stops.isNotEmpty
-        ? 'Heading to ${widget.stops.last.label}'
-        : 'Trip tracking';
-    final statusSecondary =
-        '${widget.stops.length} stops | ${widget.routePoints.isNotEmpty ? widget.routePoints.length : 0} legs';
-    final themeConfig = _driverMapThemes[_selectedTheme]!;
-
-    return Scaffold(
-      backgroundColor: const Color(0xFFF4F6F8),
-      body: SafeArea(
-        child: Column(
-          children: [
-            SizedBox(
-              height: headerHeight,
-              width: double.infinity,
-              child: TrackingHeroHeader(
-                contextLabel: liveVehicle?.registrationNumber ?? 'Trip tracking',
-                headline: headline,
-                statusPrimary:
-                    liveVehicle?.lastUpdated ?? 'Awaiting telemetry update',
-                statusSecondary: statusSecondary,
-                statusContent: headerStatusContent,
-                onBack: () => Navigator.of(context).maybePop(),
-                onRefresh: () => _mapController.move(widget.origin, 15),
-              ),
-            ),
-            const SizedBox(height: 4),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(32),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.07),
-                        blurRadius: 24,
-                        offset: const Offset(0, 12),
-                      ),
-                    ],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(32),
-                    child: Stack(
-                      children: [
-                        Positioned.fill(
-                          child: FlutterMap(
-                            mapController: _mapController,
-                            options: MapOptions(
-                              initialCenter: widget.origin,
-                              initialZoom: 15,
-                              minZoom: 10,
-                              maxZoom: 18,
-                              interactionOptions: const InteractionOptions(
-                                flags: InteractiveFlag.all &
-                                    ~InteractiveFlag.rotate,
-                              ),
-                            ),
-                            children: [
-                              TileLayer(
-                                urlTemplate: themeConfig.urlTemplate,
-                                subdomains: themeConfig.subdomains,
-                                userAgentPackageName: 'com.iwms.citizen.app',
-                              ),
-                              if (widget.routePoints.isNotEmpty)
-                                PolylineLayer(
-                                  polylines: [
-                                    Polyline(
-                                      points: routeLinePoints,
-                                      color: _driverPrimary.withOpacity(0.8),
-                                      strokeWidth: 4.5,
-                                    ),
-                                  ],
-                                ),
-                              MarkerLayer(
-                                markers: [
-                                  Marker(
-                                    width: 44,
-                                    height: 44,
-                                    point: widget.origin,
-                                    child:
-                                        const _DriverMarker(isActive: true),
-                                  ),
-                                  ...widget.stops.asMap().entries.map((entry) {
-                                    final idx = entry.key;
-                                    final stop = entry.value;
-                                    return Marker(
-                                      width: _kStopMarkerDiameter,
-                                      height: _kStopMarkerDiameter,
-                                      point: stop.location,
-                                      child: _StopMarker(
-                                        index: idx + 1,
-                                        label: stop.label,
-                                        isDestination:
-                                            idx == widget.stops.length - 1,
-                                      ),
-                                    );
-                                  }),
-                                ],
-                              ),
-                              RichAttributionWidget(
-                                alignment: AttributionAlignment.bottomRight,
-                                attributions: [
-                                  TextSourceAttribution(
-                                    themeConfig.attribution,
-                                    onTap: () {},
-                                  ),
-                                ],
-                              ),
-                            ],
-                          ),
-                        ),
-                        Positioned(
-                          left: 16,
-                          bottom: 140,
-                          child: _DriverMapStyleSelector(
-                            selected: _selectedTheme,
-                            onSelected: _setTheme,
-                          ),
-                        ),
-                        DraggableScrollableSheet(
-                          initialChildSize: 0.24,
-                          minChildSize: 0.18,
-                          maxChildSize: 0.78,
-                          builder: (context, scrollController) {
-                            return Container(
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: const BorderRadius.only(
-                                  topLeft: Radius.circular(28),
-                                  topRight: Radius.circular(28),
-                                ),
-                                boxShadow: [
-                                  BoxShadow(
-                                    color: Colors.black.withOpacity(0.15),
-                                    blurRadius: 20,
-                                    offset: const Offset(0, -6),
-                                  ),
-                                ],
-                              ),
-                              child: SafeArea(
-                                top: false,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 20, vertical: 16),
-                                  child: ListView(
-                                    controller: scrollController,
-                                    children: [
-                                      Center(
-                                        child: Container(
-                                          width: 42,
-                                          height: 4,
-                                          decoration: BoxDecoration(
-                                            color:
-                                                Colors.black.withOpacity(0.2),
-                                            borderRadius:
-                                                BorderRadius.circular(2),
-                                          ),
-                                        ),
-                                      ),
-                                      const SizedBox(height: 12),
-                                      const Text(
-                                        'Route overview',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w800,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Row(
-                                        children: [
-                                          const Icon(Icons.route_rounded,
-                                              color: _driverPrimary),
-                                          const SizedBox(width: 8),
-                                          Expanded(
-                                            child: Text(
-                                              '${widget.routePoints.length} scheduled stops -> ${widget.routePoints.isNotEmpty ? widget.routePoints.length - 1 : 0} legs',
-                                              style: const TextStyle(
-                                                  fontWeight: FontWeight.w600),
-                                              maxLines: 1,
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ),
-                                          const SizedBox(width: 8),
-                                          TextButton.icon(
-                                            onPressed: () =>
-                                                _mapController.move(
-                                                    widget.origin,
-                                                    _mapController
-                                                        .camera.zoom),
-                                            icon: const Icon(
-                                              Icons.center_focus_strong_rounded,
-                                              color: _driverPrimary,
-                                            ),
-                                            label: const Text(
-                                              'Re-center',
-                                              style: TextStyle(
-                                                  color: _driverPrimary),
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                      const SizedBox(height: 16),
-                                      _tripLiveVehicleSummary(liveVehicle),
-                                      const SizedBox(height: 12),
-                                      const Text(
-                                        'Upcoming stops',
-                                        style: TextStyle(
-                                          fontWeight: FontWeight.w700,
-                                          fontSize: 15,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 8),
-                _StopDropdown(stops: widget.stops),
-                                    ],
-                                  ),
-                                ),
-                              ),
-                            );
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(height: 16),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-const List<_CollectionEntry> _weeklyHistory = [
-  _CollectionEntry(
-      vehicleId: 'GJ13WY4422', dryKg: 50, wetKg: 150, totalKg: 200),
-  _CollectionEntry(
-      vehicleId: 'GJ10Q35454', dryKg: 100, wetKg: 100, totalKg: 200),
-  _CollectionEntry(
-      vehicleId: 'GJ23KJ0000', dryKg: 120, wetKg: 80, totalKg: 200),
-  _CollectionEntry(
-      vehicleId: 'GJ02MN2345', dryKg: 70, wetKg: 130, totalKg: 200),
-  _CollectionEntry(
-      vehicleId: 'GJ05HB6756', dryKg: 60, wetKg: 140, totalKg: 200),
-];
-
-class _HistoryTab extends StatelessWidget {
-  const _HistoryTab();
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      itemCount: _weeklyHistory.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 10),
-      itemBuilder: (context, index) {
-        final entry = _weeklyHistory[index];
-        return _HistoryCard(entry: entry);
-      },
-    );
-  }
-}
-
-class _DriverHeaderNextStop extends StatelessWidget {
-  const _DriverHeaderNextStop({
-    required this.stop,
-    required this.remainingStops,
-  });
-
-  final _DemoStop stop;
-  final int remainingStops;
-
-  @override
-  Widget build(BuildContext context) {
-    final statusText = remainingStops <= 0
-        ? 'Final stop'
-        : remainingStops == 1
-            ? '1 stop left'
-            : '$remainingStops stops left';
-
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        return ConstrainedBox(
-          constraints: BoxConstraints(maxWidth: constraints.maxWidth),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.15),
-              borderRadius: BorderRadius.circular(36),
-              border: Border.all(color: Colors.white.withValues(alpha: 0.22)),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.max,
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(6),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withValues(alpha: 0.2),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.navigation_rounded,
-                      color: Colors.white, size: 16),
-                ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        'Next stop',
-                        style: TextStyle(
-                          color: Colors.white.withValues(alpha: 0.85),
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.3,
-                        ),
-                      ),
-                      Text(
-                        stop.label,
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      if (stop.detail != null)
-                        Text(
-                          stop.detail!,
-                          style: TextStyle(
-                            color: Colors.white.withValues(alpha: 0.8),
-                            fontSize: 12,
-                          ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                    ],
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Flexible(
-                  child: Align(
-                    alignment: Alignment.centerRight,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 10, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: Colors.white.withValues(alpha: 0.18),
-                        borderRadius: BorderRadius.circular(20),
-                      ),
-                      child: FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text(
-                          statusText,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w700,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-}
-
-class _DriverMapStyleSelector extends StatelessWidget {
-  const _DriverMapStyleSelector({
-    required this.selected,
-    required this.onSelected,
-  });
-
-  final _DriverMapThemeOption selected;
-  final ValueChanged<_DriverMapThemeOption> onSelected;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.95),
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
-            blurRadius: 16,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: _DriverMapThemeOption.values.map((option) {
-          final config = _driverMapThemes[option]!;
-          final isSelected = option == selected;
-          return Padding(
-            padding: const EdgeInsets.only(right: 8),
-            child: ChoiceChip(
-              label: Text(config.label),
-              selected: isSelected,
-              onSelected: (value) {
-                if (value) onSelected(option);
-              },
-              selectedColor: theme.colorScheme.primary,
-              labelStyle: theme.textTheme.bodyMedium?.copyWith(
-                color:
-                    isSelected ? Colors.white : theme.colorScheme.onSurface,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-          );
-        }).toList(),
-      ),
-    );
-  }
-}
-
-class _HistoryCard extends StatelessWidget {
-  const _HistoryCard({required this.entry});
-
-  final _CollectionEntry entry;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 14,
-            offset: const Offset(0, 10),
-          ),
-        ],
-      ),
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: _driverPrimary.withOpacity(0.08),
-                  shape: BoxShape.circle,
-                ),
-                child:
-                    const Icon(Icons.recycling_rounded, color: _driverPrimary),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Waste Collected',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.w800,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Vehicle : ',
-                      style: TextStyle(
-                        color: Colors.black.withOpacity(0.65),
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  const Text(
-                    'Total Collected :',
-                    style: TextStyle(
-                      color: Colors.black54,
-                      fontSize: 12.5,
-                    ),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    ' Kg',
-                    style: const TextStyle(
-                      color: _driverPrimary,
-                      fontWeight: FontWeight.w800,
-                      fontSize: 15,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Container(
-            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
-            decoration: BoxDecoration(
-              color: _driverAccent.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: _driverAccent.withOpacity(0.35)),
-            ),
-            child: Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        ' Kg',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        'Dry',
-                        style: TextStyle(
-                          color: Colors.black.withOpacity(0.65),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  width: 1,
-                  height: 34,
-                  color: Colors.black.withOpacity(0.1),
-                ),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.end,
-                    children: [
-                      Text(
-                        ' Kg',
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.w800,
-                        ),
-                      ),
-                      Text(
-                        'Wet',
-                        style: TextStyle(
-                          color: Colors.black.withOpacity(0.65),
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _CollectionEntry {
-  final String vehicleId;
-  final int dryKg;
-  final int wetKg;
-  final int totalKg;
-
-  const _CollectionEntry({
-    required this.vehicleId,
-    required this.dryKg,
-    required this.wetKg,
-    required this.totalKg,
-  });
-}
-
-class _ProfileTab extends StatelessWidget {
-  const _ProfileTab({required this.onLogout});
-
-  final VoidCallback onLogout;
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(16),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.06),
-                  blurRadius: 14,
-                  offset: const Offset(0, 8),
-                ),
-              ],
-              border: Border.all(color: _driverPrimary.withOpacity(0.08)),
-            ),
-            child: Column(
-              children: [
-                CircleAvatar(
-                  radius: 34,
-                  backgroundColor: _driverPrimary.withOpacity(0.12),
-                  child:
-                      const Icon(Icons.person, color: _driverPrimary, size: 36),
-                ),
-                const SizedBox(height: 12),
-                const Text(
-                  'Ravi Kumar',
-                  style: TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-                Text(
-                  'Driver ID: DRV-1042',
-                  style: TextStyle(
-                    color: Colors.black.withOpacity(0.6),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                _ProfileRow(
-                  label: 'Vehicle',
-                  value: 'TN 01 AB 1234',
-                  icon: Icons.local_shipping_outlined,
-                ),
-                const SizedBox(height: 10),
-                _ProfileRow(
-                  label: 'Contact',
-                  value: '+91 98765 43210',
-                  icon: Icons.phone_rounded,
-                ),
-                const SizedBox(height: 10),
-                _ProfileRow(
-                  label: 'Shift',
-                  value: '06:00 AM - 02:00 PM',
-                  icon: Icons.schedule_rounded,
-                ),
-              ],
-            ),
-          ),
-          const SizedBox(height: 20),
-          SizedBox(
-            width: double.infinity,
-            child: ElevatedButton.icon(
-              onPressed: onLogout,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _driverPrimary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(14),
-                ),
-              ),
-              icon: const Icon(Icons.logout_rounded, color: Colors.white),
-              label: const Text(
-                'Logout',
-                style: TextStyle(
-                  color: Colors.white,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _ProfileRow extends StatelessWidget {
-  const _ProfileRow({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Container(
-          padding: const EdgeInsets.all(10),
-          decoration: BoxDecoration(
-            color: _driverPrimary.withOpacity(0.08),
-            shape: BoxShape.circle,
-          ),
-          child: Icon(icon, color: _driverPrimary, size: 18),
-        ),
-        const SizedBox(width: 12),
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                color: Colors.black.withOpacity(0.6),
-                fontSize: 13,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              value,
-              style: const TextStyle(
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-              ),
-            ),
-          ],
-        ),
-      ],
     );
   }
 }

@@ -3,6 +3,7 @@ import 'dart:io' show File;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 import '../../../core/constants.dart';
 import '../../../core/di.dart';
 import '../../../shared/models/collection_history.dart';
@@ -84,10 +85,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final formattedDate =
         DateFormat('EEEE, MMM d, yyyy').format(_selectedDate);
     final formattedHeader = DateFormat('MMMM yyyy').format(_selectedDate);
+    final localizations = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Collection History'),
+        title: Text(localizations.collectionHistoryPageTitle),
         backgroundColor: kPrimaryColor,
         elevation: 0,
         leading: IconButton(
@@ -131,8 +133,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
-                                'Select Date',
+                              Text(
+                                localizations.selectDateLabel,
                                 style: TextStyle(
                                   fontSize: 14,
                                   color: kPlaceholderColor,
@@ -140,7 +142,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                               ),
                               const SizedBox(height: 4),
                               Text(
-                                'Viewing: $formattedDate',
+                                localizations.viewingDateLabel(formattedDate),
                                 style: const TextStyle(
                                   fontSize: 18,
                                   fontWeight: FontWeight.bold,
@@ -159,7 +161,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 ),
                 const SizedBox(height: 30),
                 Text(
-                  'Collection Log for $formattedHeader',
+                  localizations.collectionLogFor(formattedHeader),
                   style: Theme.of(context).textTheme.titleLarge!.copyWith(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
@@ -177,7 +179,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     child: Padding(
                       padding: const EdgeInsets.all(16.0),
                       child: Text(
-                        'Total Weight Collected: ${totalWeightForDate.toStringAsFixed(2)} kg',
+                        localizations.totalWeightCollectedLabel(
+                          totalWeightForDate.toStringAsFixed(2),
+                        ),
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
@@ -192,14 +196,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     padding: const EdgeInsets.only(top: 40.0),
                     child: Center(
                       child: Column(
-                        children: const [
-                          Icon(Icons.inbox_outlined,
+                        children: [
+                          const Icon(Icons.inbox_outlined,
                               size: 64, color: kPlaceholderColor),
-                          SizedBox(height: 12),
+                          const SizedBox(height: 12),
                           Text(
-                            'No collection data for this date yet.',
-                            style: TextStyle(
-                                fontSize: 16, color: kPlaceholderColor),
+                            localizations.noCollectionData,
+                            style:
+                                const TextStyle(fontSize: 16, color: kPlaceholderColor),
                           ),
                         ],
                       ),
@@ -225,6 +229,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
         .toList();
 
     final timeLabel = DateFormat('h:mm a').format(entry.collectedAt);
+    final localizations = AppLocalizations.of(context);
 
     return Card(
       elevation: 4,
@@ -236,7 +241,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Collected at $timeLabel',
+              localizations.collectedAtLabel(timeLabel),
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -245,12 +250,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
             const SizedBox(height: 4),
             Text(
-              'Customer ID: ${entry.customerId}',
+              localizations.customerIdLabel(entry.customerId),
               style: const TextStyle(color: kPlaceholderColor),
             ),
             const SizedBox(height: 4),
             Text(
-              'Total Weight: ${entry.totalWeight.toStringAsFixed(2)} kg',
+              localizations.entryTotalWeightLabel(
+                entry.totalWeight.toStringAsFixed(2),
+              ),
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
@@ -259,9 +266,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
             const Divider(height: 24),
             if (sectionsWithData.isEmpty)
-              const Text(
-                'No detailed data captured for this visit.',
-                style: TextStyle(color: kPlaceholderColor),
+              Text(
+                localizations.noDetailedCollectionData,
+                style: const TextStyle(color: kPlaceholderColor),
               )
             else
               for (final section in sectionsWithData)
@@ -276,12 +283,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   Widget _buildSectionRow(CollectionHistorySection section) {
+    final localizations = AppLocalizations.of(context);
     final color = _colorForType(section.normalizedType);
     final rawWeight = section.weight?.trim() ?? '';
     final hasWeight = rawWeight.isNotEmpty;
     final weightDisplay = hasWeight
         ? (RegExp('[a-zA-Z]').hasMatch(rawWeight) ? rawWeight : '$rawWeight kg')
-        : 'Not recorded';
+        : localizations.notRecorded;
     final typeLabel =
         '${section.type[0].toUpperCase()}${section.type.substring(1)} Waste';
 
@@ -325,15 +333,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
               const SizedBox(height: 8),
               Align(
                 alignment: Alignment.centerLeft,
-                child: OutlinedButton.icon(
-                  onPressed: ((section.imagePath != null &&
-                              section.imagePath!.isNotEmpty) ||
+                  child: OutlinedButton.icon(
+                    onPressed: ((section.imagePath != null &&
+                                section.imagePath!.isNotEmpty) ||
                           (section.imageBase64 != null &&
                               section.imageBase64!.isNotEmpty))
                       ? () => _viewProof(context, section)
                       : null,
                   icon: const Icon(Icons.camera_alt_outlined, size: 20),
-                  label: const Text('View Proof'),
+                  label: Text(localizations.viewProofLabel),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: kPrimaryColor,
                     side: const BorderSide(color: kPrimaryColor),
@@ -398,11 +406,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
     BuildContext context,
     CollectionHistorySection section,
   ) {
+    final localizations = AppLocalizations.of(context);
     if ((section.imageBase64 == null || section.imageBase64!.isEmpty) &&
         (section.imagePath == null || section.imagePath!.isEmpty)) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No proof image available for this entry.'),
+        SnackBar(
+          content: Text(localizations.noProofImageAvailable),
         ),
       );
       return;
@@ -429,8 +438,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     if (imageWidget == null) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Proof image could not be found.'),
+        SnackBar(
+          content: Text(localizations.proofImageMissing),
         ),
       );
       return;
@@ -447,7 +456,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             Flexible(child: proofWidget),
             TextButton(
               onPressed: () => Navigator.of(dialogContext).pop(),
-              child: const Text('Close'),
+              child: Text(localizations.closeLabel),
             ),
           ],
         ),

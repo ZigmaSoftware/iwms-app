@@ -6,22 +6,33 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:animated_neumorphic/animated_neumorphic.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart'; // Import geolocator package
 import 'package:http/http.dart' as http;
 import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
 // import 'package:zigma_payroll/attendance/userimage.dart';
 
 // import '../provider/username.dart';
 import 'camerapage.dart';
 
-const Color _operatorPrimary = OperatorTheme.primary;
-const Color _operatorAccent = OperatorTheme.primaryAccent;
+const Color _operatorPrimary = AppColors.primary;
+const Color _operatorAccent = AppColors.primaryVariant;
 
 class AttendancePage extends StatefulWidget {
-  const AttendancePage({super.key});
+  const AttendancePage({
+    super.key,
+    this.operatorName = '',
+    this.operatorCode = '',
+    this.emp_id='',
+  });
 
+  final String operatorName;
+  final String operatorCode;
+  final String emp_id;
   @override
   State<AttendancePage> createState() => _AttendancePageState();
 }
@@ -56,98 +67,8 @@ class _AttendancePageState extends State<AttendancePage> {
     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
   }
 
-  void updateGreeting() {
-    setState(() {
-      greetingMessage = getDynamicGreeting();
-    });
-  }
-  // Future<void> fetchAndSetImage() async {
-  //   try {
-  //     final userProvider = Provider.of<UserProvider>(context, listen: false);
-  //     String empId = userProvider.empid; // Get the empid
-  //     print("Fetching image for empId: $empId");
 
-  //     final fetchedImageName = await fetchImageName(empId); // Fetch the image name
-  //     print("Fetched image name from API: $fetchedImageName");
 
-  //     setState(() {
-  //       imageName = fetchedImageName;
-  //       isLoading = false;
-  //     });
-  //   } catch (e) {
-  //     setState(() {
-  //       isLoading = false;
-  //     });
-  //     // print("Error occurred: $e");
-  //     // ScaffoldMessenger.of(context).showSnackBar(
-  //     //   SnackBar(content: Text("Error fetching image: $e")),
-  //     // );
-  //   }
-  // }
-  String getDynamicGreeting() {
-    var hour = DateTime.now().hour;
-    var weekday = DateTime.now().weekday; // 1 = Monday, 7 = Sunday
-
-    // Define messages for each day of the week
-    Map<int, List<String>> dailyMessages = {
-      1: [
-        // Monday
-        "Start the week strong!",
-        "New week, new opportunities!",
-        "Set goals and take action!"
-      ],
-      2: [
-        // Tuesday
-        "Keep up the momentum!",
-        "Small steps lead to big success!",
-        "Stay focused and productive!"
-      ],
-      3: [
-        // Wednesday
-        "Halfway through—keep going!",
-        "Every challenge is an opportunity!",
-        "Success comes with persistence!"
-      ],
-      4: [
-        // Thursday
-        "You're almost there!",
-        "Stay determined, results are near!",
-        "Refine your efforts, success is close!"
-      ],
-      5: [
-        // Friday
-        "Finish strong, weekend ahead!",
-        "Keep going, success follows effort!",
-        "Push through and celebrate progress!"
-      ],
-      6: [
-        // Saturday
-        "Relax and recharge!",
-        "Balance is key—enjoy today!",
-        "Learn and grow every day!"
-      ],
-      7: [
-        // Sunday
-        "Reflect and reset for success!",
-        "Take time for yourself!",
-        "Recharge for a productive week!"
-      ]
-    };
-
-    // Get a random message from today's set
-    String dailyMessage = (dailyMessages[weekday]!..shuffle()).first;
-
-    // Time-based Greetings
-    if (hour >= 5 && hour < 12) {
-      return "Good Morning! $dailyMessage";
-    } else if (hour >= 12 && hour < 17) {
-      return "Good Afternoon! $dailyMessage";
-    } else if (hour >= 17 && hour < 21) {
-      return "Good Evening! $dailyMessage";
-    } else {
-      return "Good Night! $dailyMessage";
-    }
-  }
 
   @override
   void initState() {
@@ -171,7 +92,7 @@ class _AttendancePageState extends State<AttendancePage> {
     _timer = Timer.periodic(const Duration(minutes: 1), (Timer timer) {
       // _fetchAttendanceData();
     });
-    greetingMessage = getDynamicGreeting();
+   
     _pendingSync = [
       {
         "type": "Check In",
@@ -365,13 +286,20 @@ class _AttendancePageState extends State<AttendancePage> {
 
   @override
   Widget build(BuildContext context) {
-    final userName = "Operator 1";
-    final empid = "504";
+      final nameFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).userName
+            : null);
+             final emp_idFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).emp_id
+            : null);
 
     return SafeArea(
       child: Scaffold(
-        backgroundColor: Colors.grey.shade100,
+        backgroundColor: AppColors.background,
         body: SingleChildScrollView(
+          physics: const BouncingScrollPhysics(),
           child: Column(
             children: [
               // ===========================
@@ -379,95 +307,46 @@ class _AttendancePageState extends State<AttendancePage> {
               // ===========================
               Container(
                 width: double.infinity,
-                padding: EdgeInsets.fromLTRB(20, 25, 20, 30),
+                padding: const EdgeInsets.fromLTRB(20, 24, 20, 26),
                 decoration: BoxDecoration(
                   gradient: LinearGradient(
-                      begin: Alignment.topCenter,
-                      end: Alignment.bottomCenter,
-                      colors: [
-                        _operatorPrimary,
-                        _operatorAccent
-                        // Color(0xFF007BFF),
-                        // Color(0xFF00AEEF),
-                      ]),
-                  borderRadius: BorderRadius.vertical(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      _operatorPrimary,
+                      _operatorAccent,
+                    ],
+                  ),
+                  borderRadius: const BorderRadius.vertical(
                     bottom: Radius.circular(35),
                   ),
                 ),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // PROFILE ROW
-                    Row(
-                      children: [
-                        CircleAvatar(
-                          radius: 40,
-                          backgroundColor: Colors.white,
-                          backgroundImage: imageName != null
-                              ? NetworkImage(
-                                  'http://zigfly.in:5000/uploads/$imageName')
-                              : null,
-                          child: imageName == null
-                              ? Icon(Icons.person, size: 45, color: Colors.grey)
-                              : null,
-                        ),
-                        SizedBox(width: 15),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                userName,
-                                style: TextStyle(
-                                  fontSize: 22,
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              Text(
-                                "EMP ID : $empid",
-                                style: TextStyle(
-                                    color: Colors.white70, fontSize: 14),
-                              ),
-                            ],
-                          ),
-                        ),
-                        _networkStatusChip(),
-                      ],
+                    Text(
+                      "Attendance",
+                      style: AppTextStyles.heading2.copyWith(
+                        color: Colors.white,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      "Manage today's presence and history",
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: Colors.white70,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
               ),
-
+              // Text(emp_idFromState!),
               SizedBox(height: 15),
 
-              // ===========================
-              //           KPI ROW
-              // ===========================
-              // Container(
-              //   margin: EdgeInsets.symmetric(horizontal: 20),
-              //   padding: EdgeInsets.all(18),
-              //   decoration: BoxDecoration(
-              //     color: Colors.white,
-              //     borderRadius: BorderRadius.circular(22),
-              //     boxShadow: [
-              //       BoxShadow(
-              //         blurRadius: 8,
-              //         color: Colors.black12,
-              //         offset: Offset(0, 3),
-              //       )
-              //     ],
-              //   ),
 
-              //   child: Row(
-              //     mainAxisAlignment: MainAxisAlignment.spaceAround,
-              //     children: [
-              //       _kpiItem("20 Days", "Presence"),
-              //       _kpiItem("3 Times", "Leaves"),
-              //       _kpiItem("2 Times", "Permission"),
-              //     ],
-              //   ),
-              // ),
               Container(
                 margin: EdgeInsets.symmetric(horizontal: 20),
                 padding: EdgeInsets.symmetric(vertical: 22, horizontal: 16),
@@ -516,10 +395,9 @@ class _AttendancePageState extends State<AttendancePage> {
                   children: [
                     Text(
                       DateFormat('dd MMMM yyyy').format(DateTime.now()),
-                      style:
-                          TextStyle(fontSize: 18, fontWeight: FontWeight.w700),
+                      style: AppTextStyles.heading2.copyWith(fontSize: 16),
                     ),
-                    SizedBox(height: 15),
+                    const SizedBox(height: 12),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -551,7 +429,20 @@ class _AttendancePageState extends State<AttendancePage> {
                   _quickAction(Icons.logout, "Leave"),
                   _quickAction(Icons.place, "Visit"),
                   _quickAction(Icons.timer, "Overtime"),
-                  _quickAction(Icons.history, "History"),
+                  _quickAction(Icons.history, "History", onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AttendanceHistory(empId: emp_idFromState!),
+                      ),
+                    );
+                  }),
+                  _quickAction(Icons.summarize_rounded, "Summary", onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => AttendanceHistory(empId: emp_idFromState!),
+                      ),
+                    );
+                  }),
                 ],
               ),
 
@@ -566,8 +457,8 @@ class _AttendancePageState extends State<AttendancePage> {
                     await Navigator.of(context).push(
                       MaterialPageRoute(
                         builder: (_) => CameraScreen(
-                          employeeName: userName,
-                          employeeId: empid,
+                          employeeName: nameFromState!,
+                          employeeId: emp_idFromState!,
                         ),
                       ),
                     );
@@ -611,77 +502,7 @@ class _AttendancePageState extends State<AttendancePage> {
                 ),
               ),
 
-              // ===========================
-              //   PUNCH ATTENDANCE BUTTON
-//           GestureDetector(
-//   onTapDown: (_) => setState(() => _punchPressed = true),
-//   onTapUp: (_) => setState(() => _punchPressed = false),
-//   onTapCancel: () => setState(() => _punchPressed = false),
-//   onTap: () async {
-//     final result = await Navigator.push(
-//       context,
-//       MaterialPageRoute(
-//         builder: (context) => CameraScreen(
-//           employeeName: userName,
-//           employeeId: empid,
-//         ),
-//       ),
-//     );
-//   },
-
-//   child: AnimatedScale(
-//     duration: Duration(milliseconds: 130),
-//     scale: _punchPressed ? 0.93 : 1.0,
-//     child: Container(
-//       height: 150,
-//       width: 150,
-//       decoration: BoxDecoration(
-//         shape: BoxShape.circle,
-//         gradient: LinearGradient(
-//           colors: [Color(0xFF1B5E20), Color(0xFF66BB6A)],
-//           begin: Alignment.topLeft,
-//           end: Alignment.bottomRight,
-//         ),
-//         boxShadow: [
-//           BoxShadow(
-//             color: Colors.green.withOpacity(0.3),
-//             blurRadius: 16,
-//             spreadRadius: 2,
-//             offset: Offset(0, 6),
-//           ),
-//         ],
-//       ),
-
-//       child: Container(
-//         margin: EdgeInsets.all(6),
-//         decoration: BoxDecoration(
-//           shape: BoxShape.circle,
-//           color: Colors.white,
-//         ),
-//         child: Column(
-//           mainAxisAlignment: MainAxisAlignment.center,
-//           children: [
-//             Icon(Icons.fingerprint,
-//                 size: 55,
-//                 color: Colors.green.shade700),
-//             SizedBox(height: 8),
-//             Text(
-//               "Punch\nAttendance",
-//               textAlign: TextAlign.center,
-//               style: TextStyle(
-//                 fontSize: 15,
-//                 fontWeight: FontWeight.w800,
-//                 color: Colors.green.shade900,
-//               ),
-//             ),
-//           ],
-//         ),
-//       ),
-//     ),
-//   ),
-// ),
-
-              // SizedBox(height: 40),
+ 
 
               SizedBox(height: 25),
 
@@ -709,6 +530,14 @@ class _AttendancePageState extends State<AttendancePage> {
                         children: [
                           Text(
                             "Pending Sync",
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.deepOrange,
+                            ),
+                          ),
+                           Text(
+                            "${emp_idFromState}",
                             style: TextStyle(
                               fontSize: 18,
                               fontWeight: FontWeight.w800,
@@ -800,28 +629,34 @@ class _AttendancePageState extends State<AttendancePage> {
   }
 
   /// QUICK ACTION ICON
-  Widget _quickAction(IconData icon, String title) {
-    return Column(
-      children: [
-        Container(
-          height: 55,
-          width: 55,
-          decoration: BoxDecoration(
-            color: Colors.white,
-            shape: BoxShape.circle,
-            boxShadow: [
-              BoxShadow(
-                blurRadius: 8,
-                color: Colors.black12,
-              )
-            ],
+  Widget _quickAction(IconData icon, String title, {VoidCallback? onTap}) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(16),
+      child: Column(
+        children: [
+          Container(
+            height: 52,
+            width: 52,
+            decoration: BoxDecoration(
+              color: Colors.white,
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(
+                  blurRadius: 8,
+                  color: Colors.black12,
+                )
+              ],
+            ),
+            child: Icon(icon, size: 24, color: Color(0xFF1B5E20)),
           ),
-          child: Icon(icon, size: 28, color: Color(0xFF1B5E20)),
-        ),
-        SizedBox(height: 6),
-        Text(title,
-            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w500)),
-      ],
+          SizedBox(height: 6),
+          Text(
+            title,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+          ),
+        ],
+      ),
     );
   }
 
@@ -840,7 +675,7 @@ class _AttendancePageState extends State<AttendancePage> {
         Text(
           value,
           style: TextStyle(
-            fontSize: 18,
+            fontSize: 16,
             fontWeight: FontWeight.w700,
             color: Colors.black87,
           ),
@@ -849,7 +684,7 @@ class _AttendancePageState extends State<AttendancePage> {
         Text(
           title,
           style: TextStyle(
-            fontSize: 13,
+            fontSize: 12,
             color: Colors.black54,
             fontWeight: FontWeight.w500,
           ),

@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
+
 import '../../common/theme_tokens.dart';
 import '../controllers/track_controller.dart';
 import '../models/waste_period.dart';
@@ -30,39 +32,53 @@ class _TrackTabState extends State<TrackTab> {
 
   @override
   Widget build(BuildContext context) {
-    final controller = widget.controller;
     final theme = Theme.of(context);
-    final summary = controller.currentSummary;
+    final localizations = AppLocalizations.of(context);
     final screenWidth = MediaQuery.sizeOf(context).width;
 
-    return RefreshIndicator(
-      onRefresh: () => controller.refresh(force: true),
-      color: widget.highlightColor,
-      child: ListView(
-        padding: const EdgeInsets.fromLTRB(
-          DashboardThemeTokens.spacing20,
-          DashboardThemeTokens.spacing20,
-          DashboardThemeTokens.spacing20,
-          DashboardThemeTokens.spacing32,
-        ),
-        children: [
-          _buildTrackHeader(theme),
-          const SizedBox(height: 16),
-          _buildTrackSummarySection(theme, summary),
-          const SizedBox(height: 20),
-          Text(
-            'Data refreshed for ${controller.displayFormat.format(controller.selectedDate)}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-              fontSize: screenWidth * 0.032,
+    return AnimatedBuilder(
+      animation: widget.controller,
+      builder: (context, _) {
+        final controller = widget.controller;
+        final summary =
+            controller.currentSummary ?? WasteSummary.zero(controller.selectedDate);
+        final periodLabel = _periodDescription(controller);
+
+        return RefreshIndicator(
+          onRefresh: () => controller.refresh(force: true),
+          color: widget.highlightColor,
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(
+              DashboardThemeTokens.spacing20,
+              DashboardThemeTokens.spacing20,
+              DashboardThemeTokens.spacing20,
+              DashboardThemeTokens.spacing32,
             ),
+            children: [
+              _buildTrackHeader(theme, localizations),
+              const SizedBox(height: 16),
+              _buildTrackSummarySection(
+                theme,
+                summary,
+                periodLabel,
+                localizations,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                localizations.trackShowingPeriod(periodLabel),
+                style: theme.textTheme.bodySmall?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
+                  fontSize: screenWidth * 0.032,
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 
-  Widget _buildTrackHeader(ThemeData theme) {
+  Widget _buildTrackHeader(ThemeData theme, AppLocalizations localizations) {
     final screenWidth = MediaQuery.sizeOf(context).width;
     final titleStyle = theme.textTheme.headlineSmall?.copyWith(
       fontWeight: FontWeight.w900,
@@ -73,18 +89,26 @@ class _TrackTabState extends State<TrackTab> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text(
-          'Track Your Waste',
+          localizations.trackHeaderTitle,
           style: titleStyle,
         ),
         const SizedBox(height: 8),
         Text(
-          'Live weighment figures from the city for the selected date.',
+          localizations.trackLiveDescription,
           style: theme.textTheme.bodyMedium?.copyWith(
             color: theme.colorScheme.onSurfaceVariant,
             fontSize: screenWidth * 0.035,
           ),
         ),
         const SizedBox(height: 12),
+        Text(
+          localizations.trackChoosePeriod,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+        const SizedBox(height: 8),
         Row(
           children: [
             Expanded(
@@ -104,7 +128,7 @@ class _TrackTabState extends State<TrackTab> {
                         .map(
                           (p) => DropdownMenuItem(
                             value: p,
-                            child: Text(_labelForPeriod(p)),
+                            child: Text(_periodLabel(p, localizations)),
                           ),
                         )
                         .toList(),
@@ -122,8 +146,8 @@ class _TrackTabState extends State<TrackTab> {
             const SizedBox(width: 12),
             _CalendarChip(
               highlightColor: widget.highlightColor,
-              label: widget.controller.shortDisplayFormat
-                  .format(widget.controller.selectedDate),
+              label: _calendarLabel(localizations),
+              enabled: widget.controller.selectedPeriod != WastePeriod.total,
               onTap: widget.onPickDate,
             ),
           ],
@@ -132,13 +156,28 @@ class _TrackTabState extends State<TrackTab> {
     );
   }
 
+  String _calendarLabel(AppLocalizations localizations) {
+    switch (widget.controller.selectedPeriod) {
+      case WastePeriod.daily:
+        return widget.controller.shortDisplayFormat
+            .format(widget.controller.selectedDate);
+      case WastePeriod.monthly:
+        return widget.controller.monthFormat
+            .format(widget.controller.selectedDate);
+      case WastePeriod.total:
+        return localizations.allTime;
+    }
+  }
+
   Widget _buildTrackSummarySection(
     ThemeData theme,
-    WasteSummary? summary,
+    WasteSummary summary,
+    String periodLabel,
+    AppLocalizations localizations,
   ) {
     if (widget.controller.loading) {
       return _buildTrackStatusCard(
-        message: 'Pulling live collection figures...',
+        message: localizations.trackLoading,
         accentColor: widget.highlightColor,
         showLoading: true,
       );
@@ -148,17 +187,8 @@ class _TrackTabState extends State<TrackTab> {
       return _buildTrackStatusCard(
         message: widget.controller.error!,
         accentColor: widget.highlightColor,
-        actionLabel: 'Retry now',
+        actionLabel: localizations.trackRetry,
         onAction: () => widget.controller.refresh(force: true),
-      );
-    }
-
-    if (summary == null) {
-      return _buildTrackStatusCard(
-        message: 'No collection data is available for this date yet.',
-        accentColor: widget.highlightColor,
-        actionLabel: 'Choose another date',
-        onAction: widget.onPickDate,
       );
     }
 
@@ -171,37 +201,45 @@ class _TrackTabState extends State<TrackTab> {
     })>[
       (
         asset: 'assets/cards/wetwaste.png',
-        label: 'Wet Waste',
+        label: localizations.wetWaste,
         weight: summary.wetWeight,
         color: const Color(0xFF1976D2),
         metric: WasteMetric.wet
       ),
       (
         asset: 'assets/cards/drywaste.png',
-        label: 'Dry Waste',
+        label: localizations.dryWaste,
         weight: summary.dryWeight,
         color: const Color(0xFF2E7D32),
         metric: WasteMetric.dry
       ),
       (
         asset: 'assets/cards/mixedwaste.png',
-        label: 'Mixed Waste',
+        label: localizations.mixedWaste,
         weight: summary.mixWeight,
         color: const Color(0xFFF57F17),
         metric: WasteMetric.mixed
       ),
     ];
 
+    final bool hasData = summary.totalNetWeight > 0;
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        _buildHeroSummaryCard(theme, summary),
-        const SizedBox(height: 16),
+        if (!hasData)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+        child: _buildTrackStatusCard(
+          message: localizations.trackNoData,
+          accentColor: widget.highlightColor,
+        ),
+          ),
         LayoutBuilder(
           builder: (context, constraints) {
             final available = constraints.maxWidth;
             final itemWidth = available > 0 ? (available - 24) / 3 : available;
-            return Wrap(
+        return Wrap(
               spacing: 12,
               runSpacing: 12,
               children: cards
@@ -224,115 +262,17 @@ class _TrackTabState extends State<TrackTab> {
           },
         ),
         const SizedBox(height: 16),
-        _buildMetricDetailCard(theme, summary),
+        _buildMetricDetailCard(theme, summary, localizations),
         const SizedBox(height: 16),
         _buildTrendSection(theme),
       ],
     );
   }
 
-  Widget _buildHeroSummaryCard(ThemeData theme, WasteSummary summary) {
-    final screenWidth = MediaQuery.sizeOf(context).width;
-    final horizontal = screenWidth * 0.05;
-    return AnimatedContainer(
-      duration: DashboardThemeTokens.animationSlow,
-      padding: EdgeInsets.symmetric(horizontal: horizontal, vertical: 18),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          colors: [
-            widget.highlightColor.withValues(alpha: 0.96),
-            widget.highlightColor.withValues(alpha: 0.68),
-          ],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(DashboardThemeTokens.radiusXL),
-        boxShadow: [
-          BoxShadow(
-            color: widget.highlightColor.withValues(alpha: 0.32),
-            blurRadius: 32,
-            offset: const Offset(0, 18),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Total trips',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.white70,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                  const SizedBox(height: DashboardThemeTokens.spacing6),
-                  Text(
-                    summary.totalTrip.toString(),
-                    style: theme.textTheme.headlineMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                ],
-              ),
-              const Spacer(),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    'Avg per trip',
-                    style: theme.textTheme.bodySmall?.copyWith(
-                      color: Colors.white70,
-                      letterSpacing: 0.2,
-                    ),
-                  ),
-                  const SizedBox(height: DashboardThemeTokens.spacing6),
-                  Text(
-                    '${widget.controller.averageFormatter.format(summary.averageWeightPerTrip)} kg',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: Colors.white,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          const SizedBox(height: DashboardThemeTokens.spacing20),
-          Text(
-            'Total weight',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.9),
-            ),
-          ),
-          const SizedBox(height: DashboardThemeTokens.spacing6),
-          Text(
-            '${widget.controller.weightFormatter.format(summary.totalNetWeight)} kg',
-            style: theme.textTheme.headlineSmall?.copyWith(
-              color: Colors.white,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const SizedBox(height: DashboardThemeTokens.spacing8),
-          Text(
-            'Live data for ${widget.controller.displayFormat.format(summary.date)}',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: Colors.white.withValues(alpha: 0.85),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildMetricDetailCard(
     ThemeData theme,
     WasteSummary summary,
+    AppLocalizations localizations,
   ) {
     final metric = _activeMetric;
     final double weight = _metricWeight(summary, metric);
@@ -357,7 +297,7 @@ class _TrackTabState extends State<TrackTab> {
             switchInCurve: Curves.easeOutCubic,
             switchOutCurve: Curves.easeInCubic,
             child: Text(
-              _metricHeader(metric),
+              _metricHeader(metric, localizations),
               key: ValueKey<String>('metric-header-${metric.name}'),
               style: theme.textTheme.bodyMedium?.copyWith(
                 color: widget.textColor.withValues(alpha: 0.8),
@@ -382,8 +322,8 @@ class _TrackTabState extends State<TrackTab> {
           const SizedBox(height: DashboardThemeTokens.spacing8),
           Text(
             metric == WasteMetric.total
-                ? 'Tap a card above to view detailed breakdown.'
-                : 'Tap again to switch back to total waste.',
+                ? localizations.metricTapCard
+                : localizations.metricTapBack,
             style: theme.textTheme.bodySmall?.copyWith(
               color: widget.textColor.withValues(alpha: 0.6),
             ),
@@ -491,27 +431,38 @@ class _TrackTabState extends State<TrackTab> {
     }
   }
 
-  String _metricHeader(WasteMetric metric) {
+  String _metricHeader(WasteMetric metric, AppLocalizations localizations) {
     switch (metric) {
       case WasteMetric.wet:
-        return 'Wet waste collected';
+        return localizations.metricWet;
       case WasteMetric.dry:
-        return 'Dry waste collected';
+        return localizations.metricDry;
       case WasteMetric.mixed:
-        return 'Mixed waste collected';
+        return localizations.metricMixed;
       case WasteMetric.total:
-        return 'Total waste collected';
+        return localizations.metricTotal;
     }
   }
 
-  String _labelForPeriod(WastePeriod period) {
+  String _periodLabel(WastePeriod period, AppLocalizations localizations) {
     switch (period) {
       case WastePeriod.daily:
-        return 'Daily';
+        return localizations.periodDaily;
       case WastePeriod.monthly:
-        return 'Monthly';
-      case WastePeriod.yearly:
-        return 'Yearly';
+        return localizations.periodMonthly;
+      case WastePeriod.total:
+        return localizations.periodTotal;
+    }
+  }
+
+  String _periodDescription(TrackController controller) {
+    switch (controller.selectedPeriod) {
+      case WastePeriod.daily:
+        return controller.displayFormat.format(controller.selectedDate);
+      case WastePeriod.monthly:
+        return controller.monthFormat.format(controller.selectedDate);
+      case WastePeriod.total:
+        return 'All time';
     }
   }
 
@@ -525,50 +476,65 @@ class _CalendarChip extends StatelessWidget {
   const _CalendarChip({
     required this.highlightColor,
     required this.label,
+    this.enabled = true,
     required this.onTap,
   });
   final Color highlightColor;
   final String label;
+  final bool enabled;
   final Future<void> Function() onTap;
 
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
     return Material(
       color: Colors.transparent,
       child: InkWell(
         borderRadius: BorderRadius.circular(DashboardThemeTokens.radiusLarge),
-        onTap: onTap,
+        onTap: enabled ? onTap : null,
         child: Container(
           padding: const EdgeInsets.symmetric(
             horizontal: DashboardThemeTokens.spacing12,
             vertical: DashboardThemeTokens.spacing10,
           ),
           decoration: BoxDecoration(
-            color: highlightColor.withValues(alpha: 0.15),
+            color: enabled
+                ? highlightColor.withValues(alpha: 0.15)
+                : theme.disabledColor.withValues(alpha: 0.08),
             borderRadius:
                 BorderRadius.circular(DashboardThemeTokens.radiusLarge),
-            border: Border.all(color: highlightColor.withValues(alpha: 0.35)),
+            border: Border.all(
+              color: enabled
+                  ? highlightColor.withValues(alpha: 0.35)
+                  : theme.disabledColor.withValues(alpha: 0.2),
+            ),
           ),
           child: Row(
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Icon(Icons.calendar_month, size: 20, color: highlightColor),
+              Icon(
+                Icons.calendar_month,
+                size: 20,
+                color: enabled ? highlightColor : theme.disabledColor,
+              ),
               const SizedBox(width: DashboardThemeTokens.spacing8),
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    'Calendar',
+                    localizations.calendarLabel,
                     style: theme.textTheme.bodySmall?.copyWith(
-                      color: highlightColor,
+                      color:
+                          enabled ? highlightColor : theme.disabledColor,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   Text(
                     label,
                     style: theme.textTheme.bodyMedium?.copyWith(
-                      color: highlightColor,
+                      color:
+                          enabled ? highlightColor : theme.disabledColor,
                       fontWeight: FontWeight.w700,
                     ),
                   ),

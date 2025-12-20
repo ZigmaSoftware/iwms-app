@@ -28,7 +28,6 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
         fit: StackFit.expand,
         children: [
           const AuthBackground(),
-
           SafeArea(
             child: SingleChildScrollView(
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
@@ -122,106 +121,106 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
   // TOGGLE SWITCH (Final working version)
   // ----------------------------------------------------------
 
- Widget _buildAnimatedToggle() {
-  final bool citizenActive = _isCitizen;
-  final bool operatorActive = !_isCitizen;
+  Widget _buildAnimatedToggle() {
+    final bool citizenActive = _isCitizen;
+    final bool operatorActive = !_isCitizen;
 
-  return Container(
-    height: 50,
-    width: 200, // Increased width (no more overflow)
-    padding: const EdgeInsets.all(4),
-    decoration: BoxDecoration(
-      color: Colors.white.withValues(alpha: 0.25),
-      borderRadius: BorderRadius.circular(30),
-      border: Border.all(
-        color: Colors.white.withValues(alpha: 0.5),
-        width: 1.2,
-      ),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withValues(alpha: 0.15),
-          blurRadius: 6,
-          offset: const Offset(0, 3),
+    return Container(
+      height: 50,
+      width: 200, // Increased width (no more overflow)
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.25),
+        borderRadius: BorderRadius.circular(30),
+        border: Border.all(
+          color: Colors.white.withValues(alpha: 0.5),
+          width: 1.2,
         ),
-      ],
-    ),
-    child: Stack(
-      children: [
-        // Sliding selection pill
-        AnimatedPositioned(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          left: citizenActive ? 4 : 104, // FIXED position
-          top: 4,
-          child: Container(
-            width: 92,   // Slightly smaller so both sides fit
-            height: 32,
-            decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.35),
-              borderRadius: BorderRadius.circular(25),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.15),
+            blurRadius: 6,
+            offset: const Offset(0, 3),
+          ),
+        ],
+      ),
+      child: Stack(
+        children: [
+          // Sliding selection pill
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            left: citizenActive ? 4 : 104, // FIXED position
+            top: 4,
+            child: Container(
+              width: 92, // Slightly smaller so both sides fit
+              height: 32,
+              decoration: BoxDecoration(
+                color: Colors.white.withValues(alpha: 0.35),
+                borderRadius: BorderRadius.circular(25),
+              ),
             ),
           ),
-        ),
 
-        // Labels
-        Row(
-          children: [
-            GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                if (!_isCitizen) {
-                  setState(() => _isCitizen = true);
-                }
-              },
-              child: SizedBox(
-                width: 92,
-                height: 32,
-                child: Center(
-                  child: Text(
-                    "Citizen",
-                    style: TextStyle(
-                      color: Colors.white.withValues(
-                        alpha: citizenActive ? 1.0 : 0.7,
+          // Labels
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  if (!_isCitizen) {
+                    setState(() => _isCitizen = true);
+                  }
+                },
+                child: SizedBox(
+                  width: 92,
+                  height: 32,
+                  child: Center(
+                    child: Text(
+                      "Citizen",
+                      style: TextStyle(
+                        color: Colors.white.withValues(
+                          alpha: citizenActive ? 1.0 : 0.7,
+                        ),
+                        fontWeight:
+                            citizenActive ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 14,
                       ),
-                      fontWeight:
-                          citizenActive ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 14,
                     ),
                   ),
                 ),
               ),
-            ),
-            GestureDetector(
-              onTap: () {
-                HapticFeedback.lightImpact();
-                if (_isCitizen) {
-                  setState(() => _isCitizen = false);
-                }
-              },
-              child: SizedBox(
-                width: 92,
-                height: 32,
-                child: Center(
-                  child: Text(
-                    "Operator",
-                    style: TextStyle(
-                      color: Colors.white.withValues(
-                        alpha: operatorActive ? 1.0 : 0.7,
+              GestureDetector(
+                onTap: () {
+                  HapticFeedback.lightImpact();
+                  if (_isCitizen) {
+                    setState(() => _isCitizen = false);
+                  }
+                },
+                child: SizedBox(
+                  width: 92,
+                  height: 32,
+                  child: Center(
+                    child: Text(
+                      "Operator",
+                      style: TextStyle(
+                        color: Colors.white.withValues(
+                          alpha: operatorActive ? 1.0 : 0.7,
+                        ),
+                        fontWeight:
+                            operatorActive ? FontWeight.w700 : FontWeight.w500,
+                        fontSize: 14,
                       ),
-                      fontWeight:
-                          operatorActive ? FontWeight.w700 : FontWeight.w500,
-                      fontSize: 14,
                     ),
                   ),
                 ),
               ),
-            ),
-          ],
-        ),
-      ],
-    ),
-  );
-}
+            ],
+          ),
+        ],
+      ),
+    );
+  }
 
   // ----------------------------------------------------------
   // CITIZEN VIEW
@@ -232,13 +231,11 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
     Color primaryColor,
     double screenHeight,
   ) {
-    final double topSpacing =
-        (screenHeight * 0.12).clamp(60.0, 140.0);
+    final double topSpacing = (screenHeight * 0.12).clamp(60.0, 140.0);
 
     return Column(
       children: [
         SizedBox(height: topSpacing),
-
         SizedBox(
           width: double.infinity,
           child: ElevatedButton(
@@ -261,7 +258,6 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
             ),
           ),
         ),
-
         const SizedBox(height: 20),
       ],
     );
@@ -275,7 +271,6 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
     return Column(
       children: [
         const SizedBox(height: 30),
-
         _UserRoleCard(
           icon: Icons.build,
           title: "Operator",

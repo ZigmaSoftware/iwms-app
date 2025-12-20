@@ -44,7 +44,7 @@ class TrackingHeroHeader extends StatelessWidget {
           bottom: Radius.circular(26),
         ),
       ),
-      padding: const EdgeInsets.fromLTRB(16, 6, 16, 14),
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 8),
       child: Stack(
         children: [
           Column(

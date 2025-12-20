@@ -10,27 +10,28 @@ class TrackController extends ChangeNotifier {
 
   final TrackService _service;
 
-  final DateFormat _monthKeyFormatter = DateFormat('yyyy-MM');
-  final DateFormat _dateKeyFormatter = DateFormat('yyyy-MM-dd');
   final DateFormat displayFormat = DateFormat('EEEE, dd MMM yyyy');
+  final DateFormat monthFormat = DateFormat('MMMM yyyy');
   final DateFormat shortDisplayFormat = DateFormat('d MMM');
   final NumberFormat weightFormatter = NumberFormat.decimalPattern();
   final NumberFormat averageFormatter = NumberFormat('#,##0.00');
 
-  WastePeriod selectedPeriod = WastePeriod.daily;
+  WastePeriod selectedPeriod = WastePeriod.monthly;
   DateTime selectedDate = DateTime.now();
-  String? _trackMonthKey;
-  Map<String, WasteSummary> summaries = {};
   bool loading = false;
   String? error;
+  WastePeriod? _lastPeriod;
+  DateTime? _lastReferenceDate;
+  WasteSummary? _currentSummary;
 
-  WasteSummary? get currentSummary =>
-      summaries[_dateKeyFormatter.format(_normalize(selectedDate))];
+  WasteSummary? get currentSummary => _currentSummary;
 
   Future<void> refresh({bool force = false}) async {
-    final monthStart = DateTime(selectedDate.year, selectedDate.month, 1);
-    final monthKey = _monthKeyFormatter.format(monthStart);
-    if (!force && _trackMonthKey == monthKey && summaries.isNotEmpty) {
+    final reference = _referenceDateForPeriod();
+    if (!force &&
+        _currentSummary != null &&
+        _lastPeriod == selectedPeriod &&
+        _lastReferenceDate == reference) {
       return;
     }
 
@@ -39,14 +40,18 @@ class TrackController extends ChangeNotifier {
     notifyListeners();
 
     try {
-      final data = await _service.fetchMonthlySummaries(selectedDate);
-      summaries = data;
-      _trackMonthKey = monthKey;
+      final summary = await _service.fetchCitizenSummary(
+        period: selectedPeriod,
+        referenceDate: reference,
+      );
+      _currentSummary = summary ?? WasteSummary.zero(reference);
+      _lastPeriod = selectedPeriod;
+      _lastReferenceDate = reference;
       loading = false;
       notifyListeners();
     } catch (e) {
       loading = false;
-      error = 'Unable to load live data. Pull down to retry.';
+      error = 'Unable to load collected waste. Pull down to retry.';
       notifyListeners();
     }
   }
@@ -65,4 +70,26 @@ class TrackController extends ChangeNotifier {
 
   DateTime _normalize(DateTime date) =>
       DateTime(date.year, date.month, date.day);
+
+  DateTime _referenceDateForPeriod() {
+    switch (selectedPeriod) {
+      case WastePeriod.daily:
+        return _normalize(selectedDate);
+      case WastePeriod.monthly:
+        return DateTime(selectedDate.year, selectedDate.month, 1);
+      case WastePeriod.total:
+        return _normalize(selectedDate);
+    }
+  }
+
+  String periodLabel(WastePeriod period) {
+    switch (period) {
+      case WastePeriod.daily:
+        return 'Daily';
+      case WastePeriod.monthly:
+        return 'Monthly';
+      case WastePeriod.total:
+        return 'Total';
+    }
+  }
 }

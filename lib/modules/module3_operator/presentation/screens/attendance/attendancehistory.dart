@@ -707,39 +707,7 @@ Future<void> fetchAttendanceData() async {
               child: Column(
                   children: [
                     SizedBox(height: 5,),
-                    // // --------------------------------------------------
-                    // // ⭐ MONTHLY KPI STRIP
-                    // // --------------------------------------------------
-                    // Padding(
-                    //   padding: const EdgeInsets.fromLTRB(16, 12, 16, 10),
-                    //   child: Container(
-                    //     padding: EdgeInsets.all(16),
-                    //     decoration: BoxDecoration(
-                    //       color: Colors.white,
-                    //       borderRadius: BorderRadius.circular(18),
-                    //       boxShadow: [
-                    //         BoxShadow(
-                    //           color: Colors.black12.withOpacity(0.05),
-                    //           blurRadius: 8,
-                    //           offset: Offset(0, 3),
-                    //         ),
-                    //       ],
-                    //     ),
-                    //     child: Row(
-                    //       mainAxisAlignment: MainAxisAlignment.spaceAround,
-                    //       children: [
-                    //         _kpi("Present", _countPresent().toString(), Colors.green),
-                    //         _kpi("Absent", _countAbsent().toString(), Colors.redAccent),
-                    //         _kpi("Leave", _countLeave().toString(), Colors.orange),
-                    //         _kpi("Permission", _countPermission().toString(), Colors.blue),
-                    //       ],
-                    //     ),
-                    //   ),
-                    // ),
-                      
-                    // --------------------------------------------------
-                    // 🎨 LEGEND STRIP (Modern & Clean)
-                    // --------------------------------------------------
+
                     Container(
                       padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       margin: EdgeInsets.only(bottom: 8),
@@ -883,14 +851,16 @@ Future<void> fetchAttendanceData() async {
                       
                             Color bgColor;
                       
-                            if (isHoliday) bgColor = Color(0xFFFD05AE);
-                            else if (isLeave && dayStatus == 'Half Day') bgColor = Color(0xFFBF4040);
+                            if (isHoliday) {
+                              bgColor = Color(0xFFFD05AE);
+                            } else if (isLeave && dayStatus == 'Half Day') bgColor = Color(0xFFBF4040);
                             else if (isLeave || dayStatus == 'Absent') bgColor = Color(0xFFF55D6B);
                             else if (isPermission && isPresent) bgColor = Color(0xFFBF4040);
                             else if (isPermission) bgColor = Color(0xFF6294BA);
                             else if (isPresent) {
-                              if (dayStatus == 'Full Day') bgColor = Color(0xFF72D58A);
-                              else if (dayStatus == 'Half Day') bgColor = Color(0xFFF8C74A);
+                              if (dayStatus == 'Full Day') {
+                                bgColor = Color(0xFF72D58A);
+                              } else if (dayStatus == 'Half Day') bgColor = Color(0xFFF8C74A);
                               else if (dayStatus == 'Short Hours') bgColor = Color(0xFF5DA1F5);
                               else bgColor = Colors.grey.shade600;
                             } else if (isSunday) bgColor = Color(0xFF6294BA);

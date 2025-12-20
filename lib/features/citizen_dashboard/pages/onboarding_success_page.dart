@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../router/app_router.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 class OnboardingSuccessPage extends StatelessWidget {
   const OnboardingSuccessPage({
@@ -29,11 +30,12 @@ class OnboardingSuccessPage extends StatelessWidget {
     final primaryColor = colorScheme.primary;
     final textColor = colorScheme.onSurface;
     final mutedText = textColor.withValues(alpha: 0.7);
+    final localizations = AppLocalizations.of(context);
 
     return Scaffold(
       appBar: AppBar(
         title: Text(
-          'Registration Successful',
+          localizations.registrationSuccessTitle,
           style: theme.textTheme.titleLarge?.copyWith(
             color: Colors.white,
             fontWeight: FontWeight.w600,
@@ -59,7 +61,7 @@ class OnboardingSuccessPage extends StatelessWidget {
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Text(
-                'Welcome, $userName!',
+                localizations.welcomeMessage(userName),
                 textAlign: TextAlign.center,
                 style: theme.textTheme.titleLarge!.copyWith(
                   color: primaryColor,
@@ -71,7 +73,7 @@ class OnboardingSuccessPage extends StatelessWidget {
               _imageAsset('logo.png', width: 80, height: 80),
               const SizedBox(height: 20),
               Text(
-                'Registration Complete!',
+                localizations.registrationComplete,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.headlineSmall?.copyWith(
                   fontWeight: FontWeight.bold,
@@ -80,7 +82,7 @@ class OnboardingSuccessPage extends StatelessWidget {
               ),
               const SizedBox(height: 10),
               Text(
-                'Your unique QR code is now active for waste collection verification.',
+                localizations.qrActivatedDescription,
                 textAlign: TextAlign.center,
                 style: theme.textTheme.bodyLarge?.copyWith(color: mutedText),
               ),
@@ -91,7 +93,7 @@ class OnboardingSuccessPage extends StatelessWidget {
                   onPressed: () {},
                   icon: Icon(Icons.qr_code_2, color: primaryColor),
                   label: Text(
-                    'View My Collection QR Code',
+                    localizations.viewMyCollectionQr,
                     style:
                         theme.textTheme.labelLarge?.copyWith(color: primaryColor),
                   ),
@@ -110,7 +112,7 @@ class OnboardingSuccessPage extends StatelessWidget {
                   onPressed: () {},
                   icon: Icon(Icons.feedback_outlined, color: primaryColor),
                   label: Text(
-                    'Raise a Grievance',
+                    localizations.raiseGrievance,
                     style:
                         theme.textTheme.labelLarge?.copyWith(color: primaryColor),
                   ),
@@ -125,11 +127,11 @@ class OnboardingSuccessPage extends StatelessWidget {
               const SizedBox(height: 30),
               TextButton(
                 onPressed: () => context.go(AppRoutePaths.citizenHome),
-                child: Text(
-                  'Skip to Dashboard',
-                  style: theme.textTheme.bodyMedium?.copyWith(
-                    color: primaryColor,
-                    fontWeight: FontWeight.w600,
+              child: Text(
+                localizations.skipToDashboard,
+                style: theme.textTheme.bodyMedium?.copyWith(
+                  color: primaryColor,
+                  fontWeight: FontWeight.w600,
                   ),
                 ),
               ),

@@ -1,5 +1,17 @@
 import 'package:flutter/material.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+
+const BorderRadius _kCardRadius = BorderRadius.all(Radius.circular(18));
+const BorderRadius _kChipRadius = BorderRadius.all(Radius.circular(18));
+const List<BoxShadow> _kSoftShadow = [
+  BoxShadow(
+    color: Color(0x0F000000),
+    blurRadius: 14,
+    offset: Offset(0, 10),
+  ),
+];
+const Color _historyPrimary = AppColors.primary;
+const Color _historyAccent = Color(0xFF66BB6A);
 
 class OperatorHistoryEntry {
   const OperatorHistoryEntry({
@@ -52,23 +64,31 @@ class OperatorHistoryTabs extends StatelessWidget {
           Container(
             decoration: BoxDecoration(
               color: Colors.white,
-              borderRadius: OperatorTheme.chipRadius,
-              boxShadow: OperatorTheme.softShadow,
+              borderRadius: _kChipRadius,
+              boxShadow: _kSoftShadow,
             ),
             child: TabBar(
-              labelColor: OperatorTheme.primary,
-              unselectedLabelColor: OperatorTheme.mutedText,
+              labelColor: _historyPrimary,
+              unselectedLabelColor: AppColors.textSecondary,
+              labelStyle: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+              ),
+              unselectedLabelStyle: const TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
               indicator: BoxDecoration(
-                color: OperatorTheme.primary.withOpacity(0.12),
-                borderRadius: OperatorTheme.chipRadius,
+                color: _historyPrimary.withOpacity(0.16),
+                borderRadius: _kChipRadius,
               ),
               tabs: tabs
                   .map(
                     (tab) => Tab(
-                      height: 46,
+                      height: 52,
                       child: Text(
                         tab.label,
-                        style: const TextStyle(fontWeight: FontWeight.w600),
+                        style: const TextStyle(fontWeight: FontWeight.w800),
                       ),
                     ),
                   )
@@ -102,13 +122,14 @@ class _OperatorHistoryList extends StatelessWidget {
       return const Center(
         child: Text(
           'No records for this filter.',
-          style: TextStyle(color: OperatorTheme.mutedText),
+          style: TextStyle(color: AppColors.textSecondary),
         ),
       );
     }
 
     return ListView.separated(
       padding: EdgeInsets.zero,
+      physics: const BouncingScrollPhysics(),
       itemBuilder: (context, index) {
         final entry = entries[index];
         return _OperatorHistoryCard(entry: entry);
@@ -126,14 +147,16 @@ class _OperatorHistoryCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final vehicleLabel =
+        entry.location.isNotEmpty ? entry.location : entry.routeName;
+
     return Container(
-      padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: OperatorTheme.cardRadius,
-        boxShadow: OperatorTheme.softShadow,
+        borderRadius: _kCardRadius,
+        boxShadow: _kSoftShadow,
       ),
+      padding: const EdgeInsets.all(14),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -141,33 +164,34 @@ class _OperatorHistoryCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: OperatorTheme.primary.withOpacity(0.12),
+                  color: _historyPrimary.withOpacity(0.08),
                   shape: BoxShape.circle,
                 ),
-                child: const Icon(
-                  Icons.recycling_rounded,
-                  color: OperatorTheme.primary,
-                ),
+                child: const Icon(Icons.recycling_rounded,
+                    color: _historyPrimary),
               ),
-              const SizedBox(width: 12),
+              const SizedBox(width: 10),
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      entry.routeName,
-                      style: theme.textTheme.titleLarge?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: OperatorTheme.strongText,
+                    const Text(
+                      'Waste Collected',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w800,
                       ),
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      entry.location,
-                      style: theme.textTheme.bodyMedium
-                          ?.copyWith(color: OperatorTheme.mutedText),
+                      'Vehicle : $vehicleLabel',
+                      style: TextStyle(
+                        color: Colors.black.withOpacity(0.65),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ],
                 ),
@@ -175,107 +199,88 @@ class _OperatorHistoryCard extends StatelessWidget {
               Column(
                 crossAxisAlignment: CrossAxisAlignment.end,
                 children: [
-                  Text(
-                    '${entry.totalKg.toStringAsFixed(1)} kg',
-                    style: theme.textTheme.titleMedium?.copyWith(
-                      color: OperatorTheme.primary,
-                      fontWeight: FontWeight.w700,
+                  const Text(
+                    'Total Collected :',
+                    style: TextStyle(
+                      color: Colors.black54,
+                      fontSize: 12.5,
                     ),
                   ),
+                  const SizedBox(height: 4),
                   Text(
-                    entry.timestamp,
-                    style: theme.textTheme.bodySmall
-                        ?.copyWith(color: OperatorTheme.mutedText),
+                    '${entry.totalKg.toStringAsFixed(1)} Kg',
+                    style: const TextStyle(
+                      color: _historyPrimary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 15,
+                    ),
                   ),
                 ],
               ),
             ],
           ),
-          const SizedBox(height: 16),
+          const SizedBox(height: 12),
           Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 12),
             decoration: BoxDecoration(
-              color: OperatorTheme.primary.withOpacity(0.08),
-              borderRadius: BorderRadius.circular(18),
+              color: _historyAccent.withOpacity(0.15),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: _historyAccent.withOpacity(0.35)),
             ),
             child: Row(
-              children: _buildMetricColumns(theme),
+              children: [
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        '${entry.dryKg.toStringAsFixed(1)} Kg',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        'Dry',
+                        style: TextStyle(
+                          color: Colors.black.withOpacity(0.65),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                Container(
+                  width: 1,
+                  height: 34,
+                  color: Colors.black.withOpacity(0.1),
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.end,
+                    children: [
+                      Text(
+                        '${entry.wetKg.toStringAsFixed(1)} Kg',
+                        style: const TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
+                      Text(
+                        'Wet',
+                        style: TextStyle(
+                          color: Colors.black.withOpacity(0.65),
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
         ],
       ),
     );
   }
-
-  List<Widget> _buildMetricColumns(ThemeData theme) {
-    final metrics = <_HistoryMetric>[
-      _HistoryMetric(
-        label: 'Dry Waste',
-        value: entry.dryKg,
-        alignment: CrossAxisAlignment.start,
-      ),
-      _HistoryMetric(
-        label: 'Wet Waste',
-        value: entry.wetKg,
-        alignment: CrossAxisAlignment.end,
-      ),
-    ];
-
-    if (entry.otherKg > 0) {
-      metrics.add(
-        _HistoryMetric(
-          label: 'Mixed / Other',
-          value: entry.otherKg,
-          alignment: CrossAxisAlignment.end,
-        ),
-      );
-    }
-
-    final children = <Widget>[];
-    for (var i = 0; i < metrics.length; i++) {
-      final metric = metrics[i];
-      children.add(
-        Expanded(
-          child: Column(
-            crossAxisAlignment: metric.alignment,
-            children: [
-              Text(
-                '${metric.value.toStringAsFixed(1)} kg',
-                style: theme.textTheme.titleMedium?.copyWith(
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-              Text(
-                metric.label,
-                style: theme.textTheme.bodyMedium?.copyWith(
-                  color: OperatorTheme.mutedText,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      );
-      if (i != metrics.length - 1) {
-        children.add(Container(
-          width: 1,
-          height: 34,
-          color: Colors.black.withOpacity(0.07),
-        ));
-      }
-    }
-    return children;
-  }
-}
-
-class _HistoryMetric {
-  const _HistoryMetric({
-    required this.label,
-    required this.value,
-    required this.alignment,
-  });
-
-  final String label;
-  final double value;
-  final CrossAxisAlignment alignment;
 }

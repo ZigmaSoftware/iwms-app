@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
@@ -23,9 +24,13 @@ import 'package:iwms_citizen_app/features/citizen_dashboard/notifications/models
 import 'package:iwms_citizen_app/features/citizen_dashboard/profile/widgets/profile_tab.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/quick_actions/models/quick_action.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/controllers/track_controller.dart';
+import 'package:iwms_citizen_app/features/citizen_dashboard/track/models/waste_period.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/services/track_service.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/track/widgets/track_tab.dart';
 import 'package:iwms_citizen_app/features/citizen_dashboard/geofence/utils/geofence_evaluator.dart';
+import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
+import 'package:qr_flutter/qr_flutter.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 class CitizenDashboardPage extends StatefulWidget {
   const CitizenDashboardPage({super.key, required this.userName});
@@ -46,7 +51,9 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
   late final NotificationController _notificationController;
   late final HomeNavController _navController;
   late final GeofenceEvaluator _geofenceEvaluator;
+  late final AuthRepository _authRepository;
   DateTime? _lastGeofenceAlertAt;
+  String? _userId;
 
   late final List<BannerSlide> _fallbackSlides;
 
@@ -64,9 +71,19 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     );
     _navController = HomeNavController();
     _geofenceEvaluator = const GeofenceEvaluator();
+    _authRepository = getIt<AuthRepository>();
 
     unawaited(_bannerController.initialize());
     unawaited(_trackController.refresh(force: true));
+    _loadUserId();
+  }
+
+  Future<void> _loadUserId() async {
+    final user = await _authRepository.getAuthenticatedUser();
+    if (!mounted) return;
+    setState(() {
+      _userId = user?.userId;
+    });
   }
 
   @override
@@ -101,7 +118,20 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     final highlightColor =
         isDarkMode ? colorScheme.secondary : colorScheme.primary;
 
-    final quickActions = _buildQuickActions(context);
+    final localizations = AppLocalizations.of(context);
+    final quickActions = _buildQuickActions(context, localizations);
+    final navLabels = [
+      localizations.tabHome,
+      localizations.tabTrack,
+      localizations.tabMap,
+      localizations.tabProfile,
+    ];
+    final localeCode = Localizations.localeOf(context).languageCode;
+    final navTextStyle = (theme.textTheme.bodySmall ?? const TextStyle()).copyWith(
+      color: isDarkMode ? Colors.white70 : Colors.black87,
+      fontWeight: FontWeight.w600,
+      fontSize: localeCode == 'ta' ? 11 : 12,
+    );
 
     final List<Color> sectionHeaderGradientColors = isDarkMode
         ? const [Color(0xFF0D3A16), Color(0xFF43A047)]
@@ -155,6 +185,11 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
             textColor: textColor,
             secondaryTextColor: secondaryTextColor,
             highlightColor: highlightColor,
+            onStatsTap: () {
+              _trackController.setPeriod(WastePeriod.monthly);
+              _navController.setItem(BottomNavItem.track);
+              unawaited(_trackController.refresh(force: true));
+            },
           );
       }
     }
@@ -183,70 +218,84 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
           },
         ),
         bottomNavigationBar: SafeArea(
-          child: MotionTabBar(
-            labels: const ['Home', 'Track', 'Map', 'Profile'],
-            icons: const [
-              Icons.home_outlined,
-              Icons.delete_outline,
-              Icons.map_outlined,
-              Icons.person_outline,
-            ],
-            initialSelectedTab: _labelForNav(_navController.active),
-            tabBarColor: isDarkMode ? CitizenDashboardPage.darkSurface : Colors.white,
-            tabSelectedColor: highlightColor,
-            tabIconColor: isDarkMode ? Colors.white54 : Colors.black54,
-            tabBarHeight: 64,
-            tabSize: 52,
-            tabIconSize: 22,
-            tabIconSelectedSize: 24,
-            onTabItemSelected: (value) {
-              final item = value is int
-                  ? _navFromIndex(value)
-                  : value is String
-                      ? _navFromLabel(value)
-                      : null;
-              if (item != null) _navController.setItem(item);
-            },
+          child: KeyedSubtree(
+            key: ValueKey(navLabels.join('-')),
+            child: MotionTabBar(
+              labels: navLabels,
+              textStyle: navTextStyle,
+              icons: const [
+                Icons.home_outlined,
+                Icons.delete_outline,
+                Icons.map_outlined,
+                Icons.person_outline,
+              ],
+              tabBarColor:
+                  isDarkMode ? CitizenDashboardPage.darkSurface : Colors.white,
+              tabSelectedColor: highlightColor,
+              tabIconColor: isDarkMode ? Colors.white54 : Colors.black54,
+              tabBarHeight: 64,
+              tabSize: 52,
+              tabIconSize: 22,
+              tabIconSelectedSize: 24,
+              initialSelectedTab:
+                  _labelForNav(_navController.active, localizations),
+              onTabItemSelected: (value) {
+                int? index;
+                if (value is int) {
+                  index = value;
+                } else if (value is String) {
+                  index = navLabels.indexOf(value);
+                }
+                if (index != null &&
+                    index >= 0 &&
+                    index < navLabels.length) {
+                  _navController.setItem(_navFromIndex(index));
+                }
+              },
+            ),
           ),
         ),
       ),
     );
   }
 
-  List<QuickAction> _buildQuickActions(BuildContext context) {
+  List<QuickAction> _buildQuickActions(
+    BuildContext context,
+    AppLocalizations localizations,
+  ) {
     return [
       QuickAction(
-        label: 'Track Vehicles',
+        label: localizations.quickActionTrackVehicles,
         assetPath: 'assets/icons/track_vehicles.png',
         onTap: () => context.push(AppRoutePaths.citizenMap),
       ),
       QuickAction(
-        label: 'Collection Details',
+        label: localizations.quickActionCollectionDetails,
         assetPath: 'assets/icons/collection_details.png',
         onTap: () => context.push(AppRoutePaths.citizenDriverDetails),
       ),
       QuickAction(
-        label: 'Collection History',
+        label: localizations.quickActionCollectionHistory,
         assetPath: 'assets/icons/collectionhistory.png',
         onTap: () => context.push(AppRoutePaths.citizenHistory),
       ),
       QuickAction(
-        label: 'Raise Grievance',
+        label: localizations.quickActionRaiseGrievance,
         assetPath: 'assets/icons/raise_grievance.png',
-        onTap: () => context.push(AppRoutePaths.citizenGrievanceChat),
+        onTap: () => _showComingSoon(context, 'Rating feature'),
       ),
       QuickAction(
-        label: 'Rate Collector',
+        label: localizations.quickActionRateCollector,
         assetPath: 'assets/icons/rate_collector.png',
         onTap: () => _showComingSoon(context, 'Rating feature'),
       ),
       QuickAction(
-        label: 'QR',
+        label: localizations.quickActionQr,
         assetPath: 'assets/icons/qr.png',
-        onTap: () => _showQrDialog(context),
+        onTap: () => _showQrDialog(context, localizations),
       ),
       QuickAction(
-        label: 'Upcoming Collection',
+        label: localizations.quickActionUpcomingCollection,
         assetPath: 'assets/icons/upcoming_collection.png',
         onTap: () => _showComingSoon(context, 'Upcoming collection schedule'),
       ),
@@ -283,8 +332,16 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     );
   }
 
-  Future<void> _showQrDialog(BuildContext context) async {
+  Future<void> _showQrDialog(
+    BuildContext context,
+    AppLocalizations localizations,
+  ) async {
     final theme = Theme.of(context);
+    final uid = _userId;
+    final qrPayload = uid != null
+        ? jsonEncode({"type": "citizen", "uid": uid})
+        : null;
+
     await showDialog<void>(
       context: context,
       builder: (dialogContext) {
@@ -297,34 +354,62 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
               mainAxisSize: MainAxisSize.min,
               children: [
                 Text(
-                  'My Collection QR',
+                  localizations.qrDialogTitle,
                   style: theme.textTheme.titleMedium?.copyWith(
                     fontWeight: FontWeight.w800,
                   ),
                 ),
                 const SizedBox(height: 6),
                 Text(
-                  'Show this code to your collector for instant verification.',
+                  localizations.qrDialogSubtitle,
                   style: theme.textTheme.bodySmall?.copyWith(
                     color: theme.colorScheme.onSurfaceVariant,
                   ),
                   textAlign: TextAlign.center,
                 ),
                 const SizedBox(height: 18),
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(24),
-                  child: Image.asset(
-                    'assets/images/qr.png',
-                    width: 240,
-                    height: 240,
-                    fit: BoxFit.cover,
+                if (qrPayload != null)
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(24),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: Color.fromRGBO(0, 0, 0, 0.08),
+                          blurRadius: 18,
+                          offset: Offset(0, 10),
+                        ),
+                      ],
+                    ),
+                    child: QrImageView(
+                      data: qrPayload,
+                      version: QrVersions.auto,
+                      size: 240,
+                      backgroundColor: Colors.white,
+                      eyeStyle: const QrEyeStyle(
+                        color: Colors.black,
+                        eyeShape: QrEyeShape.square,
+                      ),
+                      dataModuleStyle: const QrDataModuleStyle(
+                        color: Colors.black87,
+                        dataModuleShape: QrDataModuleShape.square,
+                      ),
+                    ),
+                  )
+                else
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 28.0),
+                    child: Text(
+                      localizations.qrDialogLoginPrompt,
+                      style: theme.textTheme.bodyMedium,
+                    ),
                   ),
-                ),
                 const SizedBox(height: 20),
                 FilledButton.icon(
                   onPressed: () => Navigator.of(dialogContext).pop(),
                   icon: const Icon(Icons.check),
-                  label: const Text('Done'),
+                  label: Text(localizations.qrDialogDone),
                   style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(horizontal: 24),
                   ),
@@ -335,20 +420,6 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
         );
       },
     );
-  }
-
-  BottomNavItem _navFromLabel(String label) {
-    switch (label) {
-      case 'Track':
-        return BottomNavItem.track;
-      case 'Map':
-        return BottomNavItem.map;
-      case 'Profile':
-        return BottomNavItem.profile;
-      case 'Home':
-        return BottomNavItem.home;
-    }
-    return BottomNavItem.home;
   }
 
   BottomNavItem _navFromIndex(int index) {
@@ -362,16 +433,16 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     return values[index];
   }
 
-  String _labelForNav(BottomNavItem item) {
+  String _labelForNav(BottomNavItem item, AppLocalizations localizations) {
     switch (item) {
       case BottomNavItem.track:
-        return 'Track';
+        return localizations.tabTrack;
       case BottomNavItem.map:
-        return 'Map';
+        return localizations.tabMap;
       case BottomNavItem.profile:
-        return 'Profile';
+        return localizations.tabProfile;
       case BottomNavItem.home:
-        return 'Home';
+        return localizations.tabHome;
     }
   }
 

@@ -1,12 +1,38 @@
+import 'dart:ui';
+
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_header.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_cards.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
+import 'package:iwms_citizen_app/logic/locale/locale_cubit.dart';
+
+const EdgeInsets _profilePagePadding =
+    EdgeInsets.symmetric(horizontal: 20, vertical: 16);
+
+class _OperatorLanguageOption {
+  const _OperatorLanguageOption({
+    required this.code,
+    required this.label,
+  });
+
+  final String code;
+  final String label;
+}
+
+const List<_OperatorLanguageOption> _operatorLanguageOptions = [
+  _OperatorLanguageOption(code: 'en', label: 'English'),
+  _OperatorLanguageOption(code: 'hi', label: 'Hindi'),
+  _OperatorLanguageOption(code: 'ta', label: 'Tamil'),
+];
 
 class OperatorProfileScreen extends StatelessWidget {
   const OperatorProfileScreen({
     super.key,
     required this.operatorName,
+    required this.emp_id,
     required this.operatorCode,
     required this.wardLabel,
     required this.zoneLabel,
@@ -18,6 +44,7 @@ class OperatorProfileScreen extends StatelessWidget {
 
   final String operatorName;
   final String operatorCode;
+  final String emp_id;
   final String wardLabel;
   final String zoneLabel;
   final VoidCallback onLogout;
@@ -28,150 +55,176 @@ class OperatorProfileScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
+
     return ColoredBox(
-      color: OperatorTheme.background,
+      color: AppColors.background,
       child: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: OperatorTheme.pagePadding,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            _ProfileHeader(
+            OperatorHeader(
               name: operatorName,
-              code: operatorCode,
-              wardLabel: wardLabel,
-              zoneLabel: zoneLabel,
-              onEdit: onEditProfile,
+              empId: emp_id,
+              badge: operatorCode,
+              ward: wardLabel,
+              zone: zoneLabel,
+              onLogout: onLogout,
+              onMenuTap: onEditProfile,
             ),
-            const SizedBox(height: 24),
-            OperatorInfoCard(
-              title: "Contact details",
-              subtitle: "All key references in one place",
+            Padding(
+              padding: _profilePagePadding,
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  _ProfileDetailRow(
-                    icon: Icons.phone,
-                    label: "Phone",
-                    value: contactInfo.phone,
-                  ),
-                  const SizedBox(height: 12),
-                  _ProfileDetailRow(
-                    icon: Icons.mail_outline,
-                    label: "Email",
-                    value: contactInfo.email,
-                  ),
-                  const SizedBox(height: 12),
-                  _ProfileDetailRow(
-                    icon: Icons.badge_outlined,
-                    label: "Designation",
-                    value: contactInfo.designation,
-                  ),
-                  const SizedBox(height: 12),
-                  _ProfileDetailRow(
-                    icon: Icons.location_city,
-                    label: "Ward / Zone",
-                    value: '$wardLabel · $zoneLabel',
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 24),
-            OperatorInfoCard(
-              title: "Attendance & leave",
-              subtitle: "Quick snapshot from attendance module",
-              child: Column(
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OperatorQuickStat(
-                          label: "This month",
-                          value: attendanceSummary.monthStat,
-                          icon: Icons.calendar_month,
-                          emphasis: true,
-                        ),
-                      ),
-                      Expanded(
-                        child: OperatorQuickStat(
-                          label: "Leaves left",
-                          value: attendanceSummary.leaveBalance,
-                          icon: Icons.eco_outlined,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      color: OperatorTheme.primary.withOpacity(0.08),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Row(
+                  const SizedBox(height: 24),
+                  OperatorInfoCard(
+                    title: localizations.profileContactTitle,
+                    subtitle: localizations.profileContactSubtitle,
+                    child: Column(
                       children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                        _ProfileDetailRow(
+                          icon: Icons.phone,
+                          label: localizations.profilePhoneLabel,
+                          value: contactInfo.phone,
+                        ),
+                        const SizedBox(height: 12),
+                        _ProfileDetailRow(
+                          icon: Icons.mail_outline,
+                          label: localizations.profileEmailLabel,
+                          value: contactInfo.email,
+                        ),
+                        const SizedBox(height: 12),
+                        _ProfileDetailRow(
+                          icon: Icons.badge_outlined,
+                          label: localizations.profileDesignationLabel,
+                          value: contactInfo.designation ?? "-",
+                        ),
+                        const SizedBox(height: 12),
+                        _ProfileDetailRow(
+                          icon: Icons.location_city,
+                          label: localizations.profileWardZoneLabel,
+                          value: '$wardLabel · $zoneLabel',
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 24),
+                  OperatorInfoCard(
+                    title: localizations.profileAttendanceTitle,
+                    subtitle: localizations.profileAttendanceSubtitle,
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Expanded(
+                              child: OperatorQuickStat(
+                                label:
+                                    localizations.operatorAttendanceMonth,
+                                value:
+                                    attendanceSummary.monthStat ?? "--",
+                                icon: Icons.calendar_month,
+                                emphasis: true,
+                              ),
+                            ),
+                            Expanded(
+                              child: OperatorQuickStat(
+                                label:
+                                    localizations.operatorLeaveBalance,
+                                value:
+                                    attendanceSummary.leaveBalance ?? "--",
+                                icon: Icons.eco_outlined,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+                        Container(
+                          padding: const EdgeInsets.all(16),
+                          decoration: BoxDecoration(
+                            color:
+                                AppColors.primary.withOpacity(0.08),
+                            borderRadius:
+                                BorderRadius.circular(18),
+                          ),
+                          child: Row(
                             children: [
-                              Text(
-                                attendanceSummary.streakLabel,
-                                style: theme.textTheme.bodySmall?.copyWith(
-                                  color: OperatorTheme.mutedText,
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      attendanceSummary.streakLabel ??
+                                          localizations
+                                              .operatorAttendanceStreak,
+                                      style: theme.textTheme.bodySmall
+                                          ?.copyWith(
+                                        color:
+                                            AppColors.textSecondary,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      attendanceSummary.streakValue ??
+                                          "--",
+                                      style: theme
+                                          .textTheme.headlineSmall
+                                          ?.copyWith(
+                                        color:
+                                            AppColors.primary,
+                                        fontWeight:
+                                            FontWeight.w800,
+                                      ),
+                                    ),
+                                  ],
                                 ),
                               ),
-                              const SizedBox(height: 4),
-                              Text(
-                                attendanceSummary.streakValue,
-                                style: theme.textTheme.headlineSmall?.copyWith(
-                                  color: OperatorTheme.primary,
-                                  fontWeight: FontWeight.w800,
+                              FilledButton.icon(
+                                onPressed: onEditProfile ??
+                                    () => _showComingSoon(
+                                        context),
+                                icon: const Icon(Icons.edit,
+                                    color: Colors.white),
+                                label: Text(
+                                  localizations.profileEditButton,
+                                  style: const TextStyle(
+                                      color: Colors.white),
                                 ),
                               ),
                             ],
                           ),
                         ),
-                        FilledButton.icon(
-                          onPressed:
-                              onEditProfile ?? () => _showComingSoon(context),
-                          style: FilledButton.styleFrom(
-                            backgroundColor: OperatorTheme.primary,
-                            padding: const EdgeInsets.symmetric(
-                              horizontal: 18,
-                              vertical: 12,
-                            ),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(24),
-                            ),
-                          ),
-                          icon: const Icon(Icons.edit, color: Colors.white),
-                          label: const Text(
-                            "Edit profile",
-                            style: TextStyle(color: Colors.white),
-                          ),
-                        ),
                       ],
                     ),
                   ),
+                  const SizedBox(height: 32),
+                  const _OperatorLanguageCard(),
+                  const SizedBox(height: 12),
+                  FilledButton.icon(
+                    onPressed: onLogout,
+                    style: FilledButton.styleFrom(
+                      backgroundColor:
+                          const Color(0xFFCF1B1B),
+                      padding: const EdgeInsets.symmetric(
+                          vertical: 16),
+                      shape: RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.circular(26),
+                      ),
+                    ),
+                    icon: const Icon(Icons.logout,
+                        color: Colors.white),
+                    label: const Text(
+                      "Logout",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
                 ],
-              ),
-            ),
-            const SizedBox(height: 32),
-            FilledButton.icon(
-              onPressed: onLogout,
-              style: FilledButton.styleFrom(
-                backgroundColor: const Color(0xFFCF1B1B),
-                padding: const EdgeInsets.symmetric(vertical: 16),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(26),
-                ),
-              ),
-              icon: const Icon(Icons.logout, color: Colors.white),
-              label: const Text(
-                "Logout",
-                style: TextStyle(
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white,
-                ),
               ),
             ),
           ],
@@ -183,90 +236,61 @@ class OperatorProfileScreen extends StatelessWidget {
   void _showComingSoon(BuildContext context) {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
-        content: Text("Edit profile flow will open the existing screen."),
+        content: Text(
+            "Edit profile flow will open the existing screen."),
       ),
     );
   }
 }
 
-class _ProfileHeader extends StatelessWidget {
-  const _ProfileHeader({
-    required this.name,
-    required this.code,
-    required this.wardLabel,
-    required this.zoneLabel,
-    this.onEdit,
-  });
-
-  final String name;
-  final String code;
-  final String wardLabel;
-  final String zoneLabel;
-  final VoidCallback? onEdit;
+class _OperatorLanguageCard extends StatelessWidget {
+  const _OperatorLanguageCard();
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
-    return Container(
-      padding: const EdgeInsets.all(24),
-      decoration: const BoxDecoration(
-        gradient: OperatorTheme.headerGradient,
-        borderRadius: BorderRadius.all(Radius.circular(28)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const CircleAvatar(
-                radius: 32,
-                backgroundColor: Colors.white24,
-                child: Icon(Icons.person, size: 36, color: Colors.white),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      name,
-                      style: textTheme.headlineSmall?.copyWith(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      code,
-                      style: textTheme.titleMedium?.copyWith(
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w600,
-                      ),
-                    ),
-                    const SizedBox(height: 4),
-                    Text(
-                      '$wardLabel · $zoneLabel',
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: Colors.white70,
-                      ),
-                    ),
-                  ],
+    final theme = Theme.of(context);
+    final localizations = AppLocalizations.of(context);
+
+    return Card(
+      shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16)),
+      child: ListTile(
+        leading:
+            const Icon(Icons.language, color: AppColors.primary),
+        title: Text(localizations.changeLanguage),
+        subtitle:
+            Text(localizations.changeLanguageSubtitle),
+
+        // ✅ CRITICAL FIX
+        trailing: SizedBox(
+          width: 120,
+          child: BlocBuilder<LocaleCubit, Locale>(
+            builder: (context, locale) {
+              return DropdownButtonHideUnderline(
+                child: DropdownButton<String>(
+                  isExpanded: true,
+                  value: locale.languageCode,
+                  items: _operatorLanguageOptions
+                      .map(
+                        (o) => DropdownMenuItem<String>(
+                          value: o.code,
+                          child: Text(o.label),
+                        ),
+                      )
+                      .toList(),
+                  onChanged: (code) {
+                    if (code == null) return;
+                    context
+                        .read<LocaleCubit>()
+                        .setLocale(Locale(code));
+                  },
                 ),
-              ),
-              IconButton(
-                onPressed: onEdit ?? () => _showComingSoon(context),
-                icon: const Icon(Icons.settings, color: Colors.white),
-              ),
-            ],
+              );
+            },
           ),
-        ],
+        ),
       ),
     );
-  }
-
-  void _showComingSoon(BuildContext context) {
-    ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Edit profile available soon.')));
   }
 }
 
@@ -284,27 +308,30 @@ class _ProfileDetailRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Row(
-      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Icon(icon, color: OperatorTheme.primary),
+        Icon(icon, color: AppColors.primary),
         const SizedBox(width: 12),
         Expanded(
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
+            crossAxisAlignment:
+                CrossAxisAlignment.start,
             children: [
               Text(
                 label,
                 style: Theme.of(context)
-                    .textTheme
-                    .bodySmall
-                    ?.copyWith(color: OperatorTheme.mutedText),
+                    .textTheme.bodySmall
+                    ?.copyWith(
+                        color:
+                            AppColors.textSecondary),
               ),
               const SizedBox(height: 4),
               Text(
                 value,
-                style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                      color: OperatorTheme.strongText,
-                      fontWeight: FontWeight.w600,
+                style: Theme.of(context)
+                    .textTheme.titleMedium
+                    ?.copyWith(
+                      fontWeight:
+                          FontWeight.w600,
                     ),
               ),
             ],

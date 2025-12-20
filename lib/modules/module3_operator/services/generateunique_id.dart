@@ -12,6 +12,6 @@ class UniqueIdService {
 
   // 🔹 final ID format:
   // scr2025s45m512abcxyz91  (prefix + year + second + millisecond + random)
-  return 'scr${year}s${secondPart}m${milliPart}$randomStr';
+  return 'scr${year}s${secondPart}m$milliPart$randomStr';
 }
 }

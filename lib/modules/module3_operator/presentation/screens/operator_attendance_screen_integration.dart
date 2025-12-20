@@ -4,10 +4,20 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/a
 /// Wrapper widget so the attendance module can be slotted inside the new tab UI
 /// without altering any of its internal business logic.
 class OperatorAttendanceScreenIntegration extends StatelessWidget {
-  const OperatorAttendanceScreenIntegration({super.key});
+  const OperatorAttendanceScreenIntegration({
+    super.key,
+    this.operatorName = '',
+    this.operatorCode = '',
+  });
+
+  final String operatorName;
+  final String operatorCode;
 
   @override
   Widget build(BuildContext context) {
-    return const AttendancePage();
+    return AttendancePage(
+      operatorName: operatorName,
+      operatorCode: operatorCode,
+    );
   }
 }
