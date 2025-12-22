@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/core/di.dart';
 
 /// Enhanced, animated cancel assignment sheet
 class EnhancedCancelAssignmentSheet extends StatefulWidget {
@@ -102,21 +101,19 @@ class _EnhancedCancelAssignmentSheetState
     setState(() => _submitting = true);
 
     try {
-      // Prefer unauthenticated DELETE to avoid backend JWT mismatch issues.
-      final dio = getIt<Dio>()..options.headers.remove('Authorization');
+      final authDio = await authorizedDio();
       final reason = _selectedReason == 'Other'
           ? _customReasonController.text.trim()
           : _selectedReason!;
 
       Response response;
       try {
-        response = await dio.delete(
+        response = await authDio.delete(
           '${ApiConfig.assignments}${widget.uniqueId}/',
           data: {'reason': reason},
         );
       } on DioException catch (e) {
-        // Fallback to authenticated cancel endpoint if DELETE is blocked
-        final authDio = await authorizedDio();
+        // Fallback to cancel endpoint if DELETE is blocked
         response = await authDio.post(
           '${ApiConfig.assignments}${widget.uniqueId}/cancel/',
           data: {'reason': reason},

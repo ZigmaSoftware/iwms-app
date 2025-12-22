@@ -1,5 +1,6 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
+import 'package:iwms_citizen_app/core/env.dart';
 
 // This function creates and configures a Dio instance
 Dio createDioClient() {
@@ -24,35 +25,28 @@ Dio createDioClient() {
 
 class ApiConfig {
   static const String _legacyBase = 'https://zigma.in/iwms_app/iwms_app/';
-  static const String _localMobileBase =
-      'http://192.168.5.92:8000/api/mobile/'; // bharathi
-  // static const String _localMobileBase = 'http://192.168.5.92:8000/api/mobile/'; //sameer
-  static const String _localDesktopBase =
-      'http://192.168.5.92:8000/api/desktop/';
-  // static const String _localMobileBase = 'http://10.111.127.123:8000/api/mobile/';
-  //  // static const String _localMobileBase = 'http://115.245.93.26:4216/api/mobile/'; server
 
   /// Base URL used by the Flutter apps for mobile endpoints.
-  static const String mobileBase = _localMobileBase;
+  static const String mobileBase = kMobileBase;
   static const String wasteSummaryEndpoint =
       '${mobileBase}waste/citizen-summary/';
 
   /// Desktop endpoints (open lists) used for driver-side data pulls.
-  static const String desktopBase = _localDesktopBase;
-  static const String customerList = '${desktopBase}customercreations/';
-  static const String assignments = '${desktopBase}assignments/';
-  static const String staffAssignments = '${desktopBase}staff-assignments/';
-  static const String collectionLogs = '${desktopBase}collection-logs/';
-  static const String citizenAssignments = '${desktopBase}citizen-assignments/';
+  static const String desktopBase = kDesktopBase;
+  static const String customerList = '${desktopBase}customers/customercreations/';
+  static const String assignments = '${desktopBase}role-assign/assignments/';
+  static const String staffAssignments = '${desktopBase}role-assign/staff-assignments/';
+  static const String collectionLogs = '${desktopBase}role-assign/collection-logs/';
+  static const String citizenAssignments = '${desktopBase}role-assign/citizen-assignments/';
 
   // TEMP: Hardcoded ORS key (DEBUG / INTERNAL ONLY)
   static const String orsApiKey =
       'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjU3MzI5ZTM0NjM3YTQ2N2ZhZDYwMDM0ZmQ3ZDk0NTc3IiwiaCI6Im11cm11cjY0In0=';
 
   static const String driverNextHouse =
-      'https://192.168.5.92:8000/api/driver/next-house/';
+      'https://192.168.5.92/api/driver/next-house/';
   static const String updateAssignmentStatus =
-      'https://192.168.5.92:8000/driver/assignment/update-status/';
+      'https://192.168.5.92/driver/assignment/update-status/';
 
   // static const String orsApiKey = String.fromEnvironment(
   //   'ORS_API_KEY',
@@ -65,9 +59,10 @@ class ApiConfig {
 
   /// Django backend endpoint for citizen authentication.
   // static const String _defaultCitizenLogin = '${_localMobileBase}customer/login/';
-  static const String _defaultCitizenLogin = '${_localMobileBase}login/';
+  static const String _defaultCitizenLogin = '${mobileBase}login/';
   static const String citizenLogin = String.fromEnvironment('CITIZEN_LOGIN_URL',
       defaultValue: _defaultCitizenLogin);
+  static const String staffLogin = '${desktopBase}login/login-user/';
 
   /// Default user type identifier expected by the Django login API.
   static const String citizenUserType = 'citizen';

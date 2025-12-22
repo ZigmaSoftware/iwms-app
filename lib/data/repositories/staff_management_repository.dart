@@ -4,16 +4,17 @@ import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
+import 'package:iwms_citizen_app/core/env.dart';
 
 class StaffManagementRepository {
   const StaffManagementRepository();
 
   Future<List<StaffMember>> fetchStaff({String? role}) async {
+    if (!kEnforcePermissions) return const <StaffMember>[];
     try {
-      final dio = getIt<Dio>();
+      final dio = await authorizedDio();
       final response = await dio.get(
-        '${ApiConfig.desktopBase}users-creation/',
-        options: Options(headers: {'Authorization': null}),
+        '${ApiConfig.desktopBase}user-creation/users-creation/',
       );
 
       final List items = response.data is List
@@ -42,8 +43,9 @@ class StaffManagementRepository {
     DateTime? dateFrom,
     DateTime? dateTo,
   }) async {
+    if (!kEnforcePermissions) return const <EnhancedAssignmentModel>[];
     try {
-      final dio = getIt<Dio>();
+      final dio = await authorizedDio();
 
       final params = <String, dynamic>{
         'staff_id': staffId,
@@ -59,7 +61,6 @@ class StaffManagementRepository {
       final response = await dio.get(
         ApiConfig.staffAssignments,
         queryParameters: params,
-        options: Options(headers: {'Authorization': null}),
       );
 
       final List items = response.data is List
@@ -78,13 +79,13 @@ class StaffManagementRepository {
   }
 
   Future<StaffAssignmentSummary?> fetchStaffSummary(String staffId) async {
+    if (!kEnforcePermissions) return null;
     try {
-      final dio = getIt<Dio>();
+      final dio = await authorizedDio();
 
       final response = await dio.get(
         '${ApiConfig.staffAssignments}summary/',
         queryParameters: {'staff_id': staffId},
-        options: Options(headers: {'Authorization': null}),
       );
 
       return StaffAssignmentSummary.fromJson(
@@ -99,11 +100,11 @@ class StaffManagementRepository {
   Future<EnhancedAssignmentModel?> fetchAssignmentDetails(
     String uniqueId,
   ) async {
+    if (!kEnforcePermissions) return null;
     try {
-      final dio = getIt<Dio>();
+      final dio = await authorizedDio();
       final response = await dio.get(
         '${ApiConfig.staffAssignments}$uniqueId/',
-        options: Options(headers: {'Authorization': null}),
       );
       return EnhancedAssignmentModel.fromJson(
         Map<String, dynamic>.from(response.data as Map),

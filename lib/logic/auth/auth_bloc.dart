@@ -81,9 +81,6 @@ Future<void> _onCitizenLoginRequested(
       password: event.password,
     );
 
-    // Save user to local DB for offline access
-    await saveOperatorToDB(user.toJson(), event.password);
-
     emit(AuthStateAuthenticated(
       userName: user.userName,
       role: user.role.toLowerCase(),
@@ -111,12 +108,26 @@ Future<void> _onCitizenLoginRequested(
       return;
     }
 
+    final offlineUser = UserModel.fromJson(
+      Map<String, dynamic>.from(localUser),
+    );
+
+    if (offlineUser.authToken == null || offlineUser.authToken!.isEmpty) {
+      emit(AuthStateFailure(
+          message:
+              "Offline login has no saved token. Please login once with the server online."));
+      emit(const AuthStateUnauthenticated());
+      return;
+    }
+
+    await _authRepository.saveUser(offlineUser);
+
     // OFFLINE LOGIN SUCCESS
     emit(AuthStateAuthenticated(
-      userName: localUser["name"],
-      role: localUser["role"],
-      userId: (localUser["unique_id"] ?? "").toString(),
-      emp_id: localUser["emp_id"],
+      userName: offlineUser.userName,
+      role: offlineUser.role,
+      userId: offlineUser.userId,
+      emp_id: offlineUser.emp_id,
     ));
   }
 }
