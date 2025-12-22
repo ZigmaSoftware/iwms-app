@@ -20,6 +20,7 @@ import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/sc
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'assign_form_sheet.dart';
 import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
 import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
 
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart'
@@ -91,7 +92,16 @@ class _DashboardShellState extends State<_DashboardShell> {
     final assignmentsFuture =
         _assignmentRepository.fetchTodayAssignments().then((list) {
       debugPrint('ASSIGNMENTS COUNT: ${list.length}');
-      return list;
+      final now = DateTime.now();
+      final filtered = list.where((assignment) {
+        if (assignment.currentStatus == AssignmentStatus.completed &&
+            assignment.completedAt != null) {
+          final diff = now.difference(assignment.completedAt!);
+          return diff.inMinutes < 5;
+        }
+        return true;
+      }).toList();
+      return filtered;
     }).catchError((e) {
       debugPrint('ASSIGNMENTS ERROR: $e');
       return <DailyAssignmentModel>[];
@@ -344,6 +354,35 @@ class _TodayAssignmentsCarousel extends StatelessWidget {
     }
   }
 
+  Widget _roleStatusChip({
+    required String label,
+    required AssignmentRoleStatus status,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: status.color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: status.color.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(status.icon, size: 12, color: status.color),
+          const SizedBox(width: 4),
+          Text(
+            '$label: ${status.displayName}',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: status.color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Column(
@@ -423,6 +462,21 @@ class _TodayAssignmentsCarousel extends StatelessWidget {
                         style: const TextStyle(fontSize: 13)),
                     Text("Operator: ${a.operatorName}",
                         style: const TextStyle(fontSize: 13)),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      children: [
+                        _roleStatusChip(
+                          label: 'Driver',
+                          status: a.driverStatus,
+                        ),
+                        _roleStatusChip(
+                          label: 'Operator',
+                          status: a.operatorStatus,
+                        ),
+                      ],
+                    ),
                     const Spacer(),
                     Row(
                       children: [
@@ -2478,7 +2532,9 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
   }
 
   void _load() {
-    _future = _assignmentRepository.fetchTodayAssignments(); // ✅ FIXED
+    _future = _assignmentRepository.fetchAssignmentHistory(
+      date: DateTime.now(),
+    );
   }
 
   @override
@@ -2532,14 +2588,14 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               const Text(
-                                'Assignments',
+                                'Assignment History',
                                 style: TextStyle(
                                   fontSize: 20,
                                   fontWeight: FontWeight.w800,
                                 ),
                               ),
                               Text(
-                                '${list.length} active ${list.length == 1 ? "assignment" : "assignments"}',
+                                '${list.length} ${list.length == 1 ? "assignment" : "assignments"}',
                                 style: const TextStyle(
                                   fontSize: 13,
                                   color: _iconGray,

@@ -89,6 +89,28 @@ class NotificationService {
   Future<void> cancelCollectorNotifications() async {
     await _plugin.cancelAll();
   }
+
+  Future<void> showAssignmentNotification({
+    required String title,
+    required String message,
+  }) async {
+    const AndroidNotificationDetails androidDetails =
+        AndroidNotificationDetails(
+      _kAndroidChannelId,
+      'General',
+      channelDescription: 'General notifications for IWMS citizen app',
+      importance: Importance.high,
+      priority: Priority.high,
+      playSound: true,
+    );
+    const DarwinNotificationDetails iosDetails = DarwinNotificationDetails();
+    const NotificationDetails details =
+        NotificationDetails(android: androidDetails, iOS: iosDetails);
+
+    final notificationId =
+        DateTime.now().millisecondsSinceEpoch.remainder(100000);
+    await _plugin.show(notificationId, title, message, details);
+  }
 }
 
 const String _kAndroidChannelId = 'iwms_default_channel';

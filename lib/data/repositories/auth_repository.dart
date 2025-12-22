@@ -264,9 +264,15 @@ Future<UserModel> loginCitizen({
     final role = _prefs.getString(_roleKey);
     final userName = _prefs.getString(_nameKey);
     final emp_id = _prefs.getString(_emp_idKey);
+    final token = _prefs.getString(_tokenKey);
 
     if (userId != null && role != null && userName != null) {
-      final token = _prefs.getString(_tokenKey);
+      final normalizedRole = role.toLowerCase();
+      if (normalizedRole != 'citizen' &&
+          normalizedRole != 'customer' &&
+          (token == null || token.isEmpty)) {
+        return null;
+      }
       return UserModel(
         userId: userId,
         userName: userName,

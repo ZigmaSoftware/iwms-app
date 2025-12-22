@@ -1,22 +1,45 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
+import 'package:iwms_citizen_app/data/models/customer_profile.dart';
 import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
 
 class CitizenCollectionRepository {
   const CitizenCollectionRepository();
 
+  Future<List<CustomerProfile>> fetchCustomers() async {
+    try {
+      final dio = await authorizedDio();
+      final response = await dio.get(ApiConfig.customerList);
+
+      final List items = response.data is List
+          ? response.data
+          : (response.data['results'] ?? []);
+
+      return items
+          .map((json) => CustomerProfile.fromJson(
+                Map<String, dynamic>.from(json as Map),
+              ))
+          .toList();
+    } catch (e, st) {
+      debugPrint('❌ FETCH CUSTOMERS ERROR: $e\n$st');
+      return [];
+    }
+  }
+
   Future<List<EnhancedAssignmentModel>> fetchAssignments({
     String? wardId,
+    String? customerId,
     String? status,
     DateTime? dateFrom,
     DateTime? dateTo,
   }) async {
     try {
-      final dio = getIt<Dio>();
+      final dio = await authorizedDio();
       final params = <String, dynamic>{};
       if (wardId != null) params['ward_id'] = wardId;
+      if (customerId != null) params['customer_id'] = customerId;
       if (status != null) params['status'] = status;
       if (dateFrom != null) {
         params['date_from'] = dateFrom.toIso8601String().split('T').first;
@@ -28,7 +51,6 @@ class CitizenCollectionRepository {
       final response = await dio.get(
         ApiConfig.citizenAssignments,
         queryParameters: params,
-        options: Options(headers: {'Authorization': null}),
       );
 
       final List items = response.data is List
@@ -48,11 +70,10 @@ class CitizenCollectionRepository {
 
   Future<StaffAssignmentSummary?> fetchSummary({String? wardId}) async {
     try {
-      final dio = getIt<Dio>();
+      final dio = await authorizedDio();
       final response = await dio.get(
         '${ApiConfig.citizenAssignments}summary/',
         queryParameters: wardId != null ? {'ward_id': wardId} : null,
-        options: Options(headers: {'Authorization': null}),
       );
 
       return StaffAssignmentSummary.fromJson(

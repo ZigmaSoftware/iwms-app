@@ -112,6 +112,84 @@ class AssignmentRepository {
     }
   }
 
+  Future<List<DailyAssignmentModel>> fetchAssignmentHistory({
+    DateTime? date,
+  }) async {
+    final resolvedDate = date ?? DateTime.now();
+    final dateStr = DateFormat('yyyy-MM-dd').format(resolvedDate);
+
+    debugPrint('📚 ASSIGNMENT HISTORY → date=$dateStr');
+
+    try {
+      final dio = await authorizedDio();
+
+      final resp = await dio.get(
+        ApiConfig.staffAssignments,
+        queryParameters: {
+          'date_from': dateStr,
+          'date_to': dateStr,
+        },
+      );
+
+      final decoded = resp.data;
+      final List list = decoded is List
+          ? decoded
+          : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
+
+      return list
+          .map((e) => DailyAssignmentModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      debugPrint('❌ Error fetching assignment history: ${e.message}');
+      rethrow;
+    } catch (e) {
+      debugPrint('❌ Unexpected error fetching assignment history: $e');
+      rethrow;
+    }
+  }
+
+  Future<List<DailyAssignmentModel>> fetchAssignmentsForOperator({
+    required String operatorId,
+    DateTime? date,
+  }) async {
+    final resolvedDate = date ?? DateTime.now();
+    final dateStr = DateFormat('yyyy-MM-dd').format(resolvedDate);
+
+    debugPrint(
+      '📋 OPERATOR ASSIGNMENTS → date=$dateStr operator_id=$operatorId',
+    );
+
+    try {
+      final dio = await authorizedDio();
+
+      final resp = await dio.get(
+        ApiConfig.assignments,
+        queryParameters: {
+          'date': dateStr,
+          'operator_id': operatorId,
+        },
+      );
+
+      final decoded = resp.data;
+      final List list = decoded is List
+          ? decoded
+          : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
+
+      return list
+          .map((e) => DailyAssignmentModel.fromJson(e as Map<String, dynamic>))
+          .toList();
+    } on DioException catch (e) {
+      debugPrint('❌ Error fetching operator assignments: ${e.message}');
+      if (e.response?.statusCode == 403) {
+        throw Exception('You do not have permission to view assignments.');
+      }
+      rethrow;
+    } catch (e) {
+      debugPrint('❌ Unexpected error fetching operator assignments: $e');
+      rethrow;
+    }
+  }
+
   /// Creates a new assignment
   Future<bool> createAssignment({
     required DateTime date,

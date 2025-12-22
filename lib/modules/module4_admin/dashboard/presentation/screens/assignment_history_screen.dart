@@ -155,10 +155,40 @@ class _DetailsCard extends StatelessWidget {
           ),
           const Divider(height: 24),
           _DetailRow(
+            icon: Icons.verified_rounded,
+            label: 'Driver status',
+            value: assignment.driverStatus.displayName,
+          ),
+          if (assignment.driverCompletedAt != null) ...[
+            const Divider(height: 24),
+            _DetailRow(
+              icon: Icons.schedule_rounded,
+              label: 'Driver completed at',
+              value: DateFormat('MMM d, yyyy h:mm a')
+                  .format(assignment.driverCompletedAt!),
+            ),
+          ],
+          const Divider(height: 24),
+          _DetailRow(
             icon: Icons.engineering_rounded,
             label: 'Operator',
             value: assignment.operatorName,
           ),
+          const Divider(height: 24),
+          _DetailRow(
+            icon: Icons.verified_rounded,
+            label: 'Operator status',
+            value: assignment.operatorStatus.displayName,
+          ),
+          if (assignment.operatorCompletedAt != null) ...[
+            const Divider(height: 24),
+            _DetailRow(
+              icon: Icons.schedule_rounded,
+              label: 'Operator completed at',
+              value: DateFormat('MMM d, yyyy h:mm a')
+                  .format(assignment.operatorCompletedAt!),
+            ),
+          ],
           const Divider(height: 24),
           _DetailRow(
             icon: Icons.schedule_rounded,
@@ -404,6 +434,14 @@ class _TimelineEvent {
     IconData icon;
 
     switch (entry.status) {
+      case 'driver_completed':
+        color = const Color(0xFF2E7D32);
+        icon = Icons.badge_rounded;
+        break;
+      case 'operator_completed':
+        color = const Color(0xFF1565C0);
+        icon = Icons.engineering_rounded;
+        break;
       case 'completed':
         color = const Color(0xFF4CAF50);
         icon = Icons.check_circle;

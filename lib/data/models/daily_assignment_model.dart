@@ -18,6 +18,10 @@ class DailyAssignmentModel {
   final DateTime? completedAt;
   final DateTime? skippedAt;
   final String? skipReason;
+  final AssignmentRoleStatus driverStatus;
+  final AssignmentRoleStatus operatorStatus;
+  final DateTime? driverCompletedAt;
+  final DateTime? operatorCompletedAt;
 
   DailyAssignmentModel({
     required this.id,
@@ -36,6 +40,10 @@ class DailyAssignmentModel {
     this.customerName,
     this.cancelledReason,
     this.cancelledAt,
+    this.driverStatus = AssignmentRoleStatus.pending,
+    this.operatorStatus = AssignmentRoleStatus.pending,
+    this.driverCompletedAt,
+    this.operatorCompletedAt,
   });
 
   factory DailyAssignmentModel.fromJson(Map<String, dynamic> json) {
@@ -49,6 +57,8 @@ class DailyAssignmentModel {
       shift: json['shift'] ?? 'full_day',
       isActive: json['is_active'] ?? true,
       currentStatus: AssignmentStatus.fromString(json['current_status']),
+      driverStatus: AssignmentRoleStatus.fromString(json['driver_status']),
+      operatorStatus: AssignmentRoleStatus.fromString(json['operator_status']),
       date:
           json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
       customerName: json['customer_name'],
@@ -58,6 +68,12 @@ class DailyAssignmentModel {
           : null,
       completedAt: json['completed_at'] != null
           ? DateTime.tryParse(json['completed_at'])
+          : null,
+      driverCompletedAt: json['driver_completed_at'] != null
+          ? DateTime.tryParse(json['driver_completed_at'])
+          : null,
+      operatorCompletedAt: json['operator_completed_at'] != null
+          ? DateTime.tryParse(json['operator_completed_at'])
           : null,
       skippedAt: json['skipped_at'] != null
           ? DateTime.tryParse(json['skipped_at'])
