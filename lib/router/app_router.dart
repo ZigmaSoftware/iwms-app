@@ -182,7 +182,14 @@ class AppRouter {
 
         GoRoute(
           path: '/operator/qr',
-          builder: (context, state) => const OperatorQRScanner(),
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>? ?? {};
+            return OperatorQRScanner(
+              expectedCustomerId: extra['expectedCustomerId']?.toString(),
+              expectedCustomerName: extra['expectedCustomerName']?.toString(),
+              returnToAssignments: extra['returnToAssignments'] == true,
+            );
+          },
         ),
 
         GoRoute(
@@ -195,6 +202,7 @@ class AppRouter {
               contactNo: extra['contactNo'],
               latitude: extra['latitude'],
               longitude: extra['longitude'],
+              skipBluetoothInit: extra['skipBluetoothInit'] == true,
             );
           },
         ),

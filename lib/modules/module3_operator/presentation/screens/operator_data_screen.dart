@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
+import 'package:flutter/services.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:flutter/material.dart';
@@ -22,6 +23,7 @@ import 'package:iwms_citizen_app/modules/module3_operator/services/image_compres
 import '../../offline/offline_sync_service.dart';
 import '../../offline/pending_record.dart';
 import '../../offline/pending_record_dao.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/utils/assignment_status_store.dart';
 
 const BorderRadius _kOperatorCardRadius = BorderRadius.all(Radius.circular(18));
 
@@ -31,6 +33,7 @@ class OperatorDataScreen extends StatefulWidget {
   final String contactNo;
   final String latitude;
   final String longitude;
+  final bool skipBluetoothInit;
 
   const OperatorDataScreen({
     super.key,
@@ -39,6 +42,7 @@ class OperatorDataScreen extends StatefulWidget {
     required this.contactNo,
     required this.latitude,
     required this.longitude,
+    this.skipBluetoothInit = false,
   });
 
   @override
@@ -59,6 +63,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   late final OfflineSyncService _syncService;
   final PendingRecordDao _pendingDao = PendingRecordDao();
   late final CollectionHistoryService _historyService;
+  final Map<String, TextEditingController> _manualWeightControllers = {};
 
   List<Map<String, dynamic>> wasteTypes = [];
   Map<String, Map<String, dynamic>> _wasteData = {};
@@ -67,6 +72,11 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     {"id": 2, "waste_type_name": "Dry"},
     {"id": 3, "waste_type_name": "Mixed"},
   ];
+
+  void _safeSetState(VoidCallback fn) {
+    if (!mounted) return;
+    setState(fn);
+  }
 
   @override
   void initState() {
@@ -78,29 +88,32 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
     latestWeight = "--";
     _historyService = getIt<CollectionHistoryService>();
+    _applyWasteTypes(defaultWasteTypes);
 
-    // 🔁 Bluetooth adapter re-init
-    Future.delayed(const Duration(seconds: 1), () async {
-      if (!await _ensureBluetoothPermissions()) return;
-      debugPrint("♻️ Reinitializing Bluetooth adapter...");
-      await FlutterBluetoothSerial.instance.cancelDiscovery();
-      final isEnabled =
-          await FlutterBluetoothSerial.instance.isEnabled ?? false;
-      if (!isEnabled) {
-        try {
-          await FlutterBluetoothSerial.instance.requestEnable();
-        } catch (e) {
-          debugPrint("⚠️ Unable to prompt for Bluetooth enable: $e");
+    if (!widget.skipBluetoothInit) {
+      // 🔁 Bluetooth adapter re-init
+      Future.delayed(const Duration(seconds: 1), () async {
+        if (!await _ensureBluetoothPermissions()) return;
+        debugPrint("♻️ Reinitializing Bluetooth adapter...");
+        await FlutterBluetoothSerial.instance.cancelDiscovery();
+        final isEnabled =
+            await FlutterBluetoothSerial.instance.isEnabled ?? false;
+        if (!isEnabled) {
+          try {
+            await FlutterBluetoothSerial.instance.requestEnable();
+          } catch (e) {
+            debugPrint("⚠️ Unable to prompt for Bluetooth enable: $e");
+          }
         }
-      }
-      await _resetBluetooth();
-      await _initBluetooth();
-    });
+        await _resetBluetooth();
+        await _initBluetooth();
+      });
+    }
 
     _syncService = OfflineSyncService(
       recordDao: _pendingDao,
       finalizeDao: _finalizeDao,
-      baseUrl: 'http://10.164.86.186:8000/api/mobile/waste',
+      baseUrl: 'http://192.168.5.92:8000/api/mobile/waste',
     )..start();
 
     _fetchWasteTypes();
@@ -113,7 +126,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
     // nothing to load → just refresh UI
     if (offlineRecords.isEmpty) {
-      setState(() {});
+      _safeSetState(() {});
       return;
     }
 
@@ -145,12 +158,44 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       updated['image'] = File(r.imagePath);
 
       _wasteData = {..._wasteData, typeKey: updated};
+      _syncManualWeightController(typeKey, r.weight?.toString());
 
       debugPrint(
           "📌 Loaded offline → $typeKey | weight=${r.weight} | uid=$safeUid");
     }
 
-    setState(() {});
+    _safeSetState(() {});
+  }
+
+  void _syncManualWeightController(String type, String? value) {
+    final controller = _manualWeightControllers[type];
+    if (controller == null) return;
+    final text = value?.toString() ?? '';
+    if (controller.text != text) {
+      controller.text = text;
+    }
+  }
+
+  String _weightTextFor(String type) {
+    final item = _wasteData[type];
+    if (item == null) return '';
+    final value = item['finalWeight'] ?? item['weight'];
+    return value == '--' || value == null ? '' : value.toString();
+  }
+
+  void _updateManualWeight(String type, String raw) {
+    final trimmed = raw.trim();
+    if (!_wasteData.containsKey(type)) return;
+    final updated = Map<String, dynamic>.from(_wasteData[type]!);
+    updated['weight'] = trimmed.isEmpty ? '--' : trimmed;
+    updated['finalWeight'] = trimmed.isEmpty ? null : trimmed;
+    _wasteData = {
+      ..._wasteData,
+      type: updated,
+    };
+    if (trimmed.isNotEmpty) {
+      latestWeight = trimmed;
+    }
   }
 
   @override
@@ -181,6 +226,9 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       _connection?.dispose();
       connected = false;
     } catch (_) {}
+    for (final controller in _manualWeightControllers.values) {
+      controller.dispose();
+    }
     _syncService.dispose();
     super.dispose();
   }
@@ -188,7 +236,9 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   @override
   void didPopNext() {
     debugPrint("🔄 Returned → reconnecting");
-    _reconnectBluetoothWithRetry();
+    if (!widget.skipBluetoothInit) {
+      _reconnectBluetoothWithRetry();
+    }
   }
 
   Future<void> _reconnectBluetoothWithRetry({int retries = 3}) async {
@@ -209,31 +259,41 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.resumed && !connected) {
+    if (!widget.skipBluetoothInit &&
+        state == AppLifecycleState.resumed &&
+        !connected) {
       _initBluetooth();
     }
   }
 
   // ==================== FETCH WASTE TYPES ====================
   Future<void> _fetchWasteTypes() async {
+    List<Map<String, dynamic>> resolvedTypes = defaultWasteTypes;
     try {
-      final response = await http.get(
-        Uri.parse('http://10.164.86.186:8000/api/mobile/waste/get-waste-types/'),
-      );
+      final response = await http
+          .get(
+            Uri.parse(
+              'http://192.168.5.92:8000/api/mobile/waste/get-waste-types/',
+            ),
+          )
+          .timeout(const Duration(seconds: 5));
 
       final data = json.decode(response.body);
 
       if (data['status'] == 'success' && data['data'] != null) {
-        wasteTypes = List<Map<String, dynamic>>.from(data['data']);
-      } else {
-        wasteTypes = defaultWasteTypes;
+        resolvedTypes = List<Map<String, dynamic>>.from(data['data']);
       }
     } catch (e) {
       debugPrint('⚠ Waste type API failed, using fallback defaults');
-      wasteTypes = defaultWasteTypes;
     }
 
-    // Build UI base structure
+    _applyWasteTypes(resolvedTypes);
+    _safeSetState(() {});
+    await _loadOfflineForScreen();
+  }
+
+  void _applyWasteTypes(List<Map<String, dynamic>> types) {
+    wasteTypes = types;
     _wasteData = {
       for (var item in wasteTypes)
         item['waste_type_name'].toString().toLowerCase(): {
@@ -247,8 +307,11 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         }
     };
 
-    setState(() {});
-    await _loadOfflineForScreen();
+    _manualWeightControllers.clear();
+    for (final type in _wasteData.keys) {
+      _manualWeightControllers[type] =
+          TextEditingController(text: _weightTextFor(type));
+    }
   }
 
   // ==================== IMAGE CAPTURE ====================
@@ -259,7 +322,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     final original = File(picked.path);
     final compressed = await ImageCompressService.compress(original);
 
-    setState(() {
+    _safeSetState(() {
       activeType = type;
 
       // ❌ DO NOT reset other types' weights here
@@ -271,6 +334,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         ..._wasteData,
         type: updated,
       };
+      _syncManualWeightController(type, latestWeight);
     });
     return compressed;
   }
@@ -278,7 +342,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   Future<void> _fetchWasteRecord(String type) async {
     try {
       final uri = Uri.parse(
-          'http://10.164.86.186:8000/api/mobile/waste/get-latest-waste/');
+          'http://192.168.5.92:8000/api/mobile/waste/get-latest-waste/');
       final response = await http.post(uri, body: {
         'screen_unique_id': screenUniqueId,
         'customer_id': widget.customerId,
@@ -289,7 +353,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       if (data['status'] == 'success' && data['data'] != null) {
         final record = data['data'];
 
-        setState(() {
+        _safeSetState(() {
           final updated = Map<String, dynamic>.from(_wasteData[type]!);
           updated['unique_id'] = record['unique_id']; // store backend record id
           updated['waste_type_id'] =
@@ -299,6 +363,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
           updated['isAdded'] = true;
 
           _wasteData = {..._wasteData, type: updated};
+          _syncManualWeightController(type, updated['weight']?.toString());
         });
 
         debugPrint('✅ Backend weight for $type: ${record['weight']}');
@@ -325,18 +390,19 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       return;
     }
 
-    if (latestWeight == "--") {
+    final weightValue = data['weight']?.toString() ?? '--';
+    if (weightValue.isEmpty || weightValue == "--") {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Please ensure weight is recorded for $type')),
       );
       return;
     }
 
-    final weight = data['weight'].toString();
+    final weight = weightValue;
     final isUpdate = data['isAdded'] == true;
     final uniqueId = data['unique_id']?.toString();
 
-    setState(() => _isSubmitting = true);
+    _safeSetState(() => _isSubmitting = true);
 
     try {
       // ------------------------------------------------------------
@@ -344,8 +410,8 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       // ------------------------------------------------------------
       final uri = Uri.parse(
         isUpdate
-            ? 'http://10.164.86.186:8000/api/mobile/waste/update-waste-sub/'
-            : 'http://10.164.86.186:8000/api/mobile/waste/insert-waste-sub/',
+            ? 'http://192.168.5.92:8000/api/mobile/waste/update-waste-sub/'
+            : 'http://192.168.5.92:8000/api/mobile/waste/insert-waste-sub/',
       );
 
       debugPrint(
@@ -400,7 +466,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       // ------------------------------------------------------------
       final backendUnique = result['unique_id']?.toString();
 
-      setState(() {
+      _safeSetState(() {
         final updated = Map<String, dynamic>.from(data);
         updated['isAdded'] = true;
         updated['finalWeight'] = weight;
@@ -475,14 +541,14 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         ),
       );
     } finally {
-      setState(() => _isSubmitting = false);
+      _safeSetState(() => _isSubmitting = false);
     }
   }
 
   Future<void> _resetUI() async {
     final oldId = screenUniqueId;
 
-    setState(() {
+    _safeSetState(() {
       latestWeight = "--";
       activeType = null;
 
@@ -508,7 +574,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
   // ==================== SUBMIT MAIN FORM ====================
   Future<void> _submitForm() async {
-    setState(() => _isSubmitting = true);
+    _safeSetState(() => _isSubmitting = true);
 
     final totalWeight = _calculateTotalWeight();
     final summary = _buildSummarySnapshot();
@@ -523,7 +589,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       // }
 
       final uri = Uri.parse(
-          'http://10.164.86.186:8000/api/mobile/waste/finalize-waste/');
+          'http://192.168.5.92:8000/api/mobile/waste/finalize-waste/');
 
       final request = http.MultipartRequest('POST', uri)
         ..fields['screen_unique_id'] = screenUniqueId
@@ -537,6 +603,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
       if (result['status'] == 'success') {
         await _recordCollectionHistory(totalWeight);
+        await AssignmentStatusStore.setStatus(widget.customerId, 'collected');
         await _showSuccessSheet(totalWeight, summary);
         _resetUI();
         await _fetchWasteTypes();
@@ -566,11 +633,12 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
       // Reset UI like online mode
       await _recordCollectionHistory(totalWeight);
+      await AssignmentStatusStore.setStatus(widget.customerId, 'collected');
       await _showSuccessSheet(totalWeight, summary, offline: true);
       _resetUI();
       await _fetchWasteTypes();
     } finally {
-      setState(() => _isSubmitting = false);
+      _safeSetState(() => _isSubmitting = false);
     }
   }
 
@@ -855,6 +923,47 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
                 fontWeight: FontWeight.w600,
               ),
             ),
+            const SizedBox(height: 8),
+            Row(
+              children: [
+                Text(
+                  'Manual (kg)',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontSize: 12,
+                    color: AppColors.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 90,
+                  height: 34,
+                  child: TextField(
+                    controller: _manualWeightControllers[type],
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    inputFormatters: [
+                      FilteringTextInputFormatter.allow(
+                        RegExp(r'^\d*\.?\d{0,2}$'),
+                      ),
+                    ],
+                    decoration: InputDecoration(
+                      hintText: '0.0',
+                      isDense: true,
+                      contentPadding:
+                          const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                    onChanged: (value) => setState(
+                      () => _updateManualWeight(type, value),
+                    ),
+                  ),
+                ),
+              ],
+            ),
 
             const SizedBox(height: 10),
 
@@ -871,7 +980,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
                       final compressed =
                           await ImageCompressService.compress(original);
 
-                      setState(() {
+                      _safeSetState(() {
                         final updated = Map<String, dynamic>.from(item);
                         updated['image'] = compressed;
                         updated['weight'] = latestWeight;
@@ -882,6 +991,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
                         };
 
                         activeType = type;
+                        _syncManualWeightController(type, latestWeight);
                       });
                     },
                     icon: const Icon(Icons.camera_alt, size: 18),
@@ -1136,7 +1246,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     try {
       debugPrint("🔌 Connecting to ${hc05.name}...");
       final conn = await BluetoothConnection.toAddress(hc05.address);
-      setState(() {
+      _safeSetState(() {
         _connection = conn;
         connected = true;
       });
@@ -1153,7 +1263,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
             bluetooth.updateWeight(trimmed);
 
-            setState(() {
+            _safeSetState(() {
               latestWeight = trimmed;
 
               // ✅ Only update the *currently active* waste type if it's not frozen
@@ -1166,13 +1276,14 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
                   ..._wasteData,
                   activeType!: updated,
                 };
+                _syncManualWeightController(activeType!, trimmed);
               }
             });
           }
           buffer = parts.last;
         }
       }).onDone(() {
-        setState(() => connected = false);
+        _safeSetState(() => connected = false);
       });
     } catch (e) {
       debugPrint("⚠️ Bluetooth connection error: $e");

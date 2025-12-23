@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:dio/dio.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
@@ -9,7 +8,6 @@ import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
 import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
 import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
 import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
-import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
@@ -32,6 +30,7 @@ class OperatorHomeScreen extends StatelessWidget {
     required this.zoneLabel,
     required this.onScanPressed,
     required this.onLogout,
+    this.onOpenAssignments,
     this.onOpenAttendance,
     this.onOpenProfile,
     this.onOpenHistory,
@@ -48,6 +47,7 @@ class OperatorHomeScreen extends StatelessWidget {
   final String zoneLabel;
   final VoidCallback onScanPressed;
   final VoidCallback onLogout;
+  final void Function(DailyAssignmentModel assignment)? onOpenAssignments;
   final VoidCallback? onOpenAttendance;
   final VoidCallback? onOpenProfile;
   final VoidCallback? onOpenHistory;
@@ -143,7 +143,9 @@ class OperatorHomeScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  const _OperatorAssignmentsSection(),
+                  _OperatorAssignmentsSection(
+                    onOpenAssignments: onOpenAssignments,
+                  ),
                   const SizedBox(height: 24),
                   OperatorInfoCard(
                     title: localizations.operatorLastCollected,
@@ -265,7 +267,11 @@ class _InfoRowItem extends StatelessWidget {
 }
 
 class _OperatorAssignmentsSection extends StatefulWidget {
-  const _OperatorAssignmentsSection();
+  const _OperatorAssignmentsSection({
+    this.onOpenAssignments,
+  });
+
+  final void Function(DailyAssignmentModel assignment)? onOpenAssignments;
 
   @override
   State<_OperatorAssignmentsSection> createState() =>
@@ -365,46 +371,6 @@ class _OperatorAssignmentsSectionState
     }
   }
 
-  Future<void> _markCompleted(DailyAssignmentModel assignment) async {
-    try {
-      final authRepo = getIt<AuthRepository>();
-      final user = await authRepo.getAuthenticatedUser();
-      if (user?.authToken == null || user!.authToken!.isEmpty) {
-        if (!mounted) return;
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Session expired. Please login again.'),
-            backgroundColor: Colors.redAccent,
-          ),
-        );
-        return;
-      }
-
-      final dio = await authorizedDio();
-      await dio.post(
-        '${ApiConfig.assignments}${assignment.uniqueId}/complete/',
-        options: Options(
-          headers: {'Authorization': 'Bearer ${user.authToken}'},
-        ),
-      );
-      if (!mounted) return;
-      setState(() {
-        _future = _loadAssignments();
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Marked as completed')),
-      );
-    } catch (_) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to update completion'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
-    }
-  }
-
   Widget _statusChip(String label, AssignmentRoleStatus status) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
@@ -498,49 +464,49 @@ class _OperatorAssignmentsSectionState
                 separatorBuilder: (_, __) => const SizedBox(width: 12),
                 itemBuilder: (context, index) {
                   final assignment = assignments[index];
-                  final canComplete =
-                      assignment.operatorStatus != AssignmentRoleStatus.completed &&
-                          assignment.currentStatus != AssignmentStatus.cancelled &&
-                          assignment.currentStatus != AssignmentStatus.skipped;
-
-                  return Container(
-                    width: 260,
-                    padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.06),
-                          blurRadius: 12,
-                          offset: const Offset(0, 4),
-                        ),
-                      ],
-                    ),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          assignment.ward,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.heading2.copyWith(
-                          fontWeight: FontWeight.w800,
-                        ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Driver: ${assignment.driver}',
-                          style: AppTextStyles.bodyMedium,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Shift: ${assignment.shiftDisplay}',
-                          style: AppTextStyles.subTitle.copyWith(
-                            color: AppColors.textSecondary,
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: widget.onOpenAssignments == null
+                        ? null
+                        : () => widget.onOpenAssignments!(assignment),
+                    child: Container(
+                      width: 260,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
                           ),
-                        ),
-                        const SizedBox(height: 10),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            assignment.ward,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.heading2.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Driver: ${assignment.driver}',
+                            style: AppTextStyles.bodyMedium,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Shift: ${assignment.shiftDisplay}',
+                            style: AppTextStyles.subTitle.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
                         Row(
                           children: [
                             _statusChip('Driver', assignment.driverStatus),
@@ -549,27 +515,16 @@ class _OperatorAssignmentsSectionState
                           ],
                         ),
                         const Spacer(),
-                        SizedBox(
-                          width: double.infinity,
-                          child: ElevatedButton(
-                            onPressed:
-                                canComplete ? () => _markCompleted(assignment) : null,
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: AppColors.primary,
-                              foregroundColor: Colors.white,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
-                            ),
-                            child: Text(
-                              assignment.operatorStatus ==
-                                      AssignmentRoleStatus.completed
-                                  ? 'Completed'
-                                  : 'Mark Completed',
-                            ),
+                        Text(
+                          'Tap to manage collection',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
-                      ],
+                        ],
+                      ),
                     ),
                   );
                 },

@@ -1079,6 +1079,14 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     try {
       final dio = await authorizedDio();
       final assignmentId = customer.baseAssignmentId;
+      String? driverId;
+      final authState = context.read<AuthBloc>().state;
+      if (authState is AuthStateAuthenticated) {
+        final trimmed = authState.userId.trim();
+        if (trimmed.isNotEmpty) {
+          driverId = trimmed;
+        }
+      }
 
       await dio.post(
         '${ApiConfig.assignments}$assignmentId/complete/',
@@ -1087,6 +1095,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
         ApiConfig.collectionLogs,
         data: {
           'assignment': assignmentId,
+          if (driverId != null) 'driver': driverId,
           'action': 'collection_completed',
           'latitude': widget.driverLocation.latitude,
           'longitude': widget.driverLocation.longitude,

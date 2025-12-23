@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
@@ -9,6 +10,7 @@ import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_assignment_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_overview_screen.dart';
@@ -19,7 +21,7 @@ import 'package:iwms_citizen_app/router/app_router.dart';
 import 'package:go_router/go_router.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
-enum OperatorNavTab { home, overview, attendance, profile }
+enum OperatorNavTab { home, assignments, overview, attendance, profile }
 
 class MainOperatorTabBar extends StatefulWidget {
   const MainOperatorTabBar({
@@ -36,6 +38,7 @@ class MainOperatorTabBar extends StatefulWidget {
 class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
   OperatorNavTab _activeTab = OperatorNavTab.home;
   OperatorSessionDetails? _sessionDetails;
+  DailyAssignmentModel? _selectedAssignment;
 
   @override
   void initState() {
@@ -75,9 +78,14 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
     );
   }
 
-  void _setTab(OperatorNavTab tab) {
+  void _setTab(OperatorNavTab tab, {DailyAssignmentModel? assignment}) {
     if (_activeTab == tab) return;
-    setState(() => _activeTab = tab);
+    setState(() {
+      _activeTab = tab;
+      if (assignment != null) {
+        _selectedAssignment = assignment;
+      }
+    });
   }
 
   void _logout() {
@@ -140,7 +148,11 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
                 label: localizations.operatorNavHome,
               ),
               BottomNavigationBarItem(
-                icon: const Icon(Icons.dashboard_customize_outlined),
+                icon: const Icon(Icons.assignment_outlined),
+                label: localizations.operatorNavAssignments,
+              ),
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.dashboard_outlined),
                 label: localizations.operatorNavOverview,
               ),
               BottomNavigationBarItem(
@@ -169,6 +181,8 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
           zoneLabel: session.zoneLabel,
           onScanPressed: () => context.push(AppRoutePaths.operatorQR),
           onLogout: _logout,
+          onOpenAssignments: (assignment) =>
+              _setTab(OperatorNavTab.assignments, assignment: assignment),
           onOpenAttendance: () => _setTab(OperatorNavTab.attendance),
           onOpenProfile: () => _setTab(OperatorNavTab.profile),
           onOpenHistory: () {
@@ -188,6 +202,10 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
               ),
             );
           },
+        );
+      case OperatorNavTab.assignments:
+        return OperatorAssignmentScreen(
+          initialAssignment: _selectedAssignment,
         );
       case OperatorNavTab.overview:
         return const OperatorOverviewScreen();
@@ -221,6 +239,8 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
     switch (tab) {
       case OperatorNavTab.home:
         return "Home";
+      case OperatorNavTab.assignments:
+        return "Assignments";
       case OperatorNavTab.overview:
         return "Overview";
       case OperatorNavTab.attendance:
@@ -239,6 +259,8 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
       switch (value) {
         case "Home":
           return OperatorNavTab.home;
+        case "Assignments":
+          return OperatorNavTab.assignments;
         case "Overview":
           return OperatorNavTab.overview;
         case "Attendance":

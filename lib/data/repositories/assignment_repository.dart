@@ -114,21 +114,28 @@ class AssignmentRepository {
 
   Future<List<DailyAssignmentModel>> fetchAssignmentHistory({
     DateTime? date,
+    DateTime? fromDate,
+    DateTime? toDate,
   }) async {
-    final resolvedDate = date ?? DateTime.now();
-    final dateStr = DateFormat('yyyy-MM-dd').format(resolvedDate);
-
-    debugPrint('📚 ASSIGNMENT HISTORY → date=$dateStr');
+    final params = <String, String>{};
+    if (fromDate != null || toDate != null || date != null) {
+      final resolvedFrom = fromDate ?? date!;
+      final resolvedTo = toDate ?? date ?? resolvedFrom;
+      params['date_from'] = DateFormat('yyyy-MM-dd').format(resolvedFrom);
+      params['date_to'] = DateFormat('yyyy-MM-dd').format(resolvedTo);
+      debugPrint(
+        '📚 ASSIGNMENT HISTORY → from=${params['date_from']} to=${params['date_to']}',
+      );
+    } else {
+      debugPrint('📚 ASSIGNMENT HISTORY → all');
+    }
 
     try {
       final dio = await authorizedDio();
 
       final resp = await dio.get(
         ApiConfig.staffAssignments,
-        queryParameters: {
-          'date_from': dateStr,
-          'date_to': dateStr,
-        },
+        queryParameters: params.isEmpty ? null : params,
       );
 
       final decoded = resp.data;
