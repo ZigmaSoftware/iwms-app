@@ -1,3 +1,6 @@
+// operator_overview_screen.dart
+// ✅ Fixed: Properly displays collected waste details from history
+
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:iwms_citizen_app/core/di.dart';
@@ -46,33 +49,52 @@ class _OperatorOverviewScreenState extends State<OperatorOverviewScreen> {
             const _OverviewHeader(),
             Expanded(
               child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: IconButton(
-                        tooltip: "Pick date",
-                        icon: const Icon(Icons.calendar_today_rounded,
-                            color: AppColors.primary),
-                        onPressed: _pickDate,
-                      ),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          DateFormat('MMMM d, yyyy').format(_selectedDate),
+                          style: AppTextStyles.heading2.copyWith(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 16,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: "Pick date",
+                          icon: const Icon(Icons.calendar_today_rounded,
+                              color: AppColors.primary),
+                          onPressed: _pickDate,
+                        ),
+                      ],
                     ),
+                    const SizedBox(height: 12),
 
-                    // ------------------ SUMMARY METRICS ------------------
+                    // Summary metrics
                     _buildSummaryMetrics(summary),
 
                     const SizedBox(height: 24),
 
-                    // ------------------ TODAY’S PICKUPS LIST ------------------
+                    // List header
+                    Text(
+                      'Collections (${mapped.length})',
+                      style: AppTextStyles.heading2.copyWith(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+
+                    // Today's pickups list
                     Expanded(
                       child: ListView.separated(
                         itemCount: mapped.length,
                         physics: const BouncingScrollPhysics(),
-                        separatorBuilder: (_, __) =>
-                            const SizedBox(height: 16),
+                        separatorBuilder: (_, __) => const SizedBox(height: 16),
                         itemBuilder: (context, index) {
                           final e = mapped[index];
                           return _PickupTile(entry: e);
@@ -89,9 +111,6 @@ class _OperatorOverviewScreenState extends State<OperatorOverviewScreen> {
     );
   }
 
-  // -------------------------------------------------------
-  // HELPERS
-  // -------------------------------------------------------
   bool _isSameDay(DateTime a, DateTime b) =>
       a.year == b.year && a.month == b.month && a.day == b.day;
 
@@ -114,20 +133,20 @@ class _OperatorOverviewScreenState extends State<OperatorOverviewScreen> {
     return entries.map((e) {
       double wet = 0, dry = 0, other = 0;
 
+      // ✅ FIX: Properly extract weight from sections
       for (final s in e.sections) {
         final raw = (s.weight ?? '').toString();
         final cleaned = raw.replaceAll(RegExp('[^0-9.]'), '');
         final weight = double.tryParse(cleaned) ?? 0;
 
-        switch (s.normalizedType) {
-          case "wet":
-            wet += weight;
-            break;
-          case "dry":
-            dry += weight;
-            break;
-          default:
-            other += weight;
+        final normalizedType = s.type.toLowerCase();
+        
+        if (normalizedType.contains('wet')) {
+          wet += weight;
+        } else if (normalizedType.contains('dry')) {
+          dry += weight;
+        } else {
+          other += weight;
         }
       }
 
@@ -153,23 +172,44 @@ class _OperatorOverviewScreenState extends State<OperatorOverviewScreen> {
   }
 
   Widget _buildEmptyState(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.recycling, size: 64, color: Colors.grey.shade400),
-            const SizedBox(height: 16),
-            Text(
-              "No collections recorded today.",
-              style: Theme.of(context).textTheme.bodyLarge?.copyWith(
-                    color: AppColors.textSecondary,
+    return Column(
+      children: [
+        const _OverviewHeader(),
+        Expanded(
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.recycling, size: 64, color: Colors.grey.shade400),
+                  const SizedBox(height: 16),
+                  Text(
+                    "No collections recorded",
+                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                          color: AppColors.textPrimary,
+                          fontWeight: FontWeight.w600,
+                        ),
                   ),
+                  const SizedBox(height: 8),
+                  Text(
+                    DateFormat('MMMM d, yyyy').format(_selectedDate),
+                    style: Theme.of(context).textTheme.bodyLarge?.copyWith(
+                          color: AppColors.textSecondary,
+                        ),
+                  ),
+                  const SizedBox(height: 24),
+                  OutlinedButton.icon(
+                    onPressed: _pickDate,
+                    icon: const Icon(Icons.calendar_today),
+                    label: const Text('Select different date'),
+                  ),
+                ],
+              ),
             ),
-          ],
+          ),
         ),
-      ),
+      ],
     );
   }
 
@@ -180,7 +220,7 @@ class _OperatorOverviewScreenState extends State<OperatorOverviewScreen> {
           child: _SummaryPill(
             label: "Wet",
             value: "${t.wet.toStringAsFixed(1)} kg",
-            color: const Color.fromARGB(255, 31, 150, 248),
+            color: _wetTint,
           ),
         ),
         const SizedBox(width: 12),
@@ -206,9 +246,7 @@ class _OperatorOverviewScreenState extends State<OperatorOverviewScreen> {
   }
 }
 
-// -------------------------------------------------------
-// DATA MODELS FOR INTERNAL USE
-// -------------------------------------------------------
+// Data models
 class _OverviewEntry {
   final String title;
   final String? subtitle;
@@ -283,9 +321,6 @@ class _SummaryPill extends StatelessWidget {
   }
 }
 
-// -------------------------------------------------------
-// PICKUP TILE (UI)
-// -------------------------------------------------------
 class _PickupTile extends StatelessWidget {
   const _PickupTile({required this.entry});
 
@@ -307,24 +342,26 @@ class _PickupTile extends StatelessWidget {
           color: AppColors.textSecondary,
         ),
       ),
-      child: Row(
+      child: Wrap(
+        spacing: 12,
+        runSpacing: 8,
         children: [
           if (entry.wet > 0)
             _Badge(
               icon: Icons.water_drop,
-              label: "${entry.wet} kg",
+              label: "${entry.wet.toStringAsFixed(1)} kg",
               color: _wetTint,
             ),
           if (entry.dry > 0)
             _Badge(
               icon: Icons.layers,
-              label: "${entry.dry} kg",
+              label: "${entry.dry.toStringAsFixed(1)} kg",
               color: _dryTint,
             ),
           if (entry.mixed > 0)
             _Badge(
               icon: Icons.inventory,
-              label: "${entry.mixed} kg",
+              label: "${entry.mixed.toStringAsFixed(1)} kg",
               color: _mixedTint,
             ),
         ],
@@ -347,7 +384,6 @@ class _Badge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Container(
-      margin: const EdgeInsets.only(right: 12),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
         color: color.withOpacity(.18),
@@ -355,6 +391,7 @@ class _Badge extends StatelessWidget {
         border: Border.all(color: color.withOpacity(.45)),
       ),
       child: Row(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 16, color: color),
           const SizedBox(width: 6),

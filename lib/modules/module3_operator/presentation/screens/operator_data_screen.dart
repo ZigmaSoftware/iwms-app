@@ -1,3 +1,8 @@
+// operator_data_screen.dart
+// 🚀 FIXED: Prevents UI from disappearing if API returns empty list
+// ✅ Retains the 1-second Bluetooth delay you added
+// ✅ Keeps Customer Details visible at all times
+
 import 'dart:convert';
 import 'dart:typed_data';
 import 'dart:io';
@@ -67,6 +72,8 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
   List<Map<String, dynamic>> wasteTypes = [];
   Map<String, Map<String, dynamic>> _wasteData = {};
+  
+  // ✅ Define defaults as final so we can reuse them safely
   final List<Map<String, dynamic>> defaultWasteTypes = [
     {"id": 1, "waste_type_name": "Wet"},
     {"id": 2, "waste_type_name": "Dry"},
@@ -88,10 +95,12 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
     latestWeight = "--";
     _historyService = getIt<CollectionHistoryService>();
+    
+    // ✅ Initialize with defaults immediately so UI is never empty
     _applyWasteTypes(defaultWasteTypes);
 
     if (!widget.skipBluetoothInit) {
-      // 🔁 Bluetooth adapter re-init
+      // 🔁 Bluetooth adapter re-init with 1s Delay
       Future.delayed(const Duration(seconds: 1), () async {
         if (!await _ensureBluetoothPermissions()) return;
         debugPrint("♻️ Reinitializing Bluetooth adapter...");
@@ -116,7 +125,48 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       baseUrl: 'http://192.168.5.92:8000/api/mobile/waste',
     )..start();
 
+    // Fetch latest types from API
     _fetchWasteTypes();
+  }
+
+  // ==================== FETCH WASTE TYPES ====================
+  Future<void> _fetchWasteTypes() async {
+    // Start with defaults. We only overwrite if API gives valid NON-EMPTY data.
+    List<Map<String, dynamic>> resolvedTypes = defaultWasteTypes;
+    
+    try {
+      final response = await http
+          .get(
+            Uri.parse(
+              'http://192.168.5.92:8000/api/mobile/waste/get-waste-types/',
+            ),
+          )
+          .timeout(const Duration(seconds: 5));
+
+      final data = json.decode(response.body);
+
+      if (data['status'] == 'success' && data['data'] != null) {
+        final fetched = List<Map<String, dynamic>>.from(data['data']);
+        
+        // ✅ CRITICAL FIX: Only use API data if it's NOT empty.
+        // If API returns [], we keep the defaults.
+        if (fetched.isNotEmpty) {
+          resolvedTypes = fetched;
+        } else {
+          debugPrint('⚠️ API returned empty waste types list. Keeping defaults.');
+        }
+      }
+    } catch (e) {
+      debugPrint('⚠ Waste type API failed, using fallback defaults: $e');
+      // resolvedTypes remains defaultWasteTypes
+    }
+
+    if (!mounted) return;
+    _applyWasteTypes(resolvedTypes);
+    _safeSetState(() {});
+    
+    // Load offline data after ensuring types are set
+    await _loadOfflineForScreen();
   }
 
   Future<void> _loadOfflineForScreen() async {
@@ -221,7 +271,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   void dispose() {
     routeObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
-    // optional: do not disconnect here if you want persistence
     try {
       _connection?.dispose();
       connected = false;
@@ -266,32 +315,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     }
   }
 
-  // ==================== FETCH WASTE TYPES ====================
-  Future<void> _fetchWasteTypes() async {
-    List<Map<String, dynamic>> resolvedTypes = defaultWasteTypes;
-    try {
-      final response = await http
-          .get(
-            Uri.parse(
-              'http://192.168.5.92:8000/api/mobile/waste/get-waste-types/',
-            ),
-          )
-          .timeout(const Duration(seconds: 5));
-
-      final data = json.decode(response.body);
-
-      if (data['status'] == 'success' && data['data'] != null) {
-        resolvedTypes = List<Map<String, dynamic>>.from(data['data']);
-      }
-    } catch (e) {
-      debugPrint('⚠ Waste type API failed, using fallback defaults');
-    }
-
-    _applyWasteTypes(resolvedTypes);
-    _safeSetState(() {});
-    await _loadOfflineForScreen();
-  }
-
   void _applyWasteTypes(List<Map<String, dynamic>> types) {
     wasteTypes = types;
     _wasteData = {
@@ -324,9 +347,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
     _safeSetState(() {
       activeType = type;
-
-      // ❌ DO NOT reset other types' weights here
-      // 🔸 Just update the current one
       final updated = Map<String, dynamic>.from(_wasteData[type]!);
       updated['image'] = compressed;
       updated['weight'] = latestWeight;
@@ -355,9 +375,9 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
         _safeSetState(() {
           final updated = Map<String, dynamic>.from(_wasteData[type]!);
-          updated['unique_id'] = record['unique_id']; // store backend record id
+          updated['unique_id'] = record['unique_id'];
           updated['waste_type_id'] =
-              _wasteData[type]!['waste_type_id']; // keep numeric type id
+              _wasteData[type]!['waste_type_id']; 
           updated['weight'] = record['weight'] ?? '--';
           updated['finalWeight'] = record['weight'] ?? '--';
           updated['isAdded'] = true;
@@ -367,10 +387,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         });
 
         debugPrint('✅ Backend weight for $type: ${record['weight']}');
-        debugPrint('✅ Updated record fetched for $type => ${jsonEncode({
-              'unique_id': record['unique_id'],
-              'weight': record['weight'],
-            })}');
       } else {
         debugPrint('⚠️ No record found for $type: ${data['message']}');
       }
@@ -405,9 +421,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     _safeSetState(() => _isSubmitting = true);
 
     try {
-      // ------------------------------------------------------------
-      // 🔗 SELECT ENDPOINT
-      // ------------------------------------------------------------
       final uri = Uri.parse(
         isUpdate
             ? 'http://192.168.5.92:8000/api/mobile/waste/update-waste-sub/'
@@ -417,9 +430,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       debugPrint(
           "▶️ _handleAdd($type) → isUpdate=$isUpdate, unique_id=$uniqueId");
 
-      // ------------------------------------------------------------
-      // 📨 BUILD REQUEST
-      // ------------------------------------------------------------
       final request = http.MultipartRequest('POST', uri)
         ..fields['screen_unique_id'] = screenUniqueId
         ..fields['customer_id'] = widget.customerId
@@ -428,18 +438,12 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         ..fields['latitude'] = widget.latitude
         ..fields['longitude'] = widget.longitude;
 
-      // 👉 Only send unique_id for update
       if (isUpdate && uniqueId != null) {
-        debugPrint("📡 Sending UPDATE with unique_id=$uniqueId");
         request.fields['unique_id'] = uniqueId;
       }
 
-      // Attach image
       request.files.add(await http.MultipartFile.fromPath('image', image.path));
 
-      // ------------------------------------------------------------
-      // 🚀 SEND REQUEST
-      // ------------------------------------------------------------
       final streamed = await request.send();
 
       if (streamed.statusCode >= 400) {
@@ -447,13 +451,10 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       }
 
       final response = await http.Response.fromStream(streamed);
-      debugPrint("📩 RAW RESPONSE => ${response.body}");
-
       dynamic result;
       try {
         result = json.decode(response.body);
       } catch (_) {
-        debugPrint("❌ Invalid JSON from server");
         throw Exception("Invalid JSON from backend");
       }
 
@@ -461,9 +462,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         throw Exception(result['message'] ?? "Unknown server error");
       }
 
-      // ------------------------------------------------------------
-      // 🎯 SUCCESS → UPDATE LOCAL STATE
-      // ------------------------------------------------------------
       final backendUnique = result['unique_id']?.toString();
 
       _safeSetState(() {
@@ -472,13 +470,12 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         updated['finalWeight'] = weight;
 
         if (backendUnique != null) {
-          updated['unique_id'] = backendUnique; // overwrite offline uid
+          updated['unique_id'] = backendUnique;
         }
 
         _wasteData[type] = updated;
       });
 
-      // Reload in case new data arrives
       await _fetchWasteRecord(type);
 
       ScaffoldMessenger.of(context).showSnackBar(
@@ -491,13 +488,8 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         ),
       );
 
-      return; // DONE ✔️
-    }
-
-    // ------------------------------------------------------------
-    // 📴 OFFLINE FALLBACK
-    // ------------------------------------------------------------
-    catch (err) {
+      return; 
+    } catch (err) {
       debugPrint("⚠️ _handleAdd offline mode triggered: $err");
 
       final record = PendingRecord(
@@ -514,7 +506,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         uniqueId: uniqueId ?? "uid_${DateTime.now().millisecondsSinceEpoch}",
       );
 
-      // Save or update offline
       final existing = await _pendingDao.findByTypeAndScreen(
         wasteTypeId: data['waste_type_id'].toString(),
         screenId: screenUniqueId,
@@ -546,16 +537,11 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   }
 
   Future<void> _resetUI() async {
-    final oldId = screenUniqueId;
-
     _safeSetState(() {
       latestWeight = "--";
       activeType = null;
-
-      // Regenerate screen unique ID for next operation
       screenUniqueId = UniqueIdService.generateScreenUniqueId();
 
-      // Clear waste data structure
       _wasteData = {
         for (var item in wasteTypes)
           item['waste_type_name'].toString().toLowerCase(): {
@@ -568,7 +554,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
           }
       };
     });
-
     debugPrint("🔄 UI reset completed. Ready for next customer.");
   }
 
@@ -580,14 +565,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     final summary = _buildSummarySnapshot();
 
     try {
-      debugPrint('🔎 total waste before submit: $totalWeight');
-
-      // if (totalWeight <= 0) {
-      //   _showDialog('Warning',
-      //       'Please add at least one waste entry before submitting.');
-      //   return;
-      // }
-
       final uri = Uri.parse(
           'http://192.168.5.92:8000/api/mobile/waste/finalize-waste/');
 
@@ -606,7 +583,8 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         await AssignmentStatusStore.setStatus(widget.customerId, 'collected');
         await _showSuccessSheet(totalWeight, summary);
         _resetUI();
-        await _fetchWasteTypes();
+        // Fetch types again just in case, but keep defaults if fail
+        _fetchWasteTypes();
       } else {
         throw Exception(result['message']);
       }
@@ -622,7 +600,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
       await _finalizeDao.insert(pendingFinalize);
 
-      // Prevent crash if internet is OFF
       try {
         if (await _syncService.hasInternet()) {
           await _syncService.syncAll();
@@ -631,12 +608,11 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         debugPrint("⚠️ Sync attempt failed: $err");
       }
 
-      // Reset UI like online mode
       await _recordCollectionHistory(totalWeight);
       await AssignmentStatusStore.setStatus(widget.customerId, 'collected');
       await _showSuccessSheet(totalWeight, summary, offline: true);
       _resetUI();
-      await _fetchWasteTypes();
+      _fetchWasteTypes();
     } finally {
       _safeSetState(() => _isSubmitting = false);
     }
@@ -693,7 +669,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     _wasteData.forEach((key, value) {
       final weight = _weightFromEntry(value);
 
-      // Always include the weight, even if it's 0
       if (key.contains('wet')) {
         totals['wet'] = (totals['wet'] ?? 0) + weight;
       } else if (key.contains('dry')) {
@@ -717,80 +692,86 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       context: context,
       isDismissible: true,
       showDragHandle: true,
+      isScrollControlled: true, // Allow full height
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
       builder: (sheetContext) {
-        return Padding(
-          padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                children: [
-                  Icon(
-                    offline ? Icons.cloud_off : Icons.check_circle,
-                    color: offline ? Colors.orange : Colors.green,
-                  ),
-                  const SizedBox(width: 8),
-                  Text(
-                    offline ? 'Saved offline' : 'Collection recorded',
-                    style: theme.textTheme.titleMedium
-                        ?.copyWith(fontWeight: FontWeight.w800),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Text(
-                'Total: ${totalWeight.toStringAsFixed(2)} kg',
-                style: theme.textTheme.titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 10,
-                runSpacing: 8,
-                children: [
-                  _pill('Wet', summary['wet'] ?? 0, Colors.blue),
-                  _pill('Dry', summary['dry'] ?? 0, Colors.green),
-                  _pill('Mixed', summary['mixed'] ?? 0, Colors.orange),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  Expanded(
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade700,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () {
-                        Navigator.of(sheetContext).pop();
-                        context.go(AppRoutePaths.operatorHome);
-                      },
-                      icon: const Icon(Icons.home),
-                      label: const Text('Back to home'),
+        return SingleChildScrollView(
+          padding: EdgeInsets.only(
+            bottom: MediaQuery.of(sheetContext).viewInsets.bottom,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 10, 20, 24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Icon(
+                      offline ? Icons.cloud_off : Icons.check_circle,
+                      color: offline ? Colors.orange : Colors.green,
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton(
-                      style: OutlinedButton.styleFrom(
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      onPressed: () {
-                        Navigator.of(sheetContext).pop();
-                      },
-                      child: const Text('Close'),
+                    const SizedBox(width: 8),
+                    Text(
+                      offline ? 'Saved offline' : 'Collection recorded',
+                      style: theme.textTheme.titleMedium
+                          ?.copyWith(fontWeight: FontWeight.w800),
                     ),
-                  ),
-                ],
-              ),
-            ],
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Total: ${totalWeight.toStringAsFixed(2)} kg',
+                  style: theme.textTheme.titleLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 8),
+                Wrap(
+                  spacing: 10,
+                  runSpacing: 8,
+                  children: [
+                    _pill('Wet', summary['wet'] ?? 0, Colors.blue),
+                    _pill('Dry', summary['dry'] ?? 0, Colors.green),
+                    _pill('Mixed', summary['mixed'] ?? 0, Colors.orange),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade700,
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: () {
+                          Navigator.of(sheetContext).pop();
+                          context.go(AppRoutePaths.operatorHome);
+                        },
+                        icon: const Icon(Icons.home),
+                        label: const Text('Back to home'),
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    Expanded(
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                        ),
+                        onPressed: () {
+                          Navigator.of(sheetContext).pop();
+                        },
+                        child: const Text('Close'),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
           ),
         );
       },
@@ -812,7 +793,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     );
   }
 
-  // ==================== DIALOG ====================
   void _showDialog(String title, String msg) {
     showDialog(
       context: context,
@@ -829,7 +809,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     );
   }
 
-  // ==================== UI HELPERS ====================
   Widget _buildCustomerInfo() => Card(
         color: AppColors.surface,
         elevation: 0,
@@ -1059,12 +1038,10 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () {
-            // Prefer router navigation back to operator home tabbar.
             final navigator = Navigator.of(context);
             if (navigator.canPop()) {
               navigator.pop();
             } else {
-              // Fallback to route if opened fresh.
               context.go(AppRoutePaths.operatorHome);
             }
           },
@@ -1074,63 +1051,72 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
           style: AppTextStyles.heading2.copyWith(color: Colors.white),
         ),
       ),
-      body: wasteTypes.isEmpty
-          ? const Center(child: CircularProgressIndicator())
-          : Column(
-              children: [
-                Container(
-                  width: double.infinity,
-                  color: AppColors.accentLight,
-                  padding:
-                      const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-                  child: Text(
-                    "📟 Live Weight: ${latestWeight == '--' ? '--' : '$latestWeight kg'}",
-                    style: AppTextStyles.heading2.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                ),
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      children: [
-                        _buildCustomerInfo(),
-                        const SizedBox(height: 12),
-                        ...wasteTypes.map((w) {
-                          final type =
-                              w['waste_type_name'].toString().toLowerCase();
-                          final name = w['waste_type_name'];
-                          return KeyedSubtree(
-                            key: ValueKey(
-                                "wastecard_${type}_${_wasteData[type]!['unique_id']}_${_wasteData[type]!['weight']}"),
-                            child: _buildWasteSection(type, name),
-                          );
-                        }),
-                        const SizedBox(height: 20),
-                        _isSubmitting
-                            ? const CircularProgressIndicator()
-                            : ElevatedButton(
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor:
-                                      const Color.fromRGBO(0, 61, 125, 0.8),
-                                  padding: const EdgeInsets.symmetric(
-                                      horizontal: 40, vertical: 12),
-                                ),
-                                onPressed: _submitForm,
-                                child: Text(
-                                  'Submit',
-                                  style: AppTextStyles.labelLarge.copyWith(
-                                    fontSize: 14,
-                                  ),
-                                ),
-                              ),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
+      // ✅ FIX: Removed the ternary operator that replaced body with Loader if empty.
+      // Now, the body is ALWAYS the Column, so Headers and Customer Info never disappear.
+      body: Column(
+        children: [
+          Container(
+            width: double.infinity,
+            color: AppColors.accentLight,
+            padding:
+                const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            child: Text(
+              "📟 Live Weight: ${latestWeight == '--' ? '--' : '$latestWeight kg'}",
+              style: AppTextStyles.heading2.copyWith(
+                color: AppColors.textPrimary,
+              ),
             ),
+          ),
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  _buildCustomerInfo(),
+                  const SizedBox(height: 12),
+                  
+                  // If wasteTypes is ever empty (fallback), show a message instead of disappearing
+                  if (wasteTypes.isEmpty)
+                    const Padding(
+                      padding: EdgeInsets.all(20.0),
+                      child: Text("No waste types configured."),
+                    )
+                  else
+                    ...wasteTypes.map((w) {
+                      final type =
+                          w['waste_type_name'].toString().toLowerCase();
+                      final name = w['waste_type_name'];
+                      return KeyedSubtree(
+                        key: ValueKey(
+                            "wastecard_${type}_${_wasteData[type]!['unique_id']}_${_wasteData[type]!['weight']}"),
+                        child: _buildWasteSection(type, name),
+                      );
+                    }),
+                    
+                  const SizedBox(height: 20),
+                  _isSubmitting
+                      ? const CircularProgressIndicator()
+                      : ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor:
+                                const Color.fromRGBO(0, 61, 125, 0.8),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 40, vertical: 12),
+                          ),
+                          onPressed: _submitForm,
+                          child: Text(
+                            'Submit',
+                            style: AppTextStyles.labelLarge.copyWith(
+                              fontSize: 14,
+                            ),
+                          ),
+                        ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
@@ -1156,77 +1142,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     return granted;
   }
 
-//   Future<void> _initBluetooth() async {
-//     if (connected) return;
-
-//     await [
-//       Permission.bluetooth,
-//       Permission.bluetoothConnect,
-//       Permission.bluetoothScan,
-//       Permission.locationWhenInUse,
-//     ].request();
-
-//     final devices = await FlutterBluetoothSerial.instance.getBondedDevices();
-//     if (devices.isEmpty) {
-//       debugPrint("⚠️ No bonded Bluetooth devices found.");
-//       return;
-//     }
-
-//     final hc05 = devices.firstWhere(
-//       (d) => (d.name ?? "").toUpperCase().contains("HC"),
-//       orElse: () => devices.first,
-//     );
-
-//     try {
-//       debugPrint("🔌 Connecting to ${hc05.name}...");
-//       final conn = await BluetoothConnection.toAddress(hc05.address);
-//       setState(() {
-//         _connection = conn;
-//         connected = true;
-//       });
-
-//       String buffer = "";
-//       conn.input?.listen((Uint8List data) {
-//         final text = utf8.decode(data);
-//         buffer += text;
-//         if (buffer.contains('\n')) {
-//           final parts = buffer.split('\n');
-//           for (var line in parts.take(parts.length - 1)) {
-//             final trimmed = line.trim();
-//             // if (trimmed.isNotEmpty) {
-//             //   bluetooth.updateWeight(trimmed);
-//             //   setState(() {
-//             //     latestWeight = trimmed;
-//             //     if (activeType != null && _wasteData.containsKey(activeType)) {
-//             //       _wasteData[activeType]!['weight'] = trimmed;
-//             //     }
-//             //   });
-//             // }
-//             if (trimmed.isNotEmpty) {
-//   bluetooth.updateWeight(trimmed);
-//   setState(() {
-//     latestWeight = trimmed;
-
-//     if (activeType != null && _wasteData.containsKey(activeType)) {
-//       // ✅ Replace the entire map entry with a new copy
-//       final updated = Map<String, dynamic>.from(_wasteData[activeType]!);
-//       updated['weight'] = trimmed;
-//       _wasteData = Map<String, Map<String, dynamic>>.from(_wasteData)
-//         ..[activeType!] = updated;
-//     }
-//   });
-// }
-
-//           }
-//           buffer = parts.last;
-//         }
-//       }).onDone(() {
-//         setState(() => connected = false);
-//       });
-//     } catch (e) {
-//       debugPrint("⚠️ Bluetooth connection error: $e");
-//     }
-//   }
   Future<void> _initBluetooth() async {
     if (connected) return;
 
@@ -1266,12 +1181,11 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
             _safeSetState(() {
               latestWeight = trimmed;
 
-              // ✅ Only update the *currently active* waste type if it's not frozen
               if (activeType != null && _wasteData.containsKey(activeType)) {
                 final current = _wasteData[activeType!]!;
                 final updated = Map<String, dynamic>.from(current);
-                updated['weight'] = trimmed; // 🔥 Always update
-                updated['finalWeight'] = null; // Keep editable until upload
+                updated['weight'] = trimmed;
+                updated['finalWeight'] = null;
                 _wasteData = {
                   ..._wasteData,
                   activeType!: updated,
