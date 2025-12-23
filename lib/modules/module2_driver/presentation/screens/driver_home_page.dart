@@ -10,7 +10,6 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:animations/animations.dart';
 import 'package:latlong2/latlong.dart';
-import 'package:dio/dio.dart';
 
 import '../../../../core/di.dart';
 import '../../../../core/geofence_config.dart';
@@ -25,10 +24,10 @@ import 'package:iwms_citizen_app/core/ors_service.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
+import 'package:iwms_citizen_app/shared/services/notification_service.dart';
 
 const Color _driverPrimary = Color(0xFF1B5E20);
 const Color _driverAccent = Color(0xFF66BB6A);
-const Duration _kHeaderTransitionDuration = Duration(milliseconds: 320);
 const Duration _kNavigationTransitionDuration = Duration(milliseconds: 600);
 
 const List<String> _skipReasons = [
@@ -43,7 +42,7 @@ const List<String> _skipReasons = [
 
 enum _NavigationMode { overview, navigating }
 
-enum _CustomerStatus { pending, collected, skipped, navigating }
+enum _CustomerStatus { pending, later, collected, skipped, navigating }
 
 class _DriverAssignmentStop {
   final String assignmentId;
@@ -99,6 +98,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
   List<_DriverAssignmentStop> _customers = [];
   bool _loadingCustomers = true;
   String? _customerError;
+  final Set<String> _notifiedAssignmentIds = {};
+  final Set<String> _notifiedCancelledAssignmentIds = {};
 
   @override
   void initState() {
@@ -271,8 +272,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
         return;
       }
 
-      // Use plain client so invalid JWTs don't trigger 401 on open endpoint
-      final dio = getIt<Dio>();
+      final dio = await authorizedDio();
 
       final today = DateTime.now();
       final dateStr =
@@ -285,6 +285,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
       final List list =
           resp.data is List ? resp.data : (resp.data['results'] ?? []);
+
+      _notifyNewAssignments(list);
+      await _notifyCancelledAssignments(driverId, dateStr);
 
       final stops = <_DriverAssignmentStop>[];
 
@@ -317,6 +320,20 @@ class _DriverHomePageState extends State<DriverHomePage> {
         } catch (_) {
           // ignore, fall back below
         }
+
+        wardList = wardList.where((entry) {
+          if (entry is! Map) return false;
+          final rawWard = entry['ward_id'] ?? entry['ward'];
+          String? entryWardId;
+          if (rawWard is Map) {
+            entryWardId =
+                (rawWard['unique_id'] ?? rawWard['id'] ?? rawWard['pk'])
+                    ?.toString();
+          } else if (rawWard != null) {
+            entryWardId = rawWard.toString();
+          }
+          return entryWardId != null && entryWardId == wardId;
+        }).toList();
 
         if (wardList.isEmpty) {
           stops.add(
@@ -420,6 +437,72 @@ class _DriverHomePageState extends State<DriverHomePage> {
         _loadingCustomers = false;
         _customerError = 'Failed to load assignments';
       });
+    }
+  }
+
+  void _notifyNewAssignments(List<dynamic> assignments) {
+    final newAssignments = <String>[];
+
+    for (final item in assignments) {
+      if (item is! Map) continue;
+      final id = item['unique_id']?.toString();
+      if (id == null || id.isEmpty) continue;
+      if (_notifiedAssignmentIds.add(id)) {
+        newAssignments.add(id);
+      }
+    }
+
+    if (newAssignments.isEmpty) return;
+    final notificationService = getIt<NotificationService>();
+    final title =
+        newAssignments.length == 1 ? 'New assignment' : 'New assignments';
+    final message =
+        'You have ${newAssignments.length} assignment(s) scheduled today.';
+    notificationService.showAssignmentNotification(
+      title: title,
+      message: message,
+    );
+  }
+
+  Future<void> _notifyCancelledAssignments(
+    String staffId,
+    String dateStr,
+  ) async {
+    try {
+      final dio = await authorizedDio();
+      final resp = await dio.get(
+        ApiConfig.staffAssignments,
+        queryParameters: {
+          'staff_id': staffId,
+          'status': 'cancelled',
+          'date_from': dateStr,
+          'date_to': dateStr,
+        },
+      );
+
+      final decoded = resp.data;
+      final List list = decoded is List
+          ? decoded
+          : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
+
+      for (final item in list) {
+        if (item is! Map) continue;
+        final id = item['unique_id']?.toString();
+        if (id == null || id.isEmpty) continue;
+        if (!_notifiedCancelledAssignmentIds.add(id)) continue;
+
+        final wardName = item['ward_name']?.toString() ?? 'Assignment';
+        final reason =
+            item['cancelled_reason']?.toString() ?? 'No reason provided';
+
+        final notificationService = getIt<NotificationService>();
+        notificationService.showAssignmentNotification(
+          title: 'Assignment cancelled',
+          message: '$wardName • $reason',
+        );
+      }
+    } catch (_) {
+      // Ignore notification failures.
     }
   }
 
@@ -801,6 +884,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     _customers = widget.customers
         .where((c) =>
             c.status == _CustomerStatus.pending ||
+            c.status == _CustomerStatus.later ||
             c.status == _CustomerStatus.navigating)
         .toList();
     _navAnimController = AnimationController(
@@ -814,6 +898,17 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   void dispose() {
     _navAnimController.dispose();
     super.dispose();
+  }
+
+  void _updateCustomerStatus(String id, _CustomerStatus status) {
+    setState(() {
+      for (final c in _customers) {
+        if (c.id == id) {
+          c.status = status;
+        }
+      }
+    });
+    widget.onStatusChanged(id, status);
   }
 
   @override
@@ -982,22 +1077,29 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
 
   Future<void> _reportCompletion(_DriverAssignmentStop customer) async {
     try {
-      final dio = getIt<Dio>();
+      final dio = await authorizedDio();
       final assignmentId = customer.baseAssignmentId;
+      String? driverId;
+      final authState = context.read<AuthBloc>().state;
+      if (authState is AuthStateAuthenticated) {
+        final trimmed = authState.userId.trim();
+        if (trimmed.isNotEmpty) {
+          driverId = trimmed;
+        }
+      }
 
       await dio.post(
         '${ApiConfig.assignments}$assignmentId/complete/',
-        options: Options(headers: {'Authorization': null}),
       );
       await dio.post(
         ApiConfig.collectionLogs,
         data: {
           'assignment': assignmentId,
+          if (driverId != null) 'driver': driverId,
           'action': 'collection_completed',
           'latitude': widget.driverLocation.latitude,
           'longitude': widget.driverLocation.longitude,
         },
-        options: Options(headers: {'Authorization': null}),
       );
     } catch (e) {
       if (!mounted) return;
@@ -1010,18 +1112,192 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     }
   }
 
+  Future<void> _handleCollect(_DriverAssignmentStop customer) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('Confirm Collection'),
+        content: const Text(
+          'Have you completed waste collection for this customer?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() {
+      customer.status = _CustomerStatus.collected;
+    });
+
+    _updateCustomerStatus(customer.id, _CustomerStatus.collected);
+
+    await _reportCompletion(customer);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Collection completed'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
+    await _computeRoute();
+  }
+
+  Future<void> _handleSkip(_DriverAssignmentStop customer) async {
+    String? selectedReason;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Skip Waste Collection'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Select a reason for skipping:'),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedReason,
+                    isExpanded: true,
+                    dropdownColor: Colors.white,
+                    decoration: const InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(),
+                      hintText: 'Reason',
+                    ),
+                    items: _skipReasons
+                        .map(
+                          (r) => DropdownMenuItem(
+                            value: r,
+                            child: Text(
+                              r,
+                              style: const TextStyle(color: Colors.black),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (val) {
+                      setStateDialog(() {
+                        selectedReason = val;
+                      });
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: selectedReason == null
+                      ? null
+                      : () => Navigator.pop(dialogContext, true),
+                  child: const Text('Skip'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true || selectedReason == null) return;
+
+    setState(() {
+      customer.status = _CustomerStatus.skipped;
+      customer.skipReason = selectedReason;
+    });
+
+    _updateCustomerStatus(customer.id, _CustomerStatus.skipped);
+
+    await _reportSkip(customer, selectedReason!);
+
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Skipped'),
+          duration: Duration(seconds: 2),
+        ),
+      );
+    }
+
+    await _computeRoute();
+  }
+
+  void _handleLater(_DriverAssignmentStop customer) {
+    setState(() {
+      customer.status = _CustomerStatus.later;
+    });
+
+    _updateCustomerStatus(customer.id, _CustomerStatus.later);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Marked for later'),
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _openAssignmentScreen(_DriverAssignmentStop customer) {
+    final wardId = customer.wardId;
+    final wardName = customer.wardName;
+
+    if (wardId == null && wardName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Ward not available for this assignment')),
+      );
+      return;
+    }
+
+    final wardCustomers = _customers.where((c) {
+      if (wardId != null && wardId.isNotEmpty) {
+        return c.wardId == wardId;
+      }
+      return c.wardName == wardName;
+    }).toList();
+
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _AssignmentScreen(
+          wardName: wardName,
+          customers: wardCustomers,
+          onCollect: _handleCollect,
+          onLater: _handleLater,
+          onSkip: _handleSkip,
+        ),
+      ),
+    );
+  }
   Future<void> _reportSkip(
     _DriverAssignmentStop customer,
     String reason,
   ) async {
     try {
-      final dio = getIt<Dio>();
+      final dio = await authorizedDio();
       final assignmentId = customer.baseAssignmentId;
 
       await dio.post(
         '${ApiConfig.assignments}$assignmentId/skip/',
         data: {'reason': reason},
-        options: Options(headers: {'Authorization': null}),
       );
 
       await dio.post(
@@ -1033,7 +1309,6 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
           'latitude': widget.driverLocation.latitude,
           'longitude': widget.driverLocation.longitude,
         },
-        options: Options(headers: {'Authorization': null}),
       );
     } catch (e) {
       if (!mounted) return;
@@ -1050,6 +1325,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     switch (status) {
       case _CustomerStatus.collected:
         return Colors.green;
+      case _CustomerStatus.later:
+        return Colors.deepOrange;
       case _CustomerStatus.skipped:
         return Colors.orange;
       case _CustomerStatus.navigating:
@@ -1234,153 +1511,11 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                                 return _CustomerCard(
                                   customer: customer,
                                   distance: _getDistanceToCustomer(customer),
-                                  onComplete: () async {
-                                    final confirmed = await showDialog<bool>(
-                                      context: context,
-                                      builder: (_) => AlertDialog(
-                                        title: const Text('Confirm Collection'),
-                                        content: const Text(
-                                          'Have you completed waste collection for this customer?',
-                                        ),
-                                        actions: [
-                                          TextButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, false),
-                                            child: const Text('Cancel'),
-                                          ),
-                                          ElevatedButton(
-                                            onPressed: () =>
-                                                Navigator.pop(context, true),
-                                            child: const Text('Confirm'),
-                                          ),
-                                        ],
-                                      ),
-                                    );
-
-                                    if (confirmed != true) return;
-
-                                    setState(() {
-                                      customer.status =
-                                          _CustomerStatus.collected;
-                                    });
-
-                                    widget.onStatusChanged(
-                                        customer.id, _CustomerStatus.collected);
-                                    await _reportCompletion(customer);
-
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Collection completed'),
-                                          duration: Duration(seconds: 2),
-                                        ),
-                                      );
-                                    }
-
-                                    await _computeRoute();
-                                  },
-                                  onSkip: () async {
-                                    String? selectedReason;
-
-                                    final confirmed = await showDialog<bool>(
-                                      context: context,
-                                      barrierDismissible: false,
-                                      builder: (dialogContext) {
-                                        return StatefulBuilder(
-                                          builder: (context, setStateDialog) {
-                                            return AlertDialog(
-                                              title: const Text(
-                                                  'Skip Waste Collection'),
-                                              content: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  const Text(
-                                                      'Select a reason for skipping:'),
-                                                  const SizedBox(height: 12),
-                                                  DropdownButtonFormField<
-                                                      String>(
-                                                    value: selectedReason,
-                                                    isExpanded: true,
-                                                    dropdownColor: Colors.white,
-                                                    decoration:
-                                                        const InputDecoration(
-                                                      filled: true,
-                                                      fillColor: Colors.white,
-                                                      border:
-                                                          OutlineInputBorder(),
-                                                      hintText: 'Reason',
-                                                    ),
-                                                    items: _skipReasons
-                                                        .map(
-                                                          (r) =>
-                                                              DropdownMenuItem(
-                                                            value: r,
-                                                            child: Text(
-                                                              r,
-                                                              style: const TextStyle(
-                                                                  color: Colors
-                                                                      .black),
-                                                            ),
-                                                          ),
-                                                        )
-                                                        .toList(),
-                                                    onChanged: (val) {
-                                                      setStateDialog(() {
-                                                        selectedReason = val;
-                                                      });
-                                                    },
-                                                  ),
-                                                ],
-                                              ),
-                                              actions: [
-                                                TextButton(
-                                                  onPressed: () =>
-                                                      Navigator.pop(
-                                                          dialogContext, false),
-                                                  child: const Text('Cancel'),
-                                                ),
-                                                ElevatedButton(
-                                                  onPressed: selectedReason ==
-                                                          null
-                                                      ? null
-                                                      : () => Navigator.pop(
-                                                          dialogContext, true),
-                                                  child: const Text('Skip'),
-                                                ),
-                                              ],
-                                            );
-                                          },
-                                        );
-                                      },
-                                    );
-
-                                    if (confirmed != true ||
-                                        selectedReason == null) return;
-
-                                    setState(() {
-                                      customer.status = _CustomerStatus.skipped;
-                                      customer.skipReason = selectedReason;
-                                    });
-
-                                    widget.onStatusChanged(
-                                        customer.id, _CustomerStatus.skipped);
-                                    await _reportSkip(
-                                        customer, selectedReason!);
-
-                                    if (mounted) {
-                                      ScaffoldMessenger.of(context)
-                                          .showSnackBar(
-                                        const SnackBar(
-                                          content: Text('Skipped'),
-                                          duration: Duration(seconds: 2),
-                                        ),
-                                      );
-                                    }
-
-                                    await _computeRoute();
-                                  },
+                                  onComplete: () => _handleCollect(customer),
+                                  onSkip: () => _handleSkip(customer),
                                   onStart: () => _startNavigation(customer.id),
+                                  onOpenAssignment: () =>
+                                      _openAssignmentScreen(customer),
                                 );
                               },
                               separatorBuilder: (_, __) =>
@@ -1509,6 +1644,7 @@ class _CustomerCard extends StatelessWidget {
     required this.onComplete,
     required this.onSkip,
     required this.onStart,
+    required this.onOpenAssignment,
   });
 
   final _DriverAssignmentStop customer;
@@ -1516,6 +1652,7 @@ class _CustomerCard extends StatelessWidget {
   final VoidCallback onComplete;
   final VoidCallback onSkip;
   final VoidCallback onStart;
+  final VoidCallback onOpenAssignment;
 
   Color get _statusColor {
     switch (customer.status) {
@@ -1523,6 +1660,8 @@ class _CustomerCard extends StatelessWidget {
         return Colors.green;
       case _CustomerStatus.skipped:
         return Colors.orange;
+      case _CustomerStatus.later:
+        return Colors.deepOrange;
       case _CustomerStatus.navigating:
         return Colors.blue;
       case _CustomerStatus.pending:
@@ -1566,170 +1705,175 @@ class _CustomerCard extends StatelessWidget {
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Padding(
-          padding: const EdgeInsets.all(10),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // ================= HEADER =================
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  CircleAvatar(
-                    radius: 16,
-                    backgroundColor: _statusColor.withOpacity(0.15),
-                    child: Text(
-                      displayName[0].toUpperCase(),
-                      style: TextStyle(
-                        color: _statusColor,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 13,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: onOpenAssignment,
+          child: Padding(
+            padding: const EdgeInsets.all(10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // ================= HEADER =================
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: _statusColor.withOpacity(0.15),
+                      child: Text(
+                        displayName[0].toUpperCase(),
+                        style: TextStyle(
+                          color: _statusColor,
+                          fontWeight: FontWeight.w800,
+                          fontSize: 13,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 8),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          displayName,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 13,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Row(
-                          children: [
-                            Icon(
-                              Icons.near_me_rounded,
-                              size: 11,
-                              color: Colors.grey.shade600,
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            displayName,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13,
                             ),
-                            const SizedBox(width: 3),
-                            Text(
-                              distance,
-                              style: TextStyle(
+                          ),
+                          const SizedBox(height: 2),
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.near_me_rounded,
+                                size: 11,
                                 color: Colors.grey.shade600,
-                                fontSize: 11,
-                                fontWeight: FontWeight.w600,
                               ),
+                              const SizedBox(width: 3),
+                              Text(
+                                distance,
+                                style: TextStyle(
+                                  color: Colors.grey.shade600,
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w600,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+
+                    // ===== ASSIGNMENT TYPE BADGE =====
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: _assignmentBg,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        customer.assignmentType.toUpperCase(),
+                        style: TextStyle(
+                          fontSize: 9,
+                          fontWeight: FontWeight.w800,
+                          color: _assignmentFg,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+
+                const SizedBox(height: 10),
+
+                // ================= ACTION BUTTONS =================
+                Row(
+                  children: [
+                    Expanded(
+                      child: SizedBox(
+                        height: 32,
+                        child: ElevatedButton(
+                          onPressed:
+                              customer.status == _CustomerStatus.collected
+                                  ? null
+                                  : onComplete,
+                          style: ElevatedButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            backgroundColor: Colors.green.shade700,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
                             ),
-                          ],
+                          ),
+                          child: const Text(
+                            'Complete',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
                         ),
-                      ],
+                      ),
                     ),
-                  ),
+                    const SizedBox(width: 6),
+                    Expanded(
+                      child: SizedBox(
+                        height: 32,
+                        child: OutlinedButton(
+                          onPressed: customer.status == _CustomerStatus.skipped
+                              ? null
+                              : onSkip,
+                          style: OutlinedButton.styleFrom(
+                            padding: EdgeInsets.zero,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                          child: const Text(
+                            'Skip',
+                            style: TextStyle(
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
 
-                  // ===== ASSIGNMENT TYPE BADGE =====
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                    decoration: BoxDecoration(
-                      color: _assignmentBg,
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      customer.assignmentType.toUpperCase(),
+                const SizedBox(height: 8),
+
+                // ================= NAVIGATE =================
+                SizedBox(
+                  width: double.infinity,
+                  height: 32,
+                  child: ElevatedButton.icon(
+                    onPressed: customer.status == _CustomerStatus.navigating
+                        ? null
+                        : onStart,
+                    icon: const Icon(Icons.navigation_rounded, size: 13),
+                    label: const Text(
+                      'Navigate',
                       style: TextStyle(
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        color: _assignmentFg,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 10),
-
-              // ================= ACTION BUTTONS =================
-              Row(
-                children: [
-                  Expanded(
-                    child: SizedBox(
-                      height: 32,
-                      child: ElevatedButton(
-                        onPressed: customer.status == _CustomerStatus.collected
-                            ? null
-                            : onComplete,
-                        style: ElevatedButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          backgroundColor: Colors.green.shade700,
-                          foregroundColor: Colors.white,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'Complete',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
+                    style: ElevatedButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      backgroundColor: Colors.blue.shade700,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
                       ),
-                    ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: SizedBox(
-                      height: 32,
-                      child: OutlinedButton(
-                        onPressed: customer.status == _CustomerStatus.skipped
-                            ? null
-                            : onSkip,
-                        style: OutlinedButton.styleFrom(
-                          padding: EdgeInsets.zero,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(8),
-                          ),
-                        ),
-                        child: const Text(
-                          'Skip',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-
-              const SizedBox(height: 8),
-
-              // ================= NAVIGATE =================
-              SizedBox(
-                width: double.infinity,
-                height: 32,
-                child: ElevatedButton.icon(
-                  onPressed: customer.status == _CustomerStatus.navigating
-                      ? null
-                      : onStart,
-                  icon: const Icon(Icons.navigation_rounded, size: 13),
-                  label: const Text(
-                    'Navigate',
-                    style: TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  style: ElevatedButton.styleFrom(
-                    padding: EdgeInsets.zero,
-                    backgroundColor: Colors.blue.shade700,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
                     ),
                   ),
                 ),
-              ),
-            ],
+              ],
+            ),
           ),
         ),
       ),
@@ -1877,6 +2021,179 @@ class _HistoryTab extends StatelessWidget {
               );
             }),
         ],
+      ),
+    );
+  }
+}
+
+class _AssignmentScreen extends StatefulWidget {
+  const _AssignmentScreen({
+    required this.wardName,
+    required this.customers,
+    required this.onCollect,
+    required this.onLater,
+    required this.onSkip,
+  });
+
+  final String wardName;
+  final List<_DriverAssignmentStop> customers;
+  final Future<void> Function(_DriverAssignmentStop customer) onCollect;
+  final void Function(_DriverAssignmentStop customer) onLater;
+  final Future<void> Function(_DriverAssignmentStop customer) onSkip;
+
+  @override
+  State<_AssignmentScreen> createState() => _AssignmentScreenState();
+}
+
+class _AssignmentScreenState extends State<_AssignmentScreen> {
+  @override
+  Widget build(BuildContext context) {
+    final title = widget.wardName.isNotEmpty
+        ? widget.wardName
+        : 'Assignment';
+
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(title),
+      ),
+      body: ListView.separated(
+        padding: const EdgeInsets.all(16),
+        itemCount: widget.customers.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (context, index) {
+          final customer = widget.customers[index];
+          final displayName =
+              customer.customerName?.trim().isNotEmpty == true
+                  ? customer.customerName!
+                  : customer.wardName;
+
+          return Container(
+            padding: const EdgeInsets.all(14),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(16),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 12,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  'Shift: ${customer.shift.replaceAll('_', ' ').toUpperCase()}',
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                if (customer.customerName == null ||
+                    customer.customerName!.isEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Ward: ${customer.wardName}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.grey.shade600,
+                    ),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Expanded(
+                      child: ElevatedButton(
+                        onPressed:
+                            customer.status == _CustomerStatus.collected
+                                ? null
+                                : () async {
+                                    await widget.onCollect(customer);
+                                    if (mounted) setState(() {});
+                                  },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.green.shade700,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Collect'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: () {
+                          widget.onLater(customer);
+                          setState(() {});
+                        },
+                        style: OutlinedButton.styleFrom(
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Later'),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: OutlinedButton(
+                        onPressed: customer.status == _CustomerStatus.skipped
+                            ? null
+                            : () async {
+                                await widget.onSkip(customer);
+                                if (mounted) setState(() {});
+                              },
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          side: const BorderSide(color: Colors.redAccent),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Skip'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (customer.status == _CustomerStatus.skipped &&
+                    customer.skipReason != null) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Reason: ${customer.skipReason}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.red.shade400,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+                if (customer.status == _CustomerStatus.later) ...[
+                  const SizedBox(height: 8),
+                  Text(
+                    'Marked for later',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.deepOrange.shade400,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          );
+        },
       ),
     );
   }

@@ -24,6 +24,7 @@ dependencies:
   equatable: ^2.0.7
   intl: ^0.20.2
   http: ^1.2.2
+  dynamic_tabbar: ^1.0.9
   
   # --- UI & Utilities ---
   smooth_page_indicator: ^1.2.1

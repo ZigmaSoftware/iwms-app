@@ -9,6 +9,7 @@ import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_login.
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_citizen_app/core/env.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
 
 class AuthRepositoryException implements Exception {
@@ -123,48 +124,105 @@ Future<UserModel> loginCitizen({
   required String username,
   required String password,
 }) async {
-  if (username.trim().isEmpty) {
+  final sanitizedUsername = username.trim();
+  final sanitizedPassword = password.trim();
+
+  if (sanitizedUsername.isEmpty) {
     throw AuthRepositoryException("Username is required.");
   }
-  if (password.trim().isEmpty) {
+  if (sanitizedPassword.isEmpty) {
     throw AuthRepositoryException("Password is required.");
   }
 
   try {
-    // ----------------------------------------------------
-    // ONLINE LOGIN ATTEMPT
-    // ----------------------------------------------------
+    final user = await _loginOnline(
+      sanitizedUsername,
+      sanitizedPassword,
+    );
+    await _persistOfflineUser(user, sanitizedPassword);
+    await saveUser(user);
+    return user;
+  } on SocketException catch (_) {
+    final offlineUser = await _loginOffline(sanitizedUsername, sanitizedPassword);
+    await saveUser(offlineUser);
+    return offlineUser;
+  } on DioException catch (dioError, stackTrace) {
+    final message = _handleDioError(dioError);
+    _logError('Login failed', dioError, stackTrace);
+    throw AuthRepositoryException(message);
+  } on AuthRepositoryException {
+    rethrow;
+  } catch (error, stackTrace) {
+    _logError('Unexpected login failure', error, stackTrace);
+    throw AuthRepositoryException("Login failed. Please try again.");
+  }
+}
+
+  Future<UserModel> _loginOnline(String username, String password) async {
+    if (kEnforcePermissions) {
+      return _loginDesktopStaff(username, password);
+    }
+    return _loginMobileCitizen(username, password);
+  }
+
+  Future<UserModel> _loginDesktopStaff(String username, String password) async {
+    try {
+      final response = await _dio.post(
+        ApiConfig.staffLogin,
+        data: {
+          "username": username,
+          "password": password,
+        },
+      );
+
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        throw AuthRepositoryException("Invalid response from staff login.");
+      }
+
+      final requiredKeys = ["unique_id", "name", "role", "access_token"];
+      final missing = requiredKeys.where((key) => data[key] == null).toList();
+      if (missing.isNotEmpty) {
+        throw AuthRepositoryException("Incomplete staff login payload.");
+      }
+
+      return UserModel(
+        userId: data["unique_id"].toString(),
+        userName: data["name"].toString(),
+        role: data["role"].toString().toLowerCase(),
+        authToken: data["access_token"].toString(),
+        emp_id: data["emp_id"]?.toString(),
+      );
+    } on DioException catch (dioError, stackTrace) {
+      final message = _handleDioError(dioError);
+      _logError('Staff login failed', dioError, stackTrace);
+      throw AuthRepositoryException(message);
+    }
+  }
+
+  Future<UserModel> _loginMobileCitizen(String username, String password) async {
     final response = await _dio.post(
       ApiConfig.citizenLogin,
       data: {
-        "username": username.trim(),
-        "password": password.trim(),
+        "username": username,
+        "password": password,
       },
     );
 
     final data = response.data;
 
-    if (data["unique_id"] == null ||
+    if (data is! Map<String, dynamic> ||
+        data["unique_id"] == null ||
         data["role"] == null ||
         data["name"] == null ||
         data["access_token"] == null) {
       throw AuthRepositoryException("Invalid login response from server.");
     }
 
-    final user = UserModel.fromApi(data);
+    return UserModel.fromApi(data);
+  }
 
-    // Save to SQLite for offline login
-    await saveOperatorToDB(data, password);
-
-    // Save to shared prefs
-    await saveUser(user);
-
-    return user;
-
-  } on SocketException catch (_) {
-    // ----------------------------------------------------
-    // OFFLINE LOGIN FALLBACK
-    // ----------------------------------------------------
+  Future<UserModel> _loginOffline(String username, String password) async {
     final local = await getOperatorFromDB(username);
 
     if (local == null) {
@@ -173,21 +231,27 @@ Future<UserModel> loginCitizen({
       );
     }
 
-    // Validate password hash
     final hash = sha256.convert(utf8.encode(password)).toString();
 
     if (hash != local["password_hash"]) {
       throw AuthRepositoryException("Incorrect password (offline mode).");
     }
 
-    // UserModel.fromJson() should handle DB model properly
     return UserModel.fromJson(local);
-
-  } catch (e) {
-    // Any other error
-    throw AuthRepositoryException("Login failed. Please try again.");
   }
-}
+
+  Future<void> _persistOfflineUser(UserModel user, String password) async {
+    await saveOperatorToDB(
+      {
+        "unique_id": user.userId,
+        "name": user.userName,
+        "role": user.role,
+        "access_token": user.authToken,
+        "emp_id": user.emp_id,
+      },
+      password,
+    );
+  }
 
   Future<UserModel> loginDriver({
     required String userName,
@@ -200,9 +264,15 @@ Future<UserModel> loginCitizen({
     final role = _prefs.getString(_roleKey);
     final userName = _prefs.getString(_nameKey);
     final emp_id = _prefs.getString(_emp_idKey);
+    final token = _prefs.getString(_tokenKey);
 
     if (userId != null && role != null && userName != null) {
-      final token = _prefs.getString(_tokenKey);
+      final normalizedRole = role.toLowerCase();
+      if (normalizedRole != 'citizen' &&
+          normalizedRole != 'customer' &&
+          (token == null || token.isEmpty)) {
+        return null;
+      }
       return UserModel(
         userId: userId,
         userName: userName,

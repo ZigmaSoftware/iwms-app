@@ -8,7 +8,9 @@ import 'package:go_router/go_router.dart';
 import 'package:motion_tab_bar/MotionTabBar.dart';
 
 import '../../../core/di.dart';
+import '../../../core/api_config.dart';
 import '../../../core/geofence_config.dart';
+import '../../../core/network/authorized_dio.dart';
 import '../../../data/models/vehicle_model.dart';
 import '../../../logic/vehicle_tracking/vehicle_bloc.dart';
 import '../../../router/app_router.dart';
@@ -54,6 +56,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
   late final AuthRepository _authRepository;
   DateTime? _lastGeofenceAlertAt;
   String? _userId;
+  final Set<String> _notifiedCitizenAssignments = {};
 
   late final List<BannerSlide> _fallbackSlides;
 
@@ -84,6 +87,50 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     setState(() {
       _userId = user?.userId;
     });
+    if (user?.userId != null && user!.userId.trim().isNotEmpty) {
+      unawaited(_fetchCitizenAssignments(user.userId.trim()));
+    }
+  }
+
+  Future<void> _fetchCitizenAssignments(String customerId) async {
+    try {
+      final dio = await authorizedDio();
+      final today = DateTime.now();
+      final dateStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+      final response = await dio.get(
+        ApiConfig.citizenAssignments,
+        queryParameters: {
+          'customer_id': customerId,
+          'date': dateStr,
+        },
+      );
+
+      final decoded = response.data;
+      final List list = decoded is List
+          ? decoded
+          : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
+
+      for (final item in list) {
+        if (item is! Map) continue;
+        final id = item['unique_id']?.toString();
+        if (id == null || id.isEmpty) continue;
+        if (!_notifiedCitizenAssignments.add(id)) continue;
+
+        final wardName = item['ward_name']?.toString() ?? 'your ward';
+        final date = item['date']?.toString() ?? dateStr;
+        _notificationController.addAlert(
+          CitizenAlert(
+            title: 'Collection scheduled',
+            message: 'Waste pickup scheduled for $wardName on $date.',
+            timestamp: DateTime.now(),
+          ),
+        );
+      }
+    } catch (e) {
+      debugPrint('Citizen assignment alerts skipped: $e');
+    }
   }
 
   @override

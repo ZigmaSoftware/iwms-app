@@ -69,6 +69,48 @@ enum AssignmentStatus {
   }
 }
 
+enum AssignmentRoleStatus {
+  pending,
+  completed;
+
+  String get displayName {
+    switch (this) {
+      case AssignmentRoleStatus.pending:
+        return 'Pending';
+      case AssignmentRoleStatus.completed:
+        return 'Completed';
+    }
+  }
+
+  Color get color {
+    switch (this) {
+      case AssignmentRoleStatus.pending:
+        return const Color(0xFFFFB300);
+      case AssignmentRoleStatus.completed:
+        return const Color(0xFF43A047);
+    }
+  }
+
+  IconData get icon {
+    switch (this) {
+      case AssignmentRoleStatus.pending:
+        return Icons.schedule;
+      case AssignmentRoleStatus.completed:
+        return Icons.check_circle;
+    }
+  }
+
+  static AssignmentRoleStatus fromString(String? status) {
+    if (status == null) return AssignmentRoleStatus.pending;
+    switch (status.toLowerCase()) {
+      case 'completed':
+        return AssignmentRoleStatus.completed;
+      default:
+        return AssignmentRoleStatus.pending;
+    }
+  }
+}
+
 class StaffMember {
   final String uniqueId;
   final String name;
@@ -195,8 +237,12 @@ class EnhancedAssignmentModel {
   final String assignmentType;
   final String shift;
   final AssignmentStatus currentStatus;
+  final AssignmentRoleStatus driverStatus;
+  final AssignmentRoleStatus operatorStatus;
   final DateTime createdAt;
   final DateTime? completedAt;
+  final DateTime? driverCompletedAt;
+  final DateTime? operatorCompletedAt;
   final DateTime? skippedAt;
   final String? skipReason;
   final DateTime? cancelledAt;
@@ -215,8 +261,12 @@ class EnhancedAssignmentModel {
     required this.assignmentType,
     required this.shift,
     required this.currentStatus,
+    this.driverStatus = AssignmentRoleStatus.pending,
+    this.operatorStatus = AssignmentRoleStatus.pending,
     required this.createdAt,
     this.completedAt,
+    this.driverCompletedAt,
+    this.operatorCompletedAt,
     this.skippedAt,
     this.skipReason,
     this.cancelledAt,
@@ -238,11 +288,19 @@ class EnhancedAssignmentModel {
       assignmentType: json['assignment_type'] ?? 'primary',
       shift: json['shift'] ?? 'full_day',
       currentStatus: AssignmentStatus.fromString(json['current_status']),
+      driverStatus: AssignmentRoleStatus.fromString(json['driver_status']),
+      operatorStatus: AssignmentRoleStatus.fromString(json['operator_status']),
       createdAt: json['created_at'] != null
           ? DateTime.parse(json['created_at'])
           : DateTime.now(),
       completedAt: json['completed_at'] != null
           ? DateTime.parse(json['completed_at'])
+          : null,
+      driverCompletedAt: json['driver_completed_at'] != null
+          ? DateTime.parse(json['driver_completed_at'])
+          : null,
+      operatorCompletedAt: json['operator_completed_at'] != null
+          ? DateTime.parse(json['operator_completed_at'])
           : null,
       skippedAt: json['skipped_at'] != null
           ? DateTime.parse(json['skipped_at'])

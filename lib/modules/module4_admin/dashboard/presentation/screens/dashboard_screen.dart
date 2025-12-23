@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:dynamic_tabbar/dynamic_tabbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
@@ -20,6 +21,7 @@ import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/sc
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'assign_form_sheet.dart';
 import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
 import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
 
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart'
@@ -91,7 +93,16 @@ class _DashboardShellState extends State<_DashboardShell> {
     final assignmentsFuture =
         _assignmentRepository.fetchTodayAssignments().then((list) {
       debugPrint('ASSIGNMENTS COUNT: ${list.length}');
-      return list;
+      final now = DateTime.now();
+      final filtered = list.where((assignment) {
+        if (assignment.currentStatus == AssignmentStatus.completed &&
+            assignment.completedAt != null) {
+          final diff = now.difference(assignment.completedAt!);
+          return diff.inMinutes < 5;
+        }
+        return true;
+      }).toList();
+      return filtered;
     }).catchError((e) {
       debugPrint('ASSIGNMENTS ERROR: $e');
       return <DailyAssignmentModel>[];
@@ -322,6 +333,57 @@ class _TodayAssignmentsCarousel extends StatelessWidget {
   final List<DailyAssignmentModel> assignments;
   final VoidCallback onCancelled;
 
+  @override
+  Widget build(BuildContext context) {
+    final cardWidth = math.min(320.0, MediaQuery.of(context).size.width - 48);
+    const cardHeight = 168.0;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 16),
+          child: Text(
+            "Today’s Assignments",
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+          ),
+        ),
+        const SizedBox(height: 10),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Column(
+            children: List.generate(assignments.length, (i) {
+              return Padding(
+                padding:
+                    EdgeInsets.only(bottom: i == assignments.length - 1 ? 0 : 12),
+                child: _AssignmentCarouselCard(
+                  assignment: assignments[i],
+                  onCancelled: onCancelled,
+                  width: cardWidth,
+                  height: cardHeight,
+                ),
+              );
+            }),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AssignmentCarouselCard extends StatelessWidget {
+  const _AssignmentCarouselCard({
+    required this.assignment,
+    required this.onCancelled,
+    this.width,
+    this.height,
+  });
+
+  final DailyAssignmentModel assignment;
+  final VoidCallback onCancelled;
+  final double? width;
+  final double? height;
+
   Color _typeBg(String type) {
     switch (type.toLowerCase()) {
       case 'temporary':
@@ -344,135 +406,210 @@ class _TodayAssignmentsCarousel extends StatelessWidget {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 16),
-          child: Text(
-            "Today’s Assignments",
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800),
+  Widget _roleStatusChip({
+    required String label,
+    required AssignmentRoleStatus status,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+      decoration: BoxDecoration(
+        color: status.color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: status.color.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(status.icon, size: 10, color: status.color),
+          const SizedBox(width: 3),
+          Text(
+            '$label: ${status.displayName}',
+            style: TextStyle(
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+              color: status.color,
+            ),
           ),
-        ),
-        const SizedBox(height: 10),
-        SizedBox(
-          height: 180,
-          width: 400,
-          child: ListView.separated(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            itemCount: assignments.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
-            itemBuilder: (context, i) {
-              final a = assignments[i];
-              final statusColor = a.statusColor;
-              return Container(
-                width: 260,
-                padding: const EdgeInsets.all(14),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: _softCardShadow(),
-                  border: Border.all(color: statusColor.withOpacity(0.25)),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: statusColor.withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            a.statusLabel,
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11,
-                              color: statusColor,
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          DateFormat('MMM d').format(a.date),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: _iconGray,
-                          ),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      a.ward,
-                      style: const TextStyle(
-                        fontWeight: FontWeight.w800,
-                        fontSize: 16,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    const SizedBox(height: 6),
-                    Text("Driver: ${a.driver}",
-                        style: const TextStyle(fontSize: 13)),
-                    Text("Operator: ${a.operatorName}",
-                        style: const TextStyle(fontSize: 13)),
-                    const Spacer(),
-                    Row(
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: _typeBg(a.assignmentType),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: Text(
-                            a.assignmentType.toUpperCase(),
-                            style: TextStyle(
-                              fontWeight: FontWeight.w700,
-                              fontSize: 11,
-                              color: _typeFg(a.assignmentType),
-                            ),
-                          ),
-                        ),
-                        const Spacer(),
-                        Text(
-                          a.shift.replaceAll('_', ' ').toUpperCase(),
-                          style: const TextStyle(
-                            fontSize: 11,
-                            color: _iconGray,
-                          ),
-                        ),
-                        TextButton(
-                          onPressed: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => AssignmentDetailsScreen(
-                                  assignment: a,
-                                  onCancelled: onCancelled,
-                                ),
-                              ),
-                            );
-                          },
-                          child: const Text('Details'),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              );
-            },
+        ],
+      ),
+    );
+  }
+
+  Widget _staffLine({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Row(
+      children: [
+        Icon(icon, size: 12, color: _iconGray),
+        const SizedBox(width: 4),
+        Flexible(
+          child: Text(
+            '$label: $value',
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFF263238),
+            ),
           ),
         ),
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cardWidth = width ??
+        math.min(320.0, MediaQuery.of(context).size.width - 48);
+    final cardHeight = height ?? 168.0;
+    final statusColor = assignment.statusColor;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: SizedBox(
+        width: cardWidth,
+        height: cardHeight,
+        child: Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: BorderRadius.circular(16),
+            boxShadow: _softCardShadow(),
+            border: Border.all(color: statusColor.withOpacity(0.25)),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: statusColor.withOpacity(0.12),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      assignment.statusLabel,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10,
+                        color: statusColor,
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    DateFormat('MMM d').format(assignment.date),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: _iconGray,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Text(
+                assignment.ward,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  fontSize: 15,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 4),
+              Row(
+                children: [
+                  Expanded(
+                    child: _staffLine(
+                      icon: Icons.local_shipping_outlined,
+                      label: 'Driver',
+                      value: assignment.driver,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _staffLine(
+                      icon: Icons.support_agent_outlined,
+                      label: 'Operator',
+                      value: assignment.operatorName,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  _roleStatusChip(
+                    label: 'Driver',
+                    status: assignment.driverStatus,
+                  ),
+                  const SizedBox(width: 6),
+                  _roleStatusChip(
+                    label: 'Operator',
+                    status: assignment.operatorStatus,
+                  ),
+                ],
+              ),
+              const Spacer(),
+              Row(
+                children: [
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: _typeBg(assignment.assignmentType),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      assignment.assignmentType.toUpperCase(),
+                      style: TextStyle(
+                        fontWeight: FontWeight.w700,
+                        fontSize: 10,
+                        color: _typeFg(assignment.assignmentType),
+                      ),
+                    ),
+                  ),
+                  const Spacer(),
+                  Text(
+                    assignment.shift.replaceAll('_', ' ').toUpperCase(),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: _iconGray,
+                    ),
+                  ),
+                  TextButton(
+                    style: TextButton.styleFrom(
+                      padding: EdgeInsets.zero,
+                      minimumSize: Size.zero,
+                      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    ),
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AssignmentDetailsScreen(
+                            assignment: assignment,
+                            onCancelled: onCancelled,
+                          ),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      'Details',
+                      style: TextStyle(fontSize: 11),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
     );
   }
 }
@@ -2467,18 +2604,268 @@ class AssignmentsScreen extends StatefulWidget {
 }
 
 class _AssignmentsScreenState extends State<AssignmentsScreen> {
-  late final AssignmentRepository _assignmentRepository; // ✅ ADD THIS
+  late final AssignmentRepository _assignmentRepository;
 
-  late Future<List<DailyAssignmentModel>> _future;
+  bool _loading = true;
+  bool _historyFiltering = false;
+  String? _error;
+  bool _didSetInitialTab = false;
+
+  List<DailyAssignmentModel> _currentAssignments = [];
+  List<DailyAssignmentModel> _historyAssignments = [];
+  List<DailyAssignmentModel> _filteredHistoryAssignments = [];
+
+  DateTime? _historyFromDate;
+  DateTime? _historyToDate;
+  DateTimeRange? _historyLoadedRange;
+  final Set<String> _historyStatusFilters = {};
+
+  static const _historyStatusOptions = [
+    _HistoryFilterOption('completed', 'Completed'),
+    _HistoryFilterOption('skipped', 'Skipped'),
+    _HistoryFilterOption('cancelled', 'Cancelled'),
+    _HistoryFilterOption('failed', 'Failed'),
+    _HistoryFilterOption('expired', 'Expired'),
+  ];
+
   @override
   void initState() {
     super.initState();
-    _assignmentRepository = getIt<AssignmentRepository>(); // ✅ ADD THIS
-    _load();
+    _assignmentRepository = getIt<AssignmentRepository>();
+    _loadAssignments();
   }
 
-  void _load() {
-    _future = _assignmentRepository.fetchTodayAssignments(); // ✅ FIXED
+  String _assignmentKey(DailyAssignmentModel assignment) {
+    if (assignment.uniqueId.isNotEmpty) {
+      return assignment.uniqueId;
+    }
+    return '${assignment.id}::${assignment.date.toIso8601String()}';
+  }
+
+  List<DailyAssignmentModel> _dedupeAssignments(
+    List<DailyAssignmentModel> assignments,
+  ) {
+    final map = <String, DailyAssignmentModel>{};
+    for (final assignment in assignments) {
+      map[_assignmentKey(assignment)] = assignment;
+    }
+    return map.values.toList();
+  }
+
+  DateTime _stripTime(DateTime date) =>
+      DateTime(date.year, date.month, date.day);
+
+  DateTimeRange? _resolveHistoryRange() {
+    if (_historyFromDate == null && _historyToDate == null) {
+      return null;
+    }
+    final start = _stripTime(_historyFromDate ?? _historyToDate!);
+    final end = _stripTime(_historyToDate ?? _historyFromDate!);
+    return DateTimeRange(start: start, end: end);
+  }
+
+  bool _sameRange(DateTimeRange? a, DateTimeRange? b) {
+    if (a == null && b == null) return true;
+    if (a == null || b == null) return false;
+    return a.start == b.start && a.end == b.end;
+  }
+
+  List<DailyAssignmentModel> _buildHistoryList(
+    List<DailyAssignmentModel> raw,
+  ) {
+    final currentIds = _currentAssignments.map(_assignmentKey).toSet();
+    final history = _dedupeAssignments(raw)
+        .where((assignment) => !assignment.isActive)
+        .where((assignment) => !currentIds.contains(_assignmentKey(assignment)))
+        .toList()
+      ..sort((a, b) => b.date.compareTo(a.date));
+    return history;
+  }
+
+  Future<void> _loadAssignments({bool showLoader = true}) async {
+    if (showLoader) {
+      setState(() {
+        _loading = true;
+        _error = null;
+      });
+    } else {
+      _error = null;
+    }
+
+    try {
+      final results = await Future.wait<List<DailyAssignmentModel>>([
+        _assignmentRepository.fetchTodayAssignments(),
+        _assignmentRepository.fetchAssignmentHistory(),
+      ]);
+
+      final currentRaw = _dedupeAssignments(results[0]);
+      final historyRaw = _dedupeAssignments(results[1]);
+
+      final current = currentRaw.where((a) => a.isActive).toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
+
+      _currentAssignments = current;
+      final history = _buildHistoryList(historyRaw);
+
+      final filteredHistory = _applyHistoryFiltersInternal(history);
+      setState(() {
+        _currentAssignments = current;
+        _historyAssignments = history;
+        _filteredHistoryAssignments = filteredHistory;
+        _historyLoadedRange = null;
+        _loading = false;
+        _historyFiltering = false;
+      });
+    } catch (e) {
+      setState(() {
+        _error = e.toString();
+        _loading = false;
+      });
+    }
+  }
+
+  List<DailyAssignmentModel> _applyHistoryFiltersInternal(
+    List<DailyAssignmentModel> base,
+  ) {
+    var filtered = base;
+    if (_historyStatusFilters.isNotEmpty) {
+      filtered = filtered
+          .where((assignment) =>
+              _historyStatusFilters.contains(assignment.statusKey))
+          .toList();
+    }
+    if (_historyFromDate != null) {
+      filtered = filtered
+          .where((assignment) =>
+              !assignment.date.isBefore(_historyFromDate!))
+          .toList();
+    }
+    if (_historyToDate != null) {
+      filtered = filtered
+          .where((assignment) => !assignment.date.isAfter(_historyToDate!))
+          .toList();
+    }
+    return filtered;
+  }
+
+  Future<void> _applyHistoryFilters({bool showLoader = true}) async {
+    if (showLoader) {
+      setState(() {
+        _historyFiltering = true;
+      });
+    }
+
+    final targetRange = _resolveHistoryRange();
+    if (targetRange != null && !_sameRange(targetRange, _historyLoadedRange)) {
+      try {
+        final fetched = await _assignmentRepository.fetchAssignmentHistory(
+          fromDate: targetRange.start,
+          toDate: targetRange.end,
+        );
+        _historyAssignments = _buildHistoryList(fetched);
+        _historyLoadedRange = targetRange;
+      } catch (_) {}
+    }
+
+    await Future.delayed(const Duration(milliseconds: 120));
+    final filtered = _applyHistoryFiltersInternal(_historyAssignments);
+
+    if (!mounted) return;
+    setState(() {
+      _filteredHistoryAssignments = filtered;
+      _historyFiltering = false;
+    });
+  }
+
+  Future<void> _pickHistoryDate({required bool isFrom}) async {
+    final initial = isFrom
+        ? (_historyFromDate ?? DateTime.now())
+        : (_historyToDate ?? DateTime.now());
+
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now(),
+    );
+
+    if (picked == null) return;
+    setState(() {
+      if (isFrom) {
+        _historyFromDate = picked;
+        if (_historyToDate != null && _historyToDate!.isBefore(picked)) {
+          _historyToDate = picked;
+        }
+      } else {
+        _historyToDate = picked;
+        if (_historyFromDate != null && _historyFromDate!.isAfter(picked)) {
+          _historyFromDate = picked;
+        }
+      }
+    });
+    await _applyHistoryFilters();
+  }
+
+  void _toggleHistoryStatus(String statusKey, bool selected) {
+    setState(() {
+      if (selected) {
+        _historyStatusFilters.add(statusKey);
+      } else {
+        _historyStatusFilters.remove(statusKey);
+      }
+    });
+    _applyHistoryFilters();
+  }
+
+  void _resetHistoryFilters() {
+    setState(() {
+      _historyStatusFilters.clear();
+      _historyFromDate = null;
+      _historyToDate = null;
+    });
+    _loadAssignments(showLoader: false);
+  }
+
+  List<TabData> _buildTabs() {
+    final tabs = [
+      _AssignmentTabSpec(
+        key: 'current',
+        title: 'Current',
+        builder: () => _CurrentAssignmentsTab(
+          assignments: _currentAssignments,
+          onRefresh: () => _loadAssignments(showLoader: false),
+        ),
+      ),
+      _AssignmentTabSpec(
+        key: 'history',
+        title: 'History',
+        builder: () => _HistoryAssignmentsTab(
+          assignments: _filteredHistoryAssignments,
+          filtering: _historyFiltering,
+          statusFilters: _historyStatusFilters,
+          fromDate: _historyFromDate,
+          toDate: _historyToDate,
+          statusOptions: _historyStatusOptions,
+          onStatusToggled: _toggleHistoryStatus,
+          onPickFromDate: () => _pickHistoryDate(isFrom: true),
+          onPickToDate: () => _pickHistoryDate(isFrom: false),
+          onResetFilters: _resetHistoryFilters,
+          onRefresh: () => _loadAssignments(showLoader: false),
+        ),
+      ),
+    ];
+
+    return tabs
+        .asMap()
+        .entries
+        .map(
+          (entry) => TabData(
+            index: entry.key,
+            title: Tab(text: entry.value.title),
+            content: _KeepAliveTab(child: entry.value.builder()),
+          ),
+        )
+        .toList();
   }
 
   @override
@@ -2486,134 +2873,362 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
     return Scaffold(
       backgroundColor: const Color(0xFFF5F5F7),
       body: SafeArea(
-        child: FutureBuilder<List<DailyAssignmentModel>>(
-          future: _future,
-          builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting) {
-              return const Center(child: CircularProgressIndicator());
-            }
-
-            final list = snapshot.data ?? [];
-
-            return RefreshIndicator(
-              onRefresh: () async {
-                setState(_load);
-                await _future;
-              },
-              child: CustomScrollView(
-                physics: const AlwaysScrollableScrollPhysics(),
-                slivers: [
-                  SliverToBoxAdapter(
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 16, vertical: 14),
-                      child: Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(10),
-                            decoration: BoxDecoration(
-                              color: Colors.white,
-                              borderRadius: BorderRadius.circular(12),
-                              boxShadow: [
-                                BoxShadow(
-                                  color: Colors.black.withOpacity(0.06),
-                                  blurRadius: 10,
-                                  offset: const Offset(0, 4),
-                                ),
-                              ],
-                            ),
-                            child: const Icon(
-                              Icons.assignment_outlined,
-                              color: _primaryGreen,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                'Assignments',
-                                style: TextStyle(
-                                  fontSize: 20,
-                                  fontWeight: FontWeight.w800,
-                                ),
-                              ),
-                              Text(
-                                '${list.length} active ${list.length == 1 ? "assignment" : "assignments"}',
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  color: _iconGray,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ],
+        child: _loading
+            ? const Center(child: CircularProgressIndicator())
+            : _error != null
+                ? _AssignmentsErrorState(
+                    message: _error!,
+                    onRetry: () => _loadAssignments(),
+                  )
+                : Column(
+                    children: [
+                      _AssignmentsHeader(
+                        currentCount: _currentAssignments.length,
+                        historyCount: _historyAssignments.length,
                       ),
-                    ),
-                  ),
-                  if (list.isEmpty)
-                    SliverFillRemaining(
-                      hasScrollBody: false,
-                      child: Center(
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          children: const [
-                            Icon(Icons.inbox_outlined,
-                                size: 42, color: _iconGray),
-                            SizedBox(height: 8),
-                            Text('No assignments'),
-                          ],
+                      const SizedBox(height: 8),
+                      Expanded(
+                        child: DynamicTabBarWidget(
+                          dynamicTabs: _buildTabs(),
+                          onTabControllerUpdated: (controller) {
+                            if (!_didSetInitialTab && controller.length > 0) {
+                              _didSetInitialTab = true;
+                              controller.animateTo(0);
+                            }
+                          },
+                          onTabChanged: (_) => _loadAssignments(showLoader: false),
+                          isScrollable: false,
+                          indicatorColor: _primaryGreen,
+                          labelColor: _primaryGreen,
+                          unselectedLabelColor: _iconGray,
+                          labelStyle: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                          ),
+                          unselectedLabelStyle: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
-                    )
-                  else
-                    SliverPadding(
-                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                      sliver: SliverList.separated(
-                        itemCount: list.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 12),
-                        itemBuilder: (context, i) {
-                          final a = list[i];
-                          return _AssignmentTile(
-                            assignment: a,
-                            onCancelled: () => setState(_load),
-                          );
-                        },
-                      ),
-                    ),
-                ],
+                    ],
+                  ),
+      ),
+    );
+  }
+}
+
+class _AssignmentTabSpec {
+  const _AssignmentTabSpec({
+    required this.key,
+    required this.title,
+    required this.builder,
+  });
+
+  final String key;
+  final String title;
+  final Widget Function() builder;
+}
+
+class _HistoryFilterOption {
+  const _HistoryFilterOption(this.value, this.label);
+
+  final String value;
+  final String label;
+}
+
+class _AssignmentsHeader extends StatelessWidget {
+  const _AssignmentsHeader({
+    required this.currentCount,
+    required this.historyCount,
+  });
+
+  final int currentCount;
+  final int historyCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.06),
+                  blurRadius: 10,
+                  offset: const Offset(0, 4),
+                ),
+              ],
+            ),
+            child: const Icon(
+              Icons.assignment_outlined,
+              color: _primaryGreen,
+            ),
+          ),
+          const SizedBox(width: 12),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Assignments',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w800,
+                ),
               ),
-            );
-          },
+              Text(
+                '$currentCount current • $historyCount history',
+                style: const TextStyle(
+                  fontSize: 13,
+                  color: _iconGray,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _AssignmentsErrorState extends StatelessWidget {
+  const _AssignmentsErrorState({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(Icons.cloud_off, size: 52, color: _iconGray),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: Theme.of(context).textTheme.bodyLarge,
+            ),
+            const SizedBox(height: 16),
+            ElevatedButton(
+              onPressed: onRetry,
+              child: const Text('Retry'),
+            ),
+          ],
         ),
       ),
     );
   }
 }
 
-class _AssignmentTile extends StatelessWidget {
-  const _AssignmentTile({
-    required this.assignment,
-    required this.onCancelled,
-  });
+class _KeepAliveTab extends StatefulWidget {
+  const _KeepAliveTab({required this.child});
 
-  final DailyAssignmentModel assignment;
-  final VoidCallback onCancelled;
+  final Widget child;
+
+  @override
+  State<_KeepAliveTab> createState() => _KeepAliveTabState();
+}
+
+class _KeepAliveTabState extends State<_KeepAliveTab>
+    with AutomaticKeepAliveClientMixin {
+  @override
+  bool get wantKeepAlive => true;
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = assignment.statusColor;
+    super.build(context);
+    return widget.child;
+  }
+}
+
+class _AssignmentsEmptyState extends StatelessWidget {
+  const _AssignmentsEmptyState({
+    required this.icon,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 42, color: _iconGray),
+          const SizedBox(height: 8),
+          Text(message),
+        ],
+      ),
+    );
+  }
+}
+
+class _CurrentAssignmentsTab extends StatelessWidget {
+  const _CurrentAssignmentsTab({
+    required this.assignments,
+    required this.onRefresh,
+  });
+
+  final List<DailyAssignmentModel> assignments;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    if (assignments.isEmpty) {
+      return RefreshIndicator(
+        onRefresh: onRefresh,
+        child: ListView(
+          physics: const AlwaysScrollableScrollPhysics(),
+          children: const [
+            SizedBox(height: 120),
+            _AssignmentsEmptyState(
+              icon: Icons.pending_actions_outlined,
+              message: 'No pending assignments available',
+            ),
+          ],
+        ),
+      );
+    }
+
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView.separated(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+        itemCount: assignments.length,
+        separatorBuilder: (_, __) => const SizedBox(height: 12),
+        itemBuilder: (context, i) {
+          final assignment = assignments[i];
+          return _AssignmentCarouselCard(
+            assignment: assignment,
+            onCancelled: () => onRefresh(),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _HistoryAssignmentsTab extends StatelessWidget {
+  const _HistoryAssignmentsTab({
+    required this.assignments,
+    required this.filtering,
+    required this.statusFilters,
+    required this.fromDate,
+    required this.toDate,
+    required this.statusOptions,
+    required this.onStatusToggled,
+    required this.onPickFromDate,
+    required this.onPickToDate,
+    required this.onResetFilters,
+    required this.onRefresh,
+  });
+
+  final List<DailyAssignmentModel> assignments;
+  final bool filtering;
+  final Set<String> statusFilters;
+  final DateTime? fromDate;
+  final DateTime? toDate;
+  final List<_HistoryFilterOption> statusOptions;
+  final void Function(String, bool) onStatusToggled;
+  final VoidCallback onPickFromDate;
+  final VoidCallback onPickToDate;
+  final VoidCallback onResetFilters;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: onRefresh,
+      child: ListView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+        children: [
+          _HistoryFilters(
+            statusOptions: statusOptions,
+            selectedStatuses: statusFilters,
+            fromDate: fromDate,
+            toDate: toDate,
+            onStatusToggled: onStatusToggled,
+            onPickFromDate: onPickFromDate,
+            onPickToDate: onPickToDate,
+            onResetFilters: onResetFilters,
+          ),
+          if (filtering)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: LinearProgressIndicator(minHeight: 2),
+            ),
+          if (assignments.isEmpty && !filtering)
+            const Padding(
+              padding: EdgeInsets.only(top: 80),
+              child: _AssignmentsEmptyState(
+                icon: Icons.history_toggle_off_outlined,
+                message: 'No archived assignments',
+              ),
+            )
+          else
+            ...assignments.map(
+              (assignment) => Padding(
+                padding: const EdgeInsets.only(top: 12),
+                child: _AssignmentCarouselCard(
+                  assignment: assignment,
+                  onCancelled: () => onRefresh(),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _HistoryFilters extends StatelessWidget {
+  const _HistoryFilters({
+    required this.statusOptions,
+    required this.selectedStatuses,
+    required this.fromDate,
+    required this.toDate,
+    required this.onStatusToggled,
+    required this.onPickFromDate,
+    required this.onPickToDate,
+    required this.onResetFilters,
+  });
+
+  final List<_HistoryFilterOption> statusOptions;
+  final Set<String> selectedStatuses;
+  final DateTime? fromDate;
+  final DateTime? toDate;
+  final void Function(String, bool) onStatusToggled;
+  final VoidCallback onPickFromDate;
+  final VoidCallback onPickToDate;
+  final VoidCallback onResetFilters;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.all(10),
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 6),
+            color: Colors.black.withOpacity(0.04),
+            blurRadius: 8,
+            offset: const Offset(0, 3),
           ),
         ],
       ),
@@ -2622,102 +3237,112 @@ class _AssignmentTile extends StatelessWidget {
         children: [
           Row(
             children: [
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: statusColor.withOpacity(0.12),
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  assignment.statusLabel,
-                  style: TextStyle(
-                    fontWeight: FontWeight.w700,
-                    fontSize: 11,
-                    color: statusColor,
-                  ),
+              const Text(
+                'History Filters',
+                style: TextStyle(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               const Spacer(),
-              Text(
-                DateFormat('MMM d').format(assignment.date),
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: _iconGray,
+              TextButton(
+                onPressed: onResetFilters,
+                style: TextButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(horizontal: 8),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'Reset',
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 10),
-          // Ward
-          Text(
-            assignment.ward,
-            style: const TextStyle(
-              fontWeight: FontWeight.w800,
-              fontSize: 16,
-            ),
-          ),
           const SizedBox(height: 6),
-
-          // Driver / Operator
-          Text('Driver: ${assignment.driver}',
-              style: const TextStyle(fontSize: 13)),
-          Text('Operator: ${assignment.operatorName}',
-              style: const TextStyle(fontSize: 13)),
-
-          const SizedBox(height: 10),
-
+          Wrap(
+            spacing: 6,
+            runSpacing: 4,
+            children: statusOptions
+                .map(
+                  (option) => FilterChip(
+                    label: Text(option.label),
+                    selected: selectedStatuses.contains(option.value),
+                    selectedColor: _primaryGreen.withOpacity(0.15),
+                    labelStyle: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 6,
+                      vertical: 2,
+                    ),
+                    materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                    visualDensity: VisualDensity.compact,
+                    onSelected: (selected) =>
+                        onStatusToggled(option.value, selected),
+                  ),
+                )
+                .toList(),
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
-              // Assignment type pill
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: assignment.typeBgColor,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: Text(
-                  assignment.assignmentType.toUpperCase(),
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: assignment.typeColor,
-                  ),
-                ),
+              _DateFilterChip(
+                label: 'From',
+                date: fromDate,
+                onTap: onPickFromDate,
               ),
-
-              const Spacer(),
-
-              // Shift
-              Text(
-                assignment.shift.replaceAll('_', ' ').toUpperCase(),
-                style: const TextStyle(
-                  fontSize: 11,
-                  color: Colors.grey,
-                ),
-              ),
-
               const SizedBox(width: 8),
-
-              // Details CTA
-              TextButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => AssignmentDetailsScreen(
-                        assignment: assignment,
-                        onCancelled: onCancelled,
-                      ),
-                    ),
-                  );
-                },
-                child: const Text('Details'),
+              _DateFilterChip(
+                label: 'To',
+                date: toDate,
+                onTap: onPickToDate,
               ),
             ],
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _DateFilterChip extends StatelessWidget {
+  const _DateFilterChip({
+    required this.label,
+    required this.date,
+    required this.onTap,
+  });
+
+  final String label;
+  final DateTime? date;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = date == null ? label : DateFormat('MMM d').format(date!);
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(12),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          border: Border.all(color: _borderGray),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.calendar_today, size: 12, color: _iconGray),
+            const SizedBox(width: 4),
+            Text(
+              text,
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

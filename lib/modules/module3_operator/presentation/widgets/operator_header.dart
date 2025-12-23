@@ -53,33 +53,42 @@ class _OperatorHeaderState extends State<OperatorHeader> {
   }
 
   Future<void> fetchEmployeeImage() async {
+    final client = HttpClient();
     try {
       final url =
           "http://10.164.86.186:8000/api/mobile/staff-profile/?staff_id_id=${widget.empId}";
 
-      final request = await HttpClient().getUrl(Uri.parse(url));
-      final response = await request.close();
+      final request = await client
+          .getUrl(Uri.parse(url))
+          .timeout(const Duration(seconds: 5));
+      final response =
+          await request.close().timeout(const Duration(seconds: 5));
       final body = await response.transform(utf8.decoder).join();
 
       final json = jsonDecode(body);
 
       if (json["status"] == "success") {
+        if (!mounted) return;
         setState(() {
           imageName = json["data"]["photo"] ?? "";
           hasProfile = imageName != null && imageName!.isNotEmpty;
           imageLoading = false;
         });
       } else {
+        if (!mounted) return;
         setState(() {
           hasProfile = false;
           imageLoading = false;
         });
       }
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         hasProfile = false;
         imageLoading = false;
       });
+    } finally {
+      client.close(force: true);
     }
   }
 

@@ -9,7 +9,16 @@ import 'package:iwms_citizen_app/modules/module3_operator/services/locationservi
 import 'package:iwms_citizen_app/router/app_router.dart';
 
 class OperatorQRScanner extends StatefulWidget {
-  const OperatorQRScanner({super.key});
+  const OperatorQRScanner({
+    super.key,
+    this.expectedCustomerId,
+    this.expectedCustomerName,
+    this.returnToAssignments = false,
+  });
+
+  final String? expectedCustomerId;
+  final String? expectedCustomerName;
+  final bool returnToAssignments;
 
   @override
   State<OperatorQRScanner> createState() => _OperatorQRScannerState();
@@ -19,7 +28,6 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
   final MobileScannerController _camera = MobileScannerController();
 
   bool _scanned = false;
-  String? _customerError;
 
   @override
   void initState() {
@@ -33,10 +41,11 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
   Future<void> _initLocation() async {
     try {
       await LocationService.refresh(timeout: const Duration(seconds: 2));
-      print(
-          "📍 Location ready: ${LocationService.latitude}, ${LocationService.longitude}");
+      debugPrint(
+        "📍 Location ready: ${LocationService.latitude}, ${LocationService.longitude}",
+      );
     } catch (e) {
-      print("⚠ Location failed: $e");
+      debugPrint("⚠ Location failed: $e");
     }
   }
 
@@ -52,10 +61,29 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
     setState(() => _scanned = true);
     await _camera.stop();
 
-    final uid = _extractUid(raw);
+    final uid = _extractUid(raw, preferredId: widget.expectedCustomerId);
     if (uid == null) {
       _showMessage("Invalid QR code");
       _restartScanner();
+      return;
+    }
+
+    if (!widget.returnToAssignments &&
+        widget.expectedCustomerId != null &&
+        widget.expectedCustomerId!.isNotEmpty &&
+        widget.expectedCustomerId != uid) {
+      final expectedLabel =
+          widget.expectedCustomerName?.trim().isNotEmpty == true
+              ? widget.expectedCustomerName!
+              : widget.expectedCustomerId!;
+      _showMessage("QR mismatch. Expected $expectedLabel, got $uid.");
+      _restartScanner();
+      return;
+    }
+
+    if (widget.returnToAssignments) {
+      if (!mounted) return;
+      Navigator.of(context).pop(uid);
       return;
     }
 
@@ -84,14 +112,80 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
   /// ---------------------------------------------------------
   /// 🔍 Extract UID from QR
   /// ---------------------------------------------------------
-  String? _extractUid(String raw) {
+  String? _extractUid(String raw, {String? preferredId}) {
+    String? pickPreferred(List<String> candidates, String? preferred) {
+      if (candidates.isEmpty) return null;
+      if (preferred == null || preferred.trim().isEmpty) {
+        return candidates.first;
+      }
+      final normalizedPreferred =
+          preferred.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
+      for (final candidate in candidates) {
+        if (candidate
+                .replaceAll(RegExp(r'[^A-Za-z0-9]'), '')
+                .toUpperCase() ==
+            normalizedPreferred) {
+          return candidate;
+        }
+      }
+      final prefixMatch = RegExp(r'^[A-Za-z]+').firstMatch(preferred);
+      final prefix = prefixMatch?.group(0)?.toUpperCase();
+      if (prefix != null && prefix.isNotEmpty) {
+        for (final candidate in candidates) {
+          if (candidate.toUpperCase().startsWith(prefix)) {
+            return candidate;
+          }
+        }
+      }
+      return candidates.first;
+    }
+
+    String? fromMap(Map<dynamic, dynamic> map) {
+      const keys = [
+        'customer_id',
+        'customerId',
+        'customer_unique_id',
+        'id',
+        'unique_id',
+        'uniqueId',
+        'uid',
+      ];
+      final candidates = <String>[];
+      for (final key in keys) {
+        final value = map[key];
+        if (value != null && value.toString().trim().isNotEmpty) {
+          candidates.add(value.toString().trim());
+        }
+      }
+      return pickPreferred(candidates, preferredId);
+    }
+
     try {
       final decoded = jsonDecode(raw);
       if (decoded is Map) {
-        final uid = decoded["uid"] ?? decoded["unique_id"] ?? decoded["id"];
-        if (uid is String && uid.trim().isNotEmpty) return uid.trim();
+        final uid = fromMap(decoded);
+        if (uid != null) return uid;
       }
     } catch (_) {}
+
+    final uri = Uri.tryParse(raw);
+    if (uri != null && uri.queryParameters.isNotEmpty) {
+      final uid = fromMap(uri.queryParameters);
+      if (uid != null) return uid;
+    }
+
+    final regex = RegExp(
+      r'(uid|unique_id|customer_id|customerId|uniqueId|id)\s*[:=]\s*([A-Za-z0-9_-]+)',
+      caseSensitive: false,
+    );
+    final match = regex.firstMatch(raw);
+    if (match != null && match.groupCount >= 2) {
+      final value = match.group(2)?.trim();
+      if (value == null || value.isEmpty) {
+        return null;
+      }
+      return pickPreferred([value], preferredId);
+    }
 
     for (final line in raw.split('\n')) {
       final parts = line.split(':');
@@ -102,7 +196,8 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
     }
 
     final trimmed = raw.trim();
-    return trimmed.isNotEmpty ? trimmed : null;
+    if (trimmed.isEmpty) return null;
+    return pickPreferred([trimmed], preferredId);
   }
 
   /// ---------------------------------------------------------
@@ -192,16 +287,23 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
                       label: const Text('Collect'),
                       onPressed: () {
                         Navigator.of(sheetContext).pop();
-                        context.go(
-                          AppRoutePaths.operatorData,
-                          extra: {
-                            'customerId': customerId,
-                            'customerName': customerName,
-                            'contactNo': contactNo,
-                            'latitude': latitude,
-                            'longitude': longitude,
-                          },
-                        );
+                        context
+                            .push(
+                              AppRoutePaths.operatorData,
+                              extra: {
+                                'customerId': customerId,
+                                'customerName': customerName,
+                                'contactNo': contactNo,
+                                'latitude': latitude,
+                                'longitude': longitude,
+                                'skipBluetoothInit': true,
+                              },
+                            )
+                            .then((_) {
+                          if (widget.returnToAssignments && mounted) {
+                            Navigator.of(context).pop(true);
+                          }
+                        });
                       },
                     ),
                   ),
@@ -276,7 +378,11 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
               icon: const Icon(Icons.cancel, size: 32, color: Colors.white),
               onPressed: () {
                 _camera.stop();
-                context.go(AppRoutePaths.operatorHome);
+                if (widget.returnToAssignments) {
+                  Navigator.of(context).pop(false);
+                } else {
+                  context.go(AppRoutePaths.operatorHome);
+                }
               },
             ),
           ),

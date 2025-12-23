@@ -1,10 +1,20 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
+import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
+import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_cards.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_header.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_qr_button.dart';
+import 'package:iwms_citizen_app/shared/services/notification_service.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 const EdgeInsets _pagePadding =
@@ -20,6 +30,7 @@ class OperatorHomeScreen extends StatelessWidget {
     required this.zoneLabel,
     required this.onScanPressed,
     required this.onLogout,
+    this.onOpenAssignments,
     this.onOpenAttendance,
     this.onOpenProfile,
     this.onOpenHistory,
@@ -36,6 +47,7 @@ class OperatorHomeScreen extends StatelessWidget {
   final String zoneLabel;
   final VoidCallback onScanPressed;
   final VoidCallback onLogout;
+  final void Function(DailyAssignmentModel assignment)? onOpenAssignments;
   final VoidCallback? onOpenAttendance;
   final VoidCallback? onOpenProfile;
   final VoidCallback? onOpenHistory;
@@ -57,9 +69,6 @@ class OperatorHomeScreen extends StatelessWidget {
         ? resolvedNextStop.locationName
         : (resolvedNextStop.label ?? '');
     final nextStatus = resolvedNextStop.status ?? 'Scheduled';
-    final nextEta = resolvedNextStop.scheduledTime.isNotEmpty
-        ? resolvedNextStop.scheduledTime
-        : (resolvedNextStop.timeRemaining ?? '--');
     final nextRoute = resolvedNextStop.routeName ?? 'Route not assigned';
 
     return ColoredBox(
@@ -134,6 +143,10 @@ class OperatorHomeScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
+                  _OperatorAssignmentsSection(
+                    onOpenAssignments: onOpenAssignments,
+                  ),
+                  const SizedBox(height: 24),
                   OperatorInfoCard(
                     title: localizations.operatorLastCollected,
                     titleStyle: const TextStyle(
@@ -209,13 +222,11 @@ class _InfoRowItem extends StatelessWidget {
     required this.icon,
     required this.title,
     required this.value,
-    this.expand = false,
   });
 
   final IconData icon;
   final String title;
   final String value;
-  final bool expand;
 
   @override
   Widget build(BuildContext context) {
@@ -251,10 +262,278 @@ class _InfoRowItem extends StatelessWidget {
       ],
     );
 
-    if (expand) {
-      return Expanded(child: content);
-    }
     return Flexible(fit: FlexFit.loose, child: content);
+  }
+}
+
+class _OperatorAssignmentsSection extends StatefulWidget {
+  const _OperatorAssignmentsSection({
+    this.onOpenAssignments,
+  });
+
+  final void Function(DailyAssignmentModel assignment)? onOpenAssignments;
+
+  @override
+  State<_OperatorAssignmentsSection> createState() =>
+      _OperatorAssignmentsSectionState();
+}
+
+class _OperatorAssignmentsSectionState
+    extends State<_OperatorAssignmentsSection> {
+  late final AssignmentRepository _assignmentRepository;
+  late Future<List<DailyAssignmentModel>> _future;
+  final Set<String> _notifiedAssignmentIds = {};
+  final Set<String> _notifiedCancelledAssignmentIds = {};
+
+  @override
+  void initState() {
+    super.initState();
+    _assignmentRepository = getIt<AssignmentRepository>();
+    _future = _loadAssignments();
+  }
+
+  Future<List<DailyAssignmentModel>> _loadAssignments() async {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is! AuthStateAuthenticated) {
+      return [];
+    }
+
+    final operatorId = authState.userId.trim();
+    if (operatorId.isEmpty) {
+      return [];
+    }
+
+    final assignments = await _assignmentRepository.fetchAssignmentsForOperator(
+      operatorId: operatorId,
+    );
+    _notifyNewAssignments(assignments);
+    await _notifyCancelledAssignments(operatorId);
+    return assignments;
+  }
+
+  void _notifyNewAssignments(List<DailyAssignmentModel> assignments) {
+    final newItems = assignments
+        .where((a) => _notifiedAssignmentIds.add(a.uniqueId))
+        .toList();
+    if (newItems.isEmpty) return;
+
+    final notificationService = getIt<NotificationService>();
+    final title =
+        newItems.length == 1 ? 'New assignment' : 'New assignments';
+    final message =
+        'You have ${newItems.length} assignment(s) scheduled today.';
+    notificationService.showAssignmentNotification(
+      title: title,
+      message: message,
+    );
+  }
+
+  Future<void> _notifyCancelledAssignments(String staffId) async {
+    try {
+      final dio = await authorizedDio();
+      final today = DateTime.now();
+      final dateStr =
+          '${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}';
+
+      final resp = await dio.get(
+        ApiConfig.staffAssignments,
+        queryParameters: {
+          'staff_id': staffId,
+          'status': 'cancelled',
+          'date_from': dateStr,
+          'date_to': dateStr,
+        },
+      );
+
+      final decoded = resp.data;
+      final List list = decoded is List
+          ? decoded
+          : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
+
+      for (final item in list) {
+        if (item is! Map) continue;
+        final id = item['unique_id']?.toString();
+        if (id == null || id.isEmpty) continue;
+        if (!_notifiedCancelledAssignmentIds.add(id)) continue;
+
+        final wardName = item['ward_name']?.toString() ?? 'Assignment';
+        final reason =
+            item['cancelled_reason']?.toString() ?? 'No reason provided';
+
+        final notificationService = getIt<NotificationService>();
+        notificationService.showAssignmentNotification(
+          title: 'Assignment cancelled',
+          message: '$wardName • $reason',
+        );
+      }
+    } catch (_) {
+      // Ignore notification failures.
+    }
+  }
+
+  Widget _statusChip(String label, AssignmentRoleStatus status) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: BoxDecoration(
+        color: status.color.withOpacity(0.12),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: status.color.withOpacity(0.25)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(status.icon, size: 12, color: status.color),
+          const SizedBox(width: 4),
+          Text(
+            '$label: ${status.displayName}',
+            style: TextStyle(
+              fontSize: 10,
+              fontWeight: FontWeight.w700,
+              color: status.color,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(
+              'Today’s Assignments',
+              style: AppTextStyles.heading2.copyWith(
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const Spacer(),
+            IconButton(
+              tooltip: 'Refresh',
+              icon: const Icon(Icons.refresh, color: AppColors.primary),
+              onPressed: () {
+                setState(() {
+                  _future = _loadAssignments();
+                });
+              },
+            ),
+          ],
+        ),
+        SizedBox(
+          height: 190,
+          child: FutureBuilder<List<DailyAssignmentModel>>(
+            future: _future,
+            builder: (context, snapshot) {
+              if (snapshot.connectionState == ConnectionState.waiting) {
+                return const Center(child: CircularProgressIndicator());
+              }
+
+              final assignments = snapshot.data ?? [];
+              if (assignments.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.06),
+                        blurRadius: 12,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Center(
+                    child: Text(
+                      'No assignments yet.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: AppColors.textSecondary,
+                      ),
+                    ),
+                  ),
+                );
+              }
+
+              return ListView.separated(
+                scrollDirection: Axis.horizontal,
+                physics: const BouncingScrollPhysics(),
+                itemCount: assignments.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 12),
+                itemBuilder: (context, index) {
+                  final assignment = assignments[index];
+                  return InkWell(
+                    borderRadius: BorderRadius.circular(16),
+                    onTap: widget.onOpenAssignments == null
+                        ? null
+                        : () => widget.onOpenAssignments!(assignment),
+                    child: Container(
+                      width: 260,
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(16),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.06),
+                            blurRadius: 12,
+                            offset: const Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            assignment.ward,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.heading2.copyWith(
+                            fontWeight: FontWeight.w800,
+                          ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Driver: ${assignment.driver}',
+                            style: AppTextStyles.bodyMedium,
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            'Shift: ${assignment.shiftDisplay}',
+                            style: AppTextStyles.subTitle.copyWith(
+                              color: AppColors.textSecondary,
+                            ),
+                          ),
+                          const SizedBox(height: 10),
+                        Row(
+                          children: [
+                            _statusChip('Driver', assignment.driverStatus),
+                            const SizedBox(width: 8),
+                            _statusChip('You', assignment.operatorStatus),
+                          ],
+                        ),
+                        const Spacer(),
+                        Text(
+                          'Tap to manage collection',
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: AppColors.textSecondary,
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        ],
+                      ),
+                    ),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
+    );
   }
 }
 
@@ -273,7 +552,6 @@ class _AttendanceSection extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final textTheme = Theme.of(context).textTheme;
     final localizations = AppLocalizations.of(context);
     return OperatorInfoCard(
       title: localizations.operatorAttendanceTitle,

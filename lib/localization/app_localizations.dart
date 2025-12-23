@@ -158,6 +158,7 @@ class AppLocalizations {
       'operatorWardZone': 'Ward {ward} · Zone {zone}',
       'operatorNavHome': 'Home',
       'operatorNavOverview': 'Overview',
+      'operatorNavAssignments': 'Assignments',
       'operatorNavAttendance': 'Attendance',
       'operatorNavProfile': 'Profile',
       'operatorNextStop': 'Next stop',
@@ -332,6 +333,7 @@ class AppLocalizations {
       'operatorWardZone': 'वार्ड {ward} · जोन {zone}',
       'operatorNavHome': 'होम',
       'operatorNavOverview': 'ओवरव्यू',
+      'operatorNavAssignments': 'असाइनमेंट',
       'operatorNavAttendance': 'उपस्थिति',
       'operatorNavProfile': 'प्रोफ़ाइल',
       'operatorNextStop': 'अगला स्टॉप',
@@ -508,6 +510,7 @@ class AppLocalizations {
       'operatorWardZone': 'வார்டு {ward} · மண்டலம் {zone}',
       'operatorNavHome': 'முகப்பு',
       'operatorNavOverview': 'கண்ணோட்டம்',
+      'operatorNavAssignments': 'ஒதுக்கீடுகள்',
       'operatorNavAttendance': 'வருகை',
       'operatorNavProfile': 'சுயவிவரம்',
       'operatorNextStop': 'அடுத்த நிறுத்தம்',
@@ -719,6 +722,7 @@ class AppLocalizations {
           .replaceAll('{zone}', zone);
   String get operatorNavHome => _translate('operatorNavHome');
   String get operatorNavOverview => _translate('operatorNavOverview');
+  String get operatorNavAssignments => _translate('operatorNavAssignments');
   String get operatorNavAttendance => _translate('operatorNavAttendance');
   String get operatorNavProfile => _translate('operatorNavProfile');
   String get operatorNextStop => _translate('operatorNextStop');
