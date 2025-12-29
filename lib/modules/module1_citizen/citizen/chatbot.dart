@@ -675,10 +675,11 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
                         if (_inputEnabled) _sendMessage();
                       },
                       decoration: InputDecoration(
+                        fillColor: Colors.transparent,
                         hintText: _inputEnabled
                             ? "Type your message..."
                             : "Choose an option to start",
-                        border: InputBorder.none,
+                        // border: InputBorder.none,
                       ),
                     ),
                   ),
@@ -692,6 +693,8 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
                 ],
               ),
             ),
+         
+         
           ],
         ),
       ),
