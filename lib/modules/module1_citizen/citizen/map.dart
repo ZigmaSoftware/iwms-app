@@ -873,6 +873,21 @@ class _VehicleMarker extends StatelessWidget {
     required this.getVehicleStatusColor,
   });
 
+  String _vehicleIconByStatus(String? status) {
+    final s = status?.toLowerCase().replaceAll(' ', '') ?? 'nodata';
+    switch (s) {
+      case 'running':
+        return 'assets/images/truck_3d.png';
+      case 'idle':
+        return 'assets/images/truck_3d_orange.png';
+      case 'parked':
+        return 'assets/images/truck_3d_red.png';
+      case 'nodata':
+      default:
+        return 'assets/images/truck_3d_grey.png';
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final size = isSelected ? 44.0 : 36.0;
@@ -898,7 +913,7 @@ class _VehicleMarker extends StatelessWidget {
 
           // 3D Vehicle
           Image.asset(
-            'assets/images/truck_3d.png',
+            _vehicleIconByStatus(vehicle.status),
             width: size,
             height: size,
             fit: BoxFit.contain,
