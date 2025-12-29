@@ -116,6 +116,8 @@ class AssignmentRepository {
     DateTime? date,
     DateTime? fromDate,
     DateTime? toDate,
+    String? driverId,
+    String? operatorId,
   }) async {
     final params = <String, String>{};
     if (fromDate != null || toDate != null || date != null) {
@@ -128,6 +130,12 @@ class AssignmentRepository {
       );
     } else {
       debugPrint('📚 ASSIGNMENT HISTORY → all');
+    }
+    if (driverId != null && driverId.trim().isNotEmpty) {
+      params['driver_id'] = driverId.trim();
+    }
+    if (operatorId != null && operatorId.trim().isNotEmpty) {
+      params['operator_id'] = operatorId.trim();
     }
 
     try {

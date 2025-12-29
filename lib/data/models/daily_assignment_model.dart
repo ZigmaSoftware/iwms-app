@@ -13,6 +13,7 @@ class DailyAssignmentModel {
   final bool isActiveFlag;
   final DateTime date;
   final String? customerName;
+  final String? customerId;
   final String? cancelledReason;
   final DateTime? cancelledAt;
   final AssignmentStatus currentStatus;
@@ -24,6 +25,7 @@ class DailyAssignmentModel {
   final AssignmentRoleStatus operatorStatus;
   final DateTime? driverCompletedAt;
   final DateTime? operatorCompletedAt;
+  final List<AssignmentCustomerStatusEntry> customerStatuses;
 
   DailyAssignmentModel({
     required this.id,
@@ -42,12 +44,14 @@ class DailyAssignmentModel {
     this.skippedAt,
     this.skipReason,
     this.customerName,
+    this.customerId,
     this.cancelledReason,
     this.cancelledAt,
     this.driverStatus = AssignmentRoleStatus.pending,
     this.operatorStatus = AssignmentRoleStatus.pending,
     this.driverCompletedAt,
     this.operatorCompletedAt,
+    this.customerStatuses = const [],
   });
 
   factory DailyAssignmentModel.fromJson(Map<String, dynamic> json) {
@@ -68,6 +72,7 @@ class DailyAssignmentModel {
       date:
           json['date'] != null ? DateTime.parse(json['date']) : DateTime.now(),
       customerName: json['customer_name'],
+      customerId: json['customer']?.toString(),
       cancelledReason: json['cancelled_reason'],
       cancelledAt: json['cancelled_at'] != null
           ? DateTime.tryParse(json['cancelled_at'])
@@ -85,6 +90,12 @@ class DailyAssignmentModel {
           ? DateTime.tryParse(json['skipped_at'])
           : null,
       skipReason: json['skip_reason'],
+      customerStatuses: (json['customer_statuses'] as List?)
+              ?.map((e) => AssignmentCustomerStatusEntry.fromJson(
+                    Map<String, dynamic>.from(e as Map),
+                  ))
+              .toList() ??
+          const [],
     );
   }
 

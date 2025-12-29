@@ -37,6 +37,8 @@ class ApiConfig {
   static const String assignments = '${desktopBase}role-assign/assignments/';
   static const String staffAssignments = '${desktopBase}role-assign/staff-assignments/';
   static const String collectionLogs = '${desktopBase}role-assign/collection-logs/';
+  static const String assignmentCustomerStatuses =
+      '${desktopBase}role-assign/assignment-customer-statuses/';
   static const String citizenAssignments = '${desktopBase}role-assign/citizen-assignments/';
 
   // TEMP: Hardcoded ORS key (DEBUG / INTERNAL ONLY)

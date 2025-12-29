@@ -25,6 +25,8 @@ import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finali
 import 'package:iwms_citizen_app/modules/module3_operator/services/bluetoothservices.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/generateunique_id.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/image_compress_service.dart';
+import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
+import 'package:iwms_citizen_app/core/api_config.dart';
 import '../../offline/offline_sync_service.dart';
 import '../../offline/pending_record.dart';
 import '../../offline/pending_record_dao.dart';
@@ -39,6 +41,7 @@ class OperatorDataScreen extends StatefulWidget {
   final String latitude;
   final String longitude;
   final bool skipBluetoothInit;
+  final String? assignmentId;
 
   const OperatorDataScreen({
     super.key,
@@ -48,6 +51,7 @@ class OperatorDataScreen extends StatefulWidget {
     required this.latitude,
     required this.longitude,
     this.skipBluetoothInit = false,
+    this.assignmentId,
   });
 
   @override
@@ -68,6 +72,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   late final OfflineSyncService _syncService;
   final PendingRecordDao _pendingDao = PendingRecordDao();
   late final CollectionHistoryService _historyService;
+  bool _collectionSubmitted = false;
   final Map<String, TextEditingController> _manualWeightControllers = {};
 
   List<Map<String, dynamic>> wasteTypes = [];
@@ -164,9 +169,9 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     if (!mounted) return;
     _applyWasteTypes(resolvedTypes);
     _safeSetState(() {});
-    
-    // Load offline data after ensuring types are set
-    await _loadOfflineForScreen();
+
+    // Load offline data after the first paint to keep the screen responsive.
+    Future.microtask(_loadOfflineForScreen);
   }
 
   Future<void> _loadOfflineForScreen() async {
@@ -366,6 +371,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       final response = await http.post(uri, body: {
         'screen_unique_id': screenUniqueId,
         'customer_id': widget.customerId,
+        'waste_type': _wasteData[type]!['waste_type_id'].toString(),
         'waste_type_id': _wasteData[type]!['waste_type_id'].toString(),
       });
 
@@ -398,10 +404,18 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   Future<void> _handleAdd(String type) async {
     final data = _wasteData[type]!;
     final image = data['image'] as File?;
+    final wasteTypeId = data['waste_type_id']?.toString() ?? '';
 
     if (image == null) {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text('Capture image for $type first')),
+      );
+      return;
+    }
+
+    if (wasteTypeId.isEmpty || wasteTypeId == 'null') {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Missing waste type for $type')),
       );
       return;
     }
@@ -433,7 +447,8 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       final request = http.MultipartRequest('POST', uri)
         ..fields['screen_unique_id'] = screenUniqueId
         ..fields['customer_id'] = widget.customerId
-        ..fields['waste_type_id'] = data['waste_type_id'].toString()
+        ..fields['waste_type'] = wasteTypeId
+        ..fields['waste_type_id'] = wasteTypeId
         ..fields['weight'] = weight
         ..fields['latitude'] = widget.latitude
         ..fields['longitude'] = widget.longitude;
@@ -563,6 +578,28 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
     final totalWeight = _calculateTotalWeight();
     final summary = _buildSummarySnapshot();
+    Future<void> _syncLog(String status) async {
+      if (widget.assignmentId == null || widget.assignmentId!.trim().isEmpty) {
+        return;
+      }
+      try {
+        final dio = await authorizedDio();
+        final latitude = widget.latitude.trim();
+        final longitude = widget.longitude.trim();
+        await dio.post(
+          ApiConfig.assignmentCustomerStatuses,
+          data: {
+            'assignment': widget.assignmentId,
+            'customer': widget.customerId,
+            'status': status == 'collection_completed' ? 'collected' : status,
+            if (latitude.isNotEmpty) 'latitude': latitude,
+            if (longitude.isNotEmpty) 'longitude': longitude,
+          },
+        );
+      } catch (_) {
+        // best-effort; ignore
+      }
+    }
 
     try {
       final uri = Uri.parse(
@@ -580,7 +617,17 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
       if (result['status'] == 'success') {
         await _recordCollectionHistory(totalWeight);
-        await AssignmentStatusStore.setStatus(widget.customerId, 'collected');
+        _collectionSubmitted = true;
+        if (widget.assignmentId != null &&
+            widget.assignmentId!.trim().isNotEmpty) {
+          await AssignmentStatusStore.setStatusForAssignment(
+            widget.assignmentId!,
+            widget.customerId,
+            'collected',
+          );
+          await _syncLog('collection_completed');
+          await _maybeCompleteAssignmentFromStore(widget.assignmentId!);
+        }
         await _showSuccessSheet(totalWeight, summary);
         _resetUI();
         // Fetch types again just in case, but keep defaults if fail
@@ -599,6 +646,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       );
 
       await _finalizeDao.insert(pendingFinalize);
+      _collectionSubmitted = true;
 
       try {
         if (await _syncService.hasInternet()) {
@@ -609,7 +657,16 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       }
 
       await _recordCollectionHistory(totalWeight);
-      await AssignmentStatusStore.setStatus(widget.customerId, 'collected');
+      if (widget.assignmentId != null &&
+          widget.assignmentId!.trim().isNotEmpty) {
+        await AssignmentStatusStore.setStatusForAssignment(
+          widget.assignmentId!,
+          widget.customerId,
+          'collected',
+        );
+        await _syncLog('collection_completed');
+        await _maybeCompleteAssignmentFromStore(widget.assignmentId!);
+      }
       await _showSuccessSheet(totalWeight, summary, offline: true);
       _resetUI();
       _fetchWasteTypes();
@@ -625,6 +682,85 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
           0;
       return sum + w;
     });
+  }
+
+  Future<void> _maybeCompleteAssignmentFromStore(String assignmentId) async {
+    final trimmedId = assignmentId.trim();
+    if (trimmedId.isEmpty) return;
+    final alreadyCompleted =
+        await AssignmentStatusStore.isAssignmentCompleted(trimmedId);
+    if (alreadyCompleted) return;
+
+    final customerIds = await _fetchAssignmentCustomerIds(trimmedId);
+    if (customerIds.isEmpty) return;
+
+    final statuses =
+        await AssignmentStatusStore.getStatusesFor(trimmedId, customerIds);
+    final allDone = customerIds.every((id) {
+      final status = statuses[id]?.toLowerCase();
+      return status == 'collected' || status == 'skipped';
+    });
+    if (!allDone) return;
+
+    await AssignmentStatusStore.setAssignmentCompleted(trimmedId);
+    await _markAssignmentComplete(trimmedId);
+  }
+
+  Future<List<String>> _fetchAssignmentCustomerIds(String assignmentId) async {
+    try {
+      final dio = await authorizedDio();
+      final assignmentResp =
+          await dio.get('${ApiConfig.assignments}$assignmentId/');
+      final assignmentData = assignmentResp.data;
+      String wardId = '';
+      if (assignmentData is Map) {
+        wardId =
+            (assignmentData['ward'] ?? assignmentData['ward_id'] ?? '').toString();
+      }
+      if (wardId.trim().isEmpty) return [];
+
+      List<dynamic> list = [];
+
+      Future<void> fetchWithParam(String paramKey) async {
+        final resp = await dio.get(
+          ApiConfig.customerList,
+          queryParameters: {paramKey: wardId},
+        );
+        final decoded = resp.data;
+        list = decoded is List
+            ? decoded
+            : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
+      }
+
+      try {
+        await fetchWithParam('ward');
+        if (list.isEmpty) {
+          await fetchWithParam('ward_id');
+        }
+      } catch (_) {
+        // ignore
+      }
+
+      final ids = <String>[];
+      for (final entry in list) {
+        if (entry is! Map) continue;
+        final id = (entry['unique_id'] ?? entry['customer_id'] ?? '').toString();
+        if (id.isEmpty) continue;
+        ids.add(id);
+      }
+      return ids;
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _markAssignmentComplete(String assignmentId) async {
+    try {
+      final dio = await authorizedDio();
+      await dio.post('${ApiConfig.assignments}$assignmentId/complete/');
+    } catch (_) {
+      // best-effort
+    }
   }
 
   Future<void> _recordCollectionHistory(double totalWeight) async {
@@ -1031,91 +1167,102 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   // ==================== MAIN UI ====================
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.background,
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        leading: IconButton(
-          icon: const Icon(Icons.arrow_back, color: Colors.white),
-          onPressed: () {
-            final navigator = Navigator.of(context);
-            if (navigator.canPop()) {
-              navigator.pop();
-            } else {
-              context.go(AppRoutePaths.operatorHome);
-            }
-          },
+    return WillPopScope(
+      onWillPop: () async {
+        final navigator = Navigator.of(context);
+        if (navigator.canPop()) {
+          navigator.pop(_collectionSubmitted);
+        } else {
+          context.go(AppRoutePaths.operatorHome);
+        }
+        return false;
+      },
+      child: Scaffold(
+        backgroundColor: AppColors.background,
+        appBar: AppBar(
+          backgroundColor: AppColors.primary,
+          leading: IconButton(
+            icon: const Icon(Icons.arrow_back, color: Colors.white),
+            onPressed: () {
+              final navigator = Navigator.of(context);
+              if (navigator.canPop()) {
+                navigator.pop(_collectionSubmitted);
+              } else {
+                context.go(AppRoutePaths.operatorHome);
+              }
+            },
+          ),
+          title: Text(
+            "Customer Details",
+            style: AppTextStyles.heading2.copyWith(color: Colors.white),
+          ),
         ),
-        title: Text(
-          "Customer Details",
-          style: AppTextStyles.heading2.copyWith(color: Colors.white),
-        ),
-      ),
       // ✅ FIX: Removed the ternary operator that replaced body with Loader if empty.
       // Now, the body is ALWAYS the Column, so Headers and Customer Info never disappear.
-      body: Column(
-        children: [
-          Container(
-            width: double.infinity,
-            color: AppColors.accentLight,
-            padding:
-                const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-            child: Text(
-              "📟 Live Weight: ${latestWeight == '--' ? '--' : '$latestWeight kg'}",
-              style: AppTextStyles.heading2.copyWith(
-                color: AppColors.textPrimary,
+        body: Column(
+          children: [
+            Container(
+              width: double.infinity,
+              color: AppColors.accentLight,
+              padding:
+                  const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+              child: Text(
+                "📟 Live Weight: ${latestWeight == '--' ? '--' : '$latestWeight kg'}",
+                style: AppTextStyles.heading2.copyWith(
+                  color: AppColors.textPrimary,
+                ),
               ),
             ),
-          ),
-          Expanded(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16),
-              child: Column(
-                children: [
-                  _buildCustomerInfo(),
-                  const SizedBox(height: 12),
-                  
-                  // If wasteTypes is ever empty (fallback), show a message instead of disappearing
-                  if (wasteTypes.isEmpty)
-                    const Padding(
-                      padding: EdgeInsets.all(20.0),
-                      child: Text("No waste types configured."),
-                    )
-                  else
-                    ...wasteTypes.map((w) {
-                      final type =
-                          w['waste_type_name'].toString().toLowerCase();
-                      final name = w['waste_type_name'];
-                      return KeyedSubtree(
-                        key: ValueKey(
-                            "wastecard_${type}_${_wasteData[type]!['unique_id']}_${_wasteData[type]!['weight']}"),
-                        child: _buildWasteSection(type, name),
-                      );
-                    }),
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  children: [
+                    _buildCustomerInfo(),
+                    const SizedBox(height: 12),
                     
-                  const SizedBox(height: 20),
-                  _isSubmitting
-                      ? const CircularProgressIndicator()
-                      : ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor:
-                                const Color.fromRGBO(0, 61, 125, 0.8),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 40, vertical: 12),
-                          ),
-                          onPressed: _submitForm,
-                          child: Text(
-                            'Submit',
-                            style: AppTextStyles.labelLarge.copyWith(
-                              fontSize: 14,
+                    // If wasteTypes is ever empty (fallback), show a message instead of disappearing
+                    if (wasteTypes.isEmpty)
+                      const Padding(
+                        padding: EdgeInsets.all(20.0),
+                        child: Text("No waste types configured."),
+                      )
+                    else
+                      ...wasteTypes.map((w) {
+                        final type =
+                            w['waste_type_name'].toString().toLowerCase();
+                        final name = w['waste_type_name'];
+                        return KeyedSubtree(
+                          key: ValueKey(
+                              "wastecard_${type}_${_wasteData[type]!['unique_id']}_${_wasteData[type]!['weight']}"),
+                          child: _buildWasteSection(type, name),
+                        );
+                      }),
+                    
+                    const SizedBox(height: 20),
+                    _isSubmitting
+                        ? const CircularProgressIndicator()
+                        : ElevatedButton(
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor:
+                                  const Color.fromRGBO(0, 61, 125, 0.8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 40, vertical: 12),
+                            ),
+                            onPressed: _submitForm,
+                            child: Text(
+                              'Submit',
+                              style: AppTextStyles.labelLarge.copyWith(
+                                fontSize: 14,
+                              ),
                             ),
                           ),
-                        ),
-                ],
+                  ],
+                ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

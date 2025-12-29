@@ -1,11 +1,18 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 
 import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/locationservices.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/utils/assignment_status_store.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 
 class OperatorQRScanner extends StatefulWidget {
@@ -13,11 +20,13 @@ class OperatorQRScanner extends StatefulWidget {
     super.key,
     this.expectedCustomerId,
     this.expectedCustomerName,
+    this.expectedAssignmentId,
     this.returnToAssignments = false,
   });
 
   final String? expectedCustomerId;
   final String? expectedCustomerName;
+  final String? expectedAssignmentId;
   final bool returnToAssignments;
 
   @override
@@ -28,6 +37,10 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
   final MobileScannerController _camera = MobileScannerController();
 
   bool _scanned = false;
+
+  String _normalizeId(String value) {
+    return value.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
+  }
 
   @override
   void initState() {
@@ -68,19 +81,8 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
       return;
     }
 
-    if (!widget.returnToAssignments &&
-        widget.expectedCustomerId != null &&
-        widget.expectedCustomerId!.isNotEmpty &&
-        widget.expectedCustomerId != uid) {
-      final expectedLabel =
-          widget.expectedCustomerName?.trim().isNotEmpty == true
-              ? widget.expectedCustomerName!
-              : widget.expectedCustomerId!;
-      _showMessage("QR mismatch. Expected $expectedLabel, got $uid.");
-      _restartScanner();
-      return;
-    }
-
+    DailyAssignmentModel? resolvedAssignment;
+    String? effectiveAssignmentId = widget.expectedAssignmentId;
     if (widget.returnToAssignments) {
       if (!mounted) return;
       Navigator.of(context).pop(uid);
@@ -89,6 +91,63 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
 
     // Try API fetch (optional)
     final apiCustomer = await _fetchCustomer(uid);
+    String canonicalId = uid;
+    if (apiCustomer != null) {
+      final apiId = apiCustomer['unique_id'] ?? apiCustomer['customer_id'];
+      final parsedId = apiId?.toString().trim();
+      if (parsedId != null && parsedId.isNotEmpty) {
+        canonicalId = parsedId;
+      }
+    }
+
+    if (!widget.returnToAssignments) {
+      final hasAssignmentId = effectiveAssignmentId != null &&
+          effectiveAssignmentId!.trim().isNotEmpty;
+      if (!hasAssignmentId) {
+        resolvedAssignment = await _resolveActiveAssignment();
+        effectiveAssignmentId = resolvedAssignment?.uniqueId;
+      }
+      final normalizedAssignmentId = effectiveAssignmentId?.trim();
+      if (normalizedAssignmentId != null && normalizedAssignmentId.isNotEmpty) {
+        final statuses = await AssignmentStatusStore.getStatusesFor(
+          normalizedAssignmentId,
+          {uid, canonicalId},
+        );
+        final status =
+            statuses[canonicalId]?.toLowerCase() ?? statuses[uid]?.toLowerCase();
+        if (status == 'collected') {
+          _showMessage('Already collected for this assignment.');
+          _restartScanner();
+          return;
+        }
+      }
+    }
+
+    if (!widget.returnToAssignments &&
+        widget.expectedCustomerId != null &&
+        widget.expectedCustomerId!.isNotEmpty &&
+        _normalizeId(widget.expectedCustomerId!) != _normalizeId(canonicalId)) {
+      final expectedLabel =
+          widget.expectedCustomerName?.trim().isNotEmpty == true
+              ? widget.expectedCustomerName!
+              : widget.expectedCustomerId!;
+      _showMessage("QR mismatch. Expected $expectedLabel, got $canonicalId.");
+      _restartScanner();
+      return;
+    }
+
+    if (!widget.returnToAssignments &&
+        resolvedAssignment != null &&
+        resolvedAssignment.assignmentType.toLowerCase() == 'emergency') {
+      final emergencyCustomerId = resolvedAssignment.customerId?.trim();
+      if (emergencyCustomerId != null &&
+          emergencyCustomerId.isNotEmpty &&
+          _normalizeId(emergencyCustomerId) != _normalizeId(canonicalId)) {
+        _showMessage('This QR does not belong to the emergency assignment.');
+        _restartScanner();
+        return;
+      }
+    }
 
     // Fallback: if API failed, treat QR as valid scanned user
     final customerName = apiCustomer?['customer_name'] ?? "Scanned User";
@@ -101,11 +160,12 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
     if (!mounted) return;
 
     await _showCustomerSheet(
-      customerId: uid,
+      customerId: canonicalId,
       customerName: customerName,
       contactNo: contactNo,
       latitude: latitude,
       longitude: longitude,
+      assignmentId: effectiveAssignmentId?.trim(),
     );
   }
 
@@ -220,6 +280,31 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
     }
   }
 
+  Future<DailyAssignmentModel?> _resolveActiveAssignment() async {
+    try {
+      final authState = context.read<AuthBloc>().state;
+      if (authState is! AuthStateAuthenticated) return null;
+      final operatorId = authState.userId.trim();
+      if (operatorId.isEmpty) return null;
+
+      final repository = getIt<AssignmentRepository>();
+      final assignments =
+          await repository.fetchAssignmentsForOperator(operatorId: operatorId);
+      if (assignments.isEmpty) return null;
+
+      final completed = await AssignmentStatusStore.getCompletedAssignments();
+      for (final assignment in assignments) {
+        if (!assignment.isActive) continue;
+        final key = AssignmentStatusStore.normalizeId(assignment.uniqueId);
+        if (completed.contains(key)) continue;
+        return assignment;
+      }
+    } catch (_) {
+      return null;
+    }
+    return null;
+  }
+
   @override
   void dispose() {
     _camera.dispose();
@@ -235,6 +320,7 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
     required String contactNo,
     required String latitude,
     required String longitude,
+    String? assignmentId,
   }) async {
     if (!mounted) return;
 
@@ -297,6 +383,9 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
                                 'latitude': latitude,
                                 'longitude': longitude,
                                 'skipBluetoothInit': true,
+                                if (assignmentId != null &&
+                                    assignmentId.trim().isNotEmpty)
+                                  'assignmentId': assignmentId,
                               },
                             )
                             .then((_) {

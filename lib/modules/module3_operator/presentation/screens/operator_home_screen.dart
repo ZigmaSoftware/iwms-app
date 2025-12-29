@@ -1,8 +1,11 @@
 // operator_home_screen.dart - PART 1/2
 // ✅ Fixed: Notification spam, Real Next Stop data with action buttons
 
+import 'dart:convert';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:http/http.dart' as http;
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
@@ -20,8 +23,10 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/o
 import 'package:iwms_citizen_app/shared/services/notification_service.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/utils/assignment_status_store.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/utils/skip_reasons.dart';
 import 'package:go_router/go_router.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
+import 'package:iwms_citizen_app/router/route_observer.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const EdgeInsets _pagePadding = EdgeInsets.symmetric(horizontal: 20, vertical: 16);
@@ -110,7 +115,15 @@ class OperatorHomeScreen extends StatelessWidget {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  _OperatorAssignmentsSection(onOpenAssignments: onOpenAssignments),
+                  ValueListenableBuilder<int>(
+                    valueListenable: AssignmentStatusStore.notifier,
+                    builder: (context, _, __) {
+                      return _OperatorAssignmentsSection(
+                        key: ValueKey(AssignmentStatusStore.notifier.value),
+                        onOpenAssignments: onOpenAssignments,
+                      );
+                    },
+                  ),
                   const SizedBox(height: 24),
                   OperatorInfoCard(
                     title: localizations.operatorLastCollected,
@@ -216,11 +229,30 @@ class _InfoRowItem extends StatelessWidget {
   }
 }
 // operator_home_screen.dart - PART 2/2
-// ✅ Real Next Stop Section with Collect/Skip/Later buttons
+enum _NextStopStatus { pending, collected, skipped, later }
 
+class _NextStopCitizen {
+  const _NextStopCitizen({
+    required this.id,
+    required this.name,
+    required this.contact,
+    required this.latitude,
+    required this.longitude,
+    required this.matchIds,
+  });
+
+  final String id;
+  final String name;
+  final String contact;
+  final String latitude;
+  final String longitude;
+  final Set<String> matchIds;
+}
+
+// ✅ Real Next Stop Section with Collect/Skip/Later buttons
 class _NextStopSection extends StatefulWidget {
   const _NextStopSection({this.onOpenAssignments});
-  
+
   final void Function(DailyAssignmentModel assignment)? onOpenAssignments;
 
   @override
@@ -229,13 +261,132 @@ class _NextStopSection extends StatefulWidget {
 
 class _NextStopSectionState extends State<_NextStopSection> {
   late final AssignmentRepository _assignmentRepository;
-  Map<String, dynamic>? _nextCitizen;
+  DailyAssignmentModel? _activeAssignment;
+  List<_NextStopCitizen> _citizens = [];
+  final Map<String, _NextStopStatus> _statuses = {};
   bool _loading = true;
+  late final VoidCallback _statusListener;
+
+  String _normalizeId(String value) {
+    return value.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
+  }
+
+  bool _matchesCitizen(_NextStopCitizen citizen, String scannedId) {
+    final normalized = _normalizeId(scannedId);
+    for (final id in citizen.matchIds) {
+      if (_normalizeId(id) == normalized) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  _NextStopStatus? _statusFromValue(String? value) {
+    if (value == null) return null;
+    switch (value.toLowerCase()) {
+      case 'collected':
+        return _NextStopStatus.collected;
+      case 'skipped':
+        return _NextStopStatus.skipped;
+      case 'later':
+        return _NextStopStatus.later;
+      default:
+        return null;
+    }
+  }
+
+  _NextStopStatus? _pickBestStatus(
+    _NextStopStatus? current,
+    _NextStopStatus candidate,
+  ) {
+    if (current == null) return candidate;
+    if (current == _NextStopStatus.collected) return current;
+    if (candidate == _NextStopStatus.collected) return candidate;
+    if (current == _NextStopStatus.skipped) return current;
+    if (candidate == _NextStopStatus.skipped) return candidate;
+    if (current == _NextStopStatus.later) return current;
+    if (candidate == _NextStopStatus.later) return candidate;
+    return current;
+  }
+
+  Future<String?> _resolveCustomerId(String scannedId) async {
+    try {
+      final uri = Uri.parse("${ApiConfig.mobileBase}waste/customer/")
+          .replace(queryParameters: {"unique_id": scannedId});
+      final resp = await http.get(uri).timeout(const Duration(seconds: 10));
+      if (resp.statusCode != 200) return null;
+      final decoded = jsonDecode(resp.body);
+      if (decoded is! Map || decoded["status"] != "success") return null;
+      final data = decoded["data"];
+      if (data is Map && data["unique_id"] != null) {
+        return data["unique_id"].toString();
+      }
+    } catch (_) {}
+    return null;
+  }
 
   @override
   void initState() {
     super.initState();
     _assignmentRepository = getIt<AssignmentRepository>();
+    _statusListener = _handleStatusStoreChange;
+    AssignmentStatusStore.notifier.addListener(_statusListener);
+    _loadNextCitizen();
+  }
+
+  @override
+  void dispose() {
+    AssignmentStatusStore.notifier.removeListener(_statusListener);
+    super.dispose();
+  }
+
+  void _handleStatusStoreChange() {
+    if (_activeAssignment == null || _citizens.isEmpty) return;
+    _refreshStatuses();
+  }
+
+  Future<void> _refreshStatuses() async {
+    final assignment = _activeAssignment;
+    if (assignment == null) return;
+    final lookupIds = <String>{};
+    for (final citizen in _citizens) {
+      lookupIds.addAll(citizen.matchIds);
+    }
+    final persisted = await AssignmentStatusStore.getStatusesFor(
+      assignment.uniqueId,
+      lookupIds,
+    );
+    if (!mounted) return;
+    setState(() {
+      _statuses.clear();
+      for (final citizen in _citizens) {
+        _NextStopStatus? resolved;
+        for (final matchId in citizen.matchIds) {
+          final status = _statusFromValue(persisted[matchId]);
+          if (status == null) continue;
+          resolved = _pickBestStatus(resolved, status);
+        }
+        if (resolved != null) {
+          _statuses[citizen.id] = resolved;
+        }
+      }
+    });
+    await _maybeCompleteAssignment(assignment);
+  }
+
+  Future<void> _maybeCompleteAssignment(DailyAssignmentModel assignment) async {
+    if (_citizens.isEmpty) return;
+    final allDone = _citizens.every((c) {
+      final status = _statusFor(c.id);
+      return status == _NextStopStatus.collected ||
+          status == _NextStopStatus.skipped;
+    });
+    if (!allDone) return;
+    final alreadyCompleted =
+        await AssignmentStatusStore.isAssignmentCompleted(assignment.uniqueId);
+    if (alreadyCompleted) return;
+    await AssignmentStatusStore.setAssignmentCompleted(assignment.uniqueId);
+    await _markAssignmentComplete(assignment.uniqueId);
     _loadNextCitizen();
   }
 
@@ -246,106 +397,525 @@ class _NextStopSectionState extends State<_NextStopSection> {
       final authState = context.read<AuthBloc>().state;
       if (authState is! AuthStateAuthenticated) {
         setState(() {
-          _nextCitizen = null;
+          _activeAssignment = null;
+          _citizens = [];
+          _statuses.clear();
           _loading = false;
         });
         return;
       }
 
-      final assignments = await _assignmentRepository.fetchAssignmentsForOperator(
+      final assignments =
+          await _assignmentRepository.fetchAssignmentsForOperator(
         operatorId: authState.userId.trim(),
       );
 
-      if (assignments.isEmpty) {
+      final completed = await AssignmentStatusStore.getCompletedAssignments();
+      bool isCompleted(DailyAssignmentModel assignment) {
+        final key = AssignmentStatusStore.normalizeId(assignment.uniqueId);
+        return completed.contains(key);
+      }
+
+      final activeAssignments = assignments
+          .where((assignment) =>
+              assignment.isActive && !isCompleted(assignment))
+          .toList();
+
+      if (activeAssignments.isEmpty) {
         setState(() {
-          _nextCitizen = null;
+          _activeAssignment = null;
+          _citizens = [];
+          _statuses.clear();
           _loading = false;
         });
         return;
       }
 
-      // Get first assignment
-      final assignment = assignments.first;
+      final assignment = activeAssignments.first;
       final dio = await authorizedDio();
-      
-      // Fetch customers for this ward
-      final resp = await dio.get(
-        ApiConfig.customerList,
-        queryParameters: {'ward': assignment.wardId},
-      );
-      
-      final decoded = resp.data;
-      final list = decoded is List
-          ? decoded
-          : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
+      List<dynamic> list = [];
 
-      if (list.isEmpty) {
-        setState(() {
-          _nextCitizen = null;
-          _loading = false;
-        });
-        return;
+      Future<void> fetchWithParam(String paramKey) async {
+        final resp = await dio.get(
+          ApiConfig.customerList,
+          queryParameters: {paramKey: assignment.wardId},
+        );
+        final decoded = resp.data;
+        list = decoded is List
+            ? decoded
+            : (decoded is Map
+                ? (decoded['results'] ?? decoded['data'] ?? [])
+                : []);
       }
 
-      // Load statuses from SharedPreferences
-      final ids = list.map((e) => (e['unique_id'] ?? e['customer_id'] ?? '').toString()).toList();
-      final statuses = await AssignmentStatusStore.getStatusesFor(ids);
-
-      // Find first pending citizen
-      Map<String, dynamic>? nextPending;
-      for (final customer in list) {
-        if (customer is! Map) continue;
-        final id = (customer['unique_id'] ?? customer['customer_id'] ?? '').toString();
-        if (id.isEmpty) continue;
-        
-        final status = statuses[id]?.toLowerCase();
-        if (status == null || status == 'later') {
-nextPending = Map<String, dynamic>.from(customer as Map);
-          break;
+      try {
+        if (assignment.wardId.trim().isNotEmpty) {
+          await fetchWithParam('ward');
+          if (list.isEmpty) {
+            await fetchWithParam('ward_id');
+          }
+        } else {
+          final resp = await dio.get(ApiConfig.customerList);
+          final decoded = resp.data;
+          list = decoded is List
+              ? decoded
+              : (decoded is Map
+                  ? (decoded['results'] ?? decoded['data'] ?? [])
+                  : []);
         }
+      } catch (_) {
+        // ignore fetch errors
       }
+
+      final citizens = <_NextStopCitizen>[];
+      for (final entry in list) {
+        if (entry is! Map) continue;
+        if (assignment.wardId.trim().isNotEmpty) {
+          final rawWard = entry['ward_id'] ?? entry['ward'];
+          String? entryWardId;
+          if (rawWard is Map) {
+            entryWardId =
+                (rawWard['unique_id'] ?? rawWard['id'] ?? rawWard['pk'])
+                    ?.toString();
+          } else if (rawWard != null) {
+            entryWardId = rawWard.toString();
+          }
+          if (entryWardId != assignment.wardId) {
+            continue;
+          }
+        }
+        final id =
+            (entry['unique_id'] ?? entry['customer_id'] ?? '').toString();
+        if (id.isEmpty) continue;
+        citizens.add(
+          _NextStopCitizen(
+            id: id,
+            name: (entry['customer_name'] ?? entry['name'] ?? 'Citizen')
+                .toString(),
+            contact: (entry['contact_no'] ?? entry['phone'] ?? '').toString(),
+            latitude:
+                (entry['latitude'] ?? entry['customer_latitude'] ?? '')
+                    .toString(),
+            longitude:
+                (entry['longitude'] ?? entry['customer_longitude'] ?? '')
+                    .toString(),
+            matchIds: {
+              id,
+              if (entry['id'] != null) entry['id'].toString(),
+              if (entry['customer_id'] != null)
+                entry['customer_id'].toString(),
+              if (entry['unique_id'] != null) entry['unique_id'].toString(),
+              if (entry['contact_no'] != null)
+                entry['contact_no'].toString(),
+            },
+          ),
+        );
+      }
+
+      final isEmergency =
+          assignment.assignmentType.toLowerCase() == 'emergency';
+      final emergencyCustomerId = assignment.customerId?.trim() ?? '';
+      final filteredCitizens = (isEmergency && emergencyCustomerId.isNotEmpty)
+          ? citizens.where((c) => c.id == emergencyCustomerId).toList()
+          : citizens;
+
+      final lookupIds = <String>{};
+      for (final citizen in filteredCitizens) {
+        lookupIds.addAll(citizen.matchIds);
+      }
+      final persisted = await AssignmentStatusStore.getStatusesFor(
+        assignment.uniqueId,
+        lookupIds,
+      );
 
       setState(() {
-        _nextCitizen = nextPending;
+        _activeAssignment = assignment;
+        _citizens = filteredCitizens;
+        _statuses.clear();
+        for (final citizen in filteredCitizens) {
+          _NextStopStatus? resolved;
+          for (final matchId in citizen.matchIds) {
+            final status = _statusFromValue(persisted[matchId]);
+            if (status == null) continue;
+            resolved = _pickBestStatus(resolved, status);
+          }
+          if (resolved != null) {
+            _statuses[citizen.id] = resolved;
+          }
+        }
         _loading = false;
       });
-    } catch (e) {
+    } catch (_) {
       setState(() {
-        _nextCitizen = null;
+        _activeAssignment = null;
+        _citizens = [];
+        _statuses.clear();
         _loading = false;
       });
     }
   }
 
-  Future<void> _handleAction(String action) async {
-    if (_nextCitizen == null) return;
+  _NextStopStatus _statusFor(String id) =>
+      _statuses[id] ?? _NextStopStatus.pending;
 
-    final id = (_nextCitizen!['unique_id'] ?? _nextCitizen!['customer_id'] ?? '').toString();
-    
-    if (action == 'collect') {
-      // Navigate to data collection screen
-      if (!mounted) return;
-      await context.push(
-        AppRoutePaths.operatorData,
-        extra: {
-          'customerId': id,
-          'customerName': (_nextCitizen!['customer_name'] ?? _nextCitizen!['name'] ?? 'Citizen').toString(),
-          'contactNo': (_nextCitizen!['contact_no'] ?? _nextCitizen!['phone'] ?? '').toString(),
-          'latitude': (_nextCitizen!['latitude'] ?? _nextCitizen!['customer_latitude'] ?? '').toString(),
-          'longitude': (_nextCitizen!['longitude'] ?? _nextCitizen!['customer_longitude'] ?? '').toString(),
-          'skipBluetoothInit': true,
-        },
-      );
-      if (!mounted) return;
-      await AssignmentStatusStore.setStatus(id, 'collected');
-      _loadNextCitizen();
-    } else if (action == 'skip') {
-      await AssignmentStatusStore.setStatus(id, 'skipped');
-      _loadNextCitizen();
-    } else if (action == 'later') {
-      await AssignmentStatusStore.setStatus(id, 'later');
+  Future<String?> _promptSkipReason() async {
+    String? selectedReason;
+
+    final confirmed = await showDialog<bool>(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setStateDialog) {
+            return AlertDialog(
+              title: const Text('Skip Waste Collection'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Select a reason for skipping:'),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedReason,
+                    isExpanded: true,
+                    dropdownColor: Colors.white,
+                    decoration: const InputDecoration(
+                      filled: true,
+                      fillColor: Colors.white,
+                      border: OutlineInputBorder(),
+                      hintText: 'Reason',
+                    ),
+                    items: operatorSkipReasons
+                        .map(
+                          (reason) => DropdownMenuItem(
+                            value: reason,
+                            child: Text(
+                              reason,
+                              style: const TextStyle(color: Colors.black),
+                            ),
+                          ),
+                        )
+                        .toList(),
+                    onChanged: (value) {
+                      setStateDialog(() => selectedReason = value);
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(dialogContext, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: selectedReason == null
+                      ? null
+                      : () => Navigator.pop(dialogContext, true),
+                  child: const Text('Skip'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (confirmed != true) return null;
+    return selectedReason;
+  }
+
+  Future<void> _setStatus(_NextStopCitizen citizen, _NextStopStatus status) async {
+    final assignment = _activeAssignment;
+    if (assignment == null) return;
+    final current = _statuses[citizen.id];
+    if (current == _NextStopStatus.collected ||
+        current == _NextStopStatus.skipped) {
+      return;
+    }
+
+    String? skipReason;
+    if (status == _NextStopStatus.skipped) {
+      skipReason = await _promptSkipReason();
+      if (!mounted || skipReason == null) return;
+    }
+
+    setState(() => _statuses[citizen.id] = status);
+    final statusStr = status == _NextStopStatus.collected
+        ? 'collected'
+        : status == _NextStopStatus.skipped
+            ? 'skipped'
+            : 'later';
+    await AssignmentStatusStore.setStatusForAssignment(
+      assignment.uniqueId,
+      citizen.id,
+      statusStr,
+    );
+    await _syncStatusToBackend(
+      assignmentId: assignment.uniqueId,
+      customerId: citizen.id,
+      status: statusStr,
+      skipReason: skipReason,
+      latitude: citizen.latitude,
+      longitude: citizen.longitude,
+    );
+
+    final allDone = _citizens.isNotEmpty &&
+        _citizens.every((c) {
+          final status = _statusFor(c.id);
+          return status == _NextStopStatus.collected ||
+              status == _NextStopStatus.skipped;
+        });
+    if (allDone) {
+      await AssignmentStatusStore.setAssignmentCompleted(assignment.uniqueId);
+      await _markAssignmentComplete(assignment.uniqueId);
       _loadNextCitizen();
     }
+  }
+
+  Future<void> _handleCollect(_NextStopCitizen citizen) async {
+    final scannedId = await context.push(
+      AppRoutePaths.operatorQR,
+      extra: {
+        'expectedCustomerId': citizen.id,
+        'expectedCustomerName': citizen.name,
+        'expectedAssignmentId': _activeAssignment?.uniqueId,
+        'returnToAssignments': true,
+      },
+    );
+
+    if (!mounted) return;
+    final scanned = scannedId?.toString().trim();
+    if (scanned == null || scanned.isEmpty) {
+      return;
+    }
+
+    String effectiveId = scanned;
+    if (!_matchesCitizen(citizen, scanned)) {
+      final resolvedId = await _resolveCustomerId(scanned);
+      if (!mounted) return;
+      if (resolvedId != null) {
+        effectiveId = resolvedId;
+      }
+    }
+
+    if (!_matchesCitizen(citizen, effectiveId)) {
+      final matchedOther = _citizens.firstWhere(
+        (c) => _matchesCitizen(c, effectiveId),
+        orElse: () => citizen,
+      );
+      final selectedName = citizen.name;
+      final scannedName =
+          matchedOther == citizen ? 'unknown citizen' : matchedOther.name;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(
+            'QR mismatch. Selected $selectedName, scanned $scannedName.',
+          ),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    final didSubmit = await context.push(
+      AppRoutePaths.operatorData,
+      extra: {
+        'customerId': effectiveId,
+        'customerName': citizen.name,
+        'contactNo': citizen.contact,
+        'latitude': citizen.latitude,
+        'longitude': citizen.longitude,
+        'skipBluetoothInit': true,
+        'assignmentId': _activeAssignment?.uniqueId,
+      },
+    );
+    if (!mounted) return;
+    if (didSubmit == true) {
+      await _setStatus(citizen, _NextStopStatus.collected);
+      _loadNextCitizen();
+    }
+  }
+
+  Future<void> _syncStatusToBackend({
+    required String assignmentId,
+    required String? customerId,
+    required String status,
+    String? skipReason,
+    String? latitude,
+    String? longitude,
+  }) async {
+    try {
+      final dio = await authorizedDio();
+      await dio.post(
+        ApiConfig.assignmentCustomerStatuses,
+        data: {
+          'assignment': assignmentId,
+          if (customerId != null) 'customer': customerId,
+          'status': status,
+          if (skipReason != null) 'skip_reason': skipReason,
+          if (latitude != null && latitude.isNotEmpty) 'latitude': latitude,
+          if (longitude != null && longitude.isNotEmpty) 'longitude': longitude,
+        },
+      );
+    } catch (_) {
+      // ignore best-effort sync failures
+    }
+  }
+
+  Future<void> _markAssignmentComplete(String assignmentId) async {
+    try {
+      final dio = await authorizedDio();
+      await dio.post('${ApiConfig.assignments}$assignmentId/complete/');
+    } catch (_) {
+      // best-effort
+    }
+  }
+
+  Color _statusColor(_NextStopStatus status) {
+    switch (status) {
+      case _NextStopStatus.collected:
+        return Colors.green.shade700;
+      case _NextStopStatus.skipped:
+        return Colors.orange.shade700;
+      case _NextStopStatus.later:
+        return Colors.blue.shade700;
+      case _NextStopStatus.pending:
+        return AppColors.primary;
+    }
+  }
+
+  String _statusLabel(_NextStopStatus status) {
+    switch (status) {
+      case _NextStopStatus.collected:
+        return 'Collected';
+      case _NextStopStatus.skipped:
+        return 'Skipped';
+      case _NextStopStatus.later:
+        return 'Later';
+      case _NextStopStatus.pending:
+        return 'Pending';
+    }
+  }
+
+  Widget _buildCitizenCard(_NextStopCitizen citizen) {
+    final status = _statusFor(citizen.id);
+    final locked = status == _NextStopStatus.collected ||
+        status == _NextStopStatus.skipped;
+    final statusColor = _statusColor(status);
+
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.black.withOpacity(0.05)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(
+                  citizen.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: statusColor.withOpacity(0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  _statusLabel(status),
+                  style: TextStyle(
+                    fontSize: 10,
+                    fontWeight: FontWeight.w700,
+                    color: statusColor,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'ID: ${citizen.id}',
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: AppColors.textSecondary,
+              fontSize: 11,
+            ),
+          ),
+          if (citizen.contact.isNotEmpty)
+            Text(
+              'Contact: ${citizen.contact}',
+              style: AppTextStyles.bodyMedium.copyWith(
+                color: AppColors.textSecondary,
+                fontSize: 11,
+              ),
+            ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton(
+                  onPressed: locked ? null : () => _handleCollect(citizen),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('Collect', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed:
+                      locked ? null : () => _setStatus(citizen, _NextStopStatus.skipped),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: const Text('Skip', style: TextStyle(fontSize: 12)),
+                ),
+              ),
+              const SizedBox(width: 6),
+              Expanded(
+                child: OutlinedButton(
+                  onPressed:
+                      locked ? null : () => _setStatus(citizen, _NextStopStatus.later),
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 8),
+                    side: BorderSide(color: Colors.blue.shade700),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                  child: Text(
+                    'Later',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: Colors.blue.shade700,
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
 
   @override
@@ -362,13 +932,14 @@ nextPending = Map<String, dynamic>.from(customer as Map);
       );
     }
 
-    if (_nextCitizen == null) {
+    if (_activeAssignment == null) {
       return OperatorInfoCard(
         title: 'Next Stop',
         titleStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-        subtitle: 'All citizens completed',
+        subtitle: 'No active assignments',
         trailing: const Chip(
-          label: Text('Done', style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
+          label: Text('Idle',
+              style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
           backgroundColor: Color(0x1A4CAF50),
           shape: StadiumBorder(),
         ),
@@ -376,87 +947,68 @@ nextPending = Map<String, dynamic>.from(customer as Map);
       );
     }
 
-    final name = (_nextCitizen!['customer_name'] ?? _nextCitizen!['name'] ?? 'Citizen').toString();
-    final id = (_nextCitizen!['unique_id'] ?? _nextCitizen!['customer_id'] ?? '').toString();
-    final contact = (_nextCitizen!['contact_no'] ?? _nextCitizen!['phone'] ?? '').toString();
+    if (_citizens.isEmpty) {
+      return OperatorInfoCard(
+        title: 'Next Stop',
+        titleStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        subtitle: 'No citizens available',
+        trailing: const Chip(
+          label: Text('Empty',
+              style: TextStyle(color: Colors.orange, fontWeight: FontWeight.w600)),
+          backgroundColor: Color(0x1AFF9800),
+          shape: StadiumBorder(),
+        ),
+        child: const SizedBox(height: 20),
+      );
+    }
+
+    final nextPending = _citizens.firstWhere(
+      (c) => _statusFor(c.id) == _NextStopStatus.pending,
+      orElse: () => _citizens.firstWhere(
+        (c) => _statusFor(c.id) == _NextStopStatus.later,
+        orElse: () => _citizens.first,
+      ),
+    );
+
+    // If nothing pending, show completed state
+    final hasPending = _citizens.any((c) {
+      final status = _statusFor(c.id);
+      return status == _NextStopStatus.pending ||
+          status == _NextStopStatus.later;
+    });
+    if (!hasPending) {
+      return OperatorInfoCard(
+        title: 'Next Stop',
+        titleStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+        subtitle: '${_activeAssignment!.ward} • ${_activeAssignment!.shiftDisplay}',
+        trailing: const Chip(
+          label: Text('Completed',
+              style: TextStyle(color: Colors.green, fontWeight: FontWeight.w600)),
+          backgroundColor: Color(0x1A4CAF50),
+          shape: StadiumBorder(),
+        ),
+        child: const SizedBox(height: 20),
+      );
+    }
 
     return OperatorInfoCard(
       title: 'Next Stop',
       titleStyle: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
-      subtitle: name,
+      subtitle: '${_activeAssignment!.ward} • ${_activeAssignment!.shiftDisplay}',
       trailing: const Chip(
-        label: Text('Pending', style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
+        label: Text('Active',
+            style: TextStyle(color: AppColors.primary, fontWeight: FontWeight.w600)),
         backgroundColor: Color(0x1A003D7D),
         shape: StadiumBorder(),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 8),
-          Text(
-            'ID: $id',
-            style: AppTextStyles.bodyMedium.copyWith(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-            ),
-          ),
-          if (contact.isNotEmpty)
-            Text(
-              'Contact: $contact',
-              style: AppTextStyles.bodyMedium.copyWith(
-                color: AppColors.textSecondary,
-                fontSize: 12,
-              ),
-            ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: () => _handleAction('collect'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Collect', style: TextStyle(fontSize: 13)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _handleAction('skip'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: const Text('Skip', style: TextStyle(fontSize: 13)),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: OutlinedButton(
-                  onPressed: () => _handleAction('later'),
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(vertical: 10),
-                    side: BorderSide(color: Colors.blue.shade700),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  child: Text('Later', style: TextStyle(fontSize: 13, color: Colors.blue.shade700)),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
+      child: _buildCitizenCard(nextPending),
     );
   }
 }
 
 // ✅ FIXED: Notification spam - Only notify once per assignment
 class _OperatorAssignmentsSection extends StatefulWidget {
-  const _OperatorAssignmentsSection({this.onOpenAssignments});
+  const _OperatorAssignmentsSection({super.key, this.onOpenAssignments});
 
   final void Function(DailyAssignmentModel assignment)? onOpenAssignments;
 
@@ -464,7 +1016,8 @@ class _OperatorAssignmentsSection extends StatefulWidget {
   State<_OperatorAssignmentsSection> createState() => _OperatorAssignmentsSectionState();
 }
 
-class _OperatorAssignmentsSectionState extends State<_OperatorAssignmentsSection> {
+class _OperatorAssignmentsSectionState extends State<_OperatorAssignmentsSection>
+    with RouteAware {
   late final AssignmentRepository _assignmentRepository;
   late Future<List<DailyAssignmentModel>> _future;
   
@@ -472,17 +1025,37 @@ class _OperatorAssignmentsSectionState extends State<_OperatorAssignmentsSection
   static const String _notifiedKey = 'notified_assignments';
   Set<String> _notifiedAssignmentIds = {};
 
-@override
-void initState() {
-  super.initState();
-  _assignmentRepository = getIt<AssignmentRepository>();
+  @override
+  void initState() {
+    super.initState();
+    _assignmentRepository = getIt<AssignmentRepository>();
+    _future = _initAssignments();
+  }
 
-  // ✅ Always initialize immediately
-  _future = _loadAssignments();
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route is PageRoute) {
+      routeObserver.subscribe(this, route);
+    }
+  }
 
-  // Load notified IDs in background
-  _loadNotifiedIds();
-}
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    super.dispose();
+  }
+
+  @override
+  void didPopNext() {
+    _refreshAssignments();
+  }
+
+  Future<List<DailyAssignmentModel>> _initAssignments() async {
+    await _loadNotifiedIds();
+    return _loadAssignments();
+  }
 
 
   Future<void> _loadNotifiedIds() async {
@@ -494,6 +1067,11 @@ void initState() {
   Future<void> _saveNotifiedIds() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setStringList(_notifiedKey, _notifiedAssignmentIds.toList());
+  }
+
+  void _refreshAssignments() {
+    if (!mounted) return;
+    setState(() => _future = _loadAssignments());
   }
 
   Future<List<DailyAssignmentModel>> _loadAssignments() async {
@@ -562,12 +1140,12 @@ Text("Today's Assignments",
             IconButton(
               tooltip: 'Refresh',
               icon: const Icon(Icons.refresh, color: AppColors.primary),
-              onPressed: () => setState(() => _future = _loadAssignments()),
+              onPressed: _refreshAssignments,
             ),
           ],
         ),
         SizedBox(
-          height: 190,
+          height: 170,
           child: FutureBuilder<List<DailyAssignmentModel>>(
             future: _future,
             builder: (context, snapshot) {
@@ -624,7 +1202,7 @@ Text("Today's Assignments",
                               _statusChip('You', assignment.operatorStatus),
                             ],
                           ),
-                          const Spacer(),
+                          const SizedBox(height: 10),
                           Text('Tap to manage collection', style: AppTextStyles.bodyMedium.copyWith(color: AppColors.textSecondary, fontSize: 12, fontWeight: FontWeight.w600)),
                         ],
                       ),

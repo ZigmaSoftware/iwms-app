@@ -1,0 +1,367 @@
+When I open a customer data screen from scanning the page and add a weight by clicking +add button, it says this in the backend:
+Bad Request: /api/desktop/role-assign/collection-logs/
+[26/Dec/2025 09:52:00] "POST /api/desktop/role-assign/collection-logs/ HTTP/1.1" 400 80
+[26/Dec/2025 09:52:00] "GET /api/desktop/role-assign/assignments/?date=2025-12-26&operator_id=USER646c033f6f19191529 HTTP/1.1" 200 672
+[26/Dec/2025 09:52:01] "GET /api/desktop/customers/customercreations/?ward=WARD646c033d7d8ff13542 HTTP/1.1" 200 2468
+[26/Dec/2025 09:52:05] "GET /api/mobile/waste/customer/?unique_id=USER646c033f7eaf952339 HTTP/1.1" 200 244
+[26/Dec/2025 09:52:05] "GET /api/mobile/waste/get-waste-types/ HTTP/1.1" 200 40
+[26/Dec/2025 09:52:05] "POST /api/mobile/waste/finalize-waste/ HTTP/1.1" 200 53
+Internal Server Error: /api/mobile/waste/insert-waste-sub/
+Traceback (most recent call last):
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/mysql/base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 179, in execute
+    res = self._query(mogrified_query)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 330, in _query
+    db.query(q)
+    ~~~~~~~~^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/connections.py", line 280, in query
+    _mysql.connection.query(self, query)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+MySQLdb.IntegrityError: (1048, "Column 'waste_type_id' cannot be null")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/viewsets.py", line 125, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "/home/sameer/Documents/iwms-backend/api/views/mobileView/waste_collection_bluetooth/waste_bluetooth_viewset.py", line 58, in insert_waste_sub
+    cursor.execute("""
+    ~~~~~~~~~~~~~~^^^^
+        INSERT INTO waste_collection_sub
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    """, [unique_id, screen_id, customer_id, waste_type, image_path,
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          weight, latitude, longitude, now])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sql, params, many=False, executor=self._execute
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/mysql/base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 179, in execute
+    res = self._query(mogrified_query)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 330, in _query
+    db.query(q)
+    ~~~~~~~~^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/connections.py", line 280, in query
+    _mysql.connection.query(self, query)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+django.db.utils.IntegrityError: (1048, "Column 'waste_type_id' cannot be null")
+[26/Dec/2025 09:52:20] "POST /api/mobile/waste/insert-waste-sub/ HTTP/1.1" 500 179705
+
+
+When I add all the sub weights, backend sayd this:
+[26/Dec/2025 09:53:45,389] - Broken pipe from ('192.168.6.28', 59624)
+[26/Dec/2025 09:53:45,391] - Broken pipe from ('192.168.6.28', 37358)
+[26/Dec/2025 09:53:45,392] - Broken pipe from ('192.168.6.28', 54934)
+[26/Dec/2025 09:53:45,393] - Broken pipe from ('192.168.6.28', 50968)
+[26/Dec/2025 09:53:45,393] - Broken pipe from ('192.168.6.28', 40374)
+[26/Dec/2025 09:53:45,394] - Broken pipe from ('192.168.6.28', 50976)
+[26/Dec/2025 09:53:45,395] - Broken pipe from ('192.168.6.28', 37354)
+Internal Server Error: /api/mobile/waste/insert-waste-sub/
+Traceback (most recent call last):
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/mysql/base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 179, in execute
+    res = self._query(mogrified_query)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 330, in _query
+    db.query(q)
+    ~~~~~~~~^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/connections.py", line 280, in query
+    _mysql.connection.query(self, query)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+MySQLdb.IntegrityError: (1048, "Column 'waste_type_id' cannot be null")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/viewsets.py", line 125, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "/home/sameer/Documents/iwms-backend/api/views/mobileView/waste_collection_bluetooth/waste_bluetooth_viewset.py", line 58, in insert_waste_sub
+    cursor.execute("""
+    ~~~~~~~~~~~~~~^^^^
+        INSERT INTO waste_collection_sub
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    """, [unique_id, screen_id, customer_id, waste_type, image_path,
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          weight, latitude, longitude, now])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sql, params, many=False, executor=self._execute
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/mysql/base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 179, in execute
+    res = self._query(mogrified_query)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 330, in _query
+    db.query(q)
+    ~~~~~~~~^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/connections.py", line 280, in query
+    _mysql.connection.query(self, query)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+django.db.utils.IntegrityError: (1048, "Column 'waste_type_id' cannot be null")
+[26/Dec/2025 09:54:04] "POST /api/mobile/waste/insert-waste-sub/ HTTP/1.1" 500 179683
+Internal Server Error: /api/mobile/waste/insert-waste-sub/
+Traceback (most recent call last):
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/mysql/base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 179, in execute
+    res = self._query(mogrified_query)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 330, in _query
+    db.query(q)
+    ~~~~~~~~^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/connections.py", line 280, in query
+    _mysql.connection.query(self, query)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+MySQLdb.IntegrityError: (1048, "Column 'waste_type_id' cannot be null")
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/core/handlers/exception.py", line 55, in inner
+    response = get_response(request)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/core/handlers/base.py", line 197, in _get_response
+    response = wrapped_callback(request, *callback_args, **callback_kwargs)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/views/decorators/csrf.py", line 65, in _view_wrapper
+    return view_func(request, *args, **kwargs)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/viewsets.py", line 125, in view
+    return self.dispatch(request, *args, **kwargs)
+           ~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 515, in dispatch
+    response = self.handle_exception(exc)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 475, in handle_exception
+    self.raise_uncaught_exception(exc)
+    ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 486, in raise_uncaught_exception
+    raise exc
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/rest_framework/views.py", line 512, in dispatch
+    response = handler(request, *args, **kwargs)
+  File "/home/sameer/Documents/iwms-backend/api/views/mobileView/waste_collection_bluetooth/waste_bluetooth_viewset.py", line 58, in insert_waste_sub
+    cursor.execute("""
+    ~~~~~~~~~~~~~~^^^^
+        INSERT INTO waste_collection_sub
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    ...<3 lines>...
+    """, [unique_id, screen_id, customer_id, waste_type, image_path,
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+          weight, latitude, longitude, now])
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 122, in execute
+    return super().execute(sql, params)
+           ~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 79, in execute
+    return self._execute_with_wrappers(
+           ~~~~~~~~~~~~~~~~~~~~~~~~~~~^
+        sql, params, many=False, executor=self._execute
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+    )
+    ^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 92, in _execute_with_wrappers
+    return executor(sql, params, many, context)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 100, in _execute
+    with self.db.wrap_database_errors:
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/utils.py", line 91, in __exit__
+    raise dj_exc_value.with_traceback(traceback) from exc_value
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/utils.py", line 105, in _execute
+    return self.cursor.execute(sql, params)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/django/db/backends/mysql/base.py", line 76, in execute
+    return self.cursor.execute(query, args)
+           ~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 179, in execute
+    res = self._query(mogrified_query)
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/cursors.py", line 330, in _query
+    db.query(q)
+    ~~~~~~~~^^^
+  File "/home/sameer/Documents/iwms-backend/venv/lib/python3.13/site-packages/MySQLdb/connections.py", line 280, in query
+    _mysql.connection.query(self, query)
+    ~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^
+django.db.utils.IntegrityError: (1048, "Column 'waste_type_id' cannot be null")
+[26/Dec/2025 09:54:13] "POST /api/mobile/waste/insert-waste-sub/ HTTP/1.1" 500 179705
+
+
+When I press "submit" 
+backend logs:
+[26/Dec/2025 09:54:57] "POST /api/mobile/waste/finalize-waste/ HTTP/1.1" 200 53
+[26/Dec/2025 09:54:57] "POST /api/mobile/waste/insert-waste-sub/ HTTP/1.1" 200 182
+[26/Dec/2025 09:54:57] "POST /api/mobile/waste/insert-waste-sub/ HTTP/1.1" 200 182
+[26/Dec/2025 09:54:57] "POST /api/mobile/waste/insert-waste-sub/ HTTP/1.1" 200 181
+[26/Dec/2025 09:54:58] "POST /api/mobile/waste/finalize-waste/ HTTP/1.1" 200 53
+[26/Dec/2025 09:54:58] "POST /api/mobile/waste/finalize-waste/ HTTP/1.1" 200 125
+Bad Request: /api/desktop/role-assign/collection-logs/
+[26/Dec/2025 09:54:58] "POST /api/desktop/role-assign/collection-logs/ HTTP/1.1" 400 80
+
+
+Is it even working and getting updated to the db?
+Is authorization from swagger the problem here?
+
+
+After the last changes you made:
+[26/Dec/2025 10:24:40] "POST /api/mobile/waste/finalize-waste/ HTTP/1.1" 200 53
+[26/Dec/2025 10:24:40] "POST /api/mobile/waste/insert-waste-sub/ HTTP/1.1" 200 181
+[26/Dec/2025 10:24:40] "POST /api/mobile/waste/insert-waste-sub/ HTTP/1.1" 200 182
+[26/Dec/2025 10:24:40] "POST /api/mobile/waste/insert-waste-sub/ HTTP/1.1" 200 181
+[26/Dec/2025 10:24:40] "POST /api/mobile/waste/finalize-waste/ HTTP/1.1" 200 53
+[26/Dec/2025 10:24:40] "POST /api/mobile/waste/finalize-waste/ HTTP/1.1" 200 125
+[26/Dec/2025 10:24:41] "POST /api/desktop/role-assign/assignment-customer-statuses/ HTTP/1.1" 201 356
+[26/Dec/2025 10:25:37] "GET /api/mobile/waste/get-waste-types/ HTTP/1.1" 200 40
+[26/Dec/2025 10:25:40] "GET /api/desktop/role-assign/assignments/?date=2025-12-26&operator_id=USER646d37760048128177 HTTP/1.1" 200 671
+[26/Dec/2025 10:25:40] "GET /api/desktop/customers/customercreations/?ward=WARD646d37745f54897915 HTTP/1.1" 200 828
+[26/Dec/2025 10:25:41] "GET /api/desktop/role-assign/assignments/?date=2025-12-26&operator_id=USER646d37760048128177 HTTP/1.1" 200 671
+[26/Dec/2025 10:25:41] "GET /api/desktop/role-assign/assignments/?date=2025-12-26&operator_id=USER646d37760048128177 HTTP/1.1" 200 671
+[26/Dec/2025 10:25:41] "GET /api/desktop/customers/customercreations/?ward=WARD646d37745f54897915 HTTP/1.1" 200 828
+
++25496 ms] V/AutofillManager(25412): requestHideFillUi(null): anchor = null
+[  +41 ms] D/ViewRootImplExtImpl(25412): the up motion event handled by
+client, just return
+[ +110 ms] I/flutter (25412): ⚠️ Finalize failed, storing offline:
+Exception: No waste records found
+[ +120 ms] I/flutter (25412): 🔥 PendingRecord UPDATE → rows affected: 1 |
+id=34 | uid=wcs2025zhlhjw8yot40
+[ +143 ms] I/flutter (25412): 🔥 PendingRecord UPDATE → rows affected: 1 |
+id=35 | uid=wcs2025vvuc4kdywk40
+[ +146 ms] I/flutter (25412): 🔥 PendingRecord UPDATE → rows affected: 1 |
+id=36 | uid=wcs2025y5vz4zwfqf40
+[ +261 ms] I/flutter (25412): *** Request ***
+[        ] I/flutter (25412): uri:
+http://192.168.5.92:8000/api/desktop/role-assign/assignment-customer-statuse
+s/
+[  +11 ms] I/flutter (25412): method: POST
+[        ] I/flutter (25412): responseType: ResponseType.json
+[        ] I/flutter (25412): followRedirects: true
+[        ] I/flutter (25412): persistentConnection: true
+[        ] I/flutter (25412): connectTimeout: 0:00:10.000000
+[        ] I/flutter (25412): sendTimeout: null
+[        ] I/flutter (25412): receiveTimeout: 0:00:10.000000
+[        ] I/flutter (25412): receiveDataWhenStatusError: true
+[        ] I/flutter (25412): extra: {}
+[        ] I/flutter (25412): headers:
+[        ] I/flutter (25412):  Content-Type: application/json
+[        ] I/flutter (25412):  Authorization: Bearer
+eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjo
+xNzY2NzQyNzg4LCJpYXQiOjE3NjY3MjQ3ODgsImp0aSI6IjFkZmZhMGY5YjUzOTQ4OWNhNzY2YjA
+wYzVlNGQwYzIwIiwidXNlcl9pZCI6IjMiLCJ1bmlxdWVfaWQiOiJVU0VSNjQ2ZDM3NzYwMDQ4MTI
+4MTc3IiwidXNlcl90eXBlIjoiU3RhZmYiLCJuYW1lIjoiUmFodWwiLCJyb2xlIjoib3BlcmF0b3I
+iLCJlbWFpbCI6InJhaHVsQGV4YW1wbGUuY29tIiwicGVybWlzc2lvbnMiOnsicm9sZS1hc3NpZ24
+iOnsiQXNzaWdubWVudEN1c3RvbWVyU3RhdHVzZXMiOlsiYWRkIiwidmlldyJdLCJEYWlseUFzc2l
+nbm1lbnRzIjpbInZpZXciLCJhZGQiXSwiQ29sbGVjdGlvbkxvZ3MiOlsiYWRkIl0sIkFzc2lnbm1
+lbnRzIjpbInZpZXciLCJhZGQiXSwiU3RhZmZBc3NpZ25tZW50cyI6WyJ2aWV3Il19LCJjdXN0b21
+lcnMiOnsiQ3VzdG9tZXJjcmVhdGlvbnMiOlsidmlldyJdfX0sInZhbGlkX3NlY29uZHMiOjE4MDA
+wLCJ2YWxpZF9ob3VycyI6NS4wLCJ2YWxpZF9kYXlzIjowLjIwODN9.Y5HNwON9fdH_MUwpXhiWzs
+K7J7xQd13NRmvtg-6pKJE
+[   +2 ms] I/flutter (25412): data:
+[        ] I/flutter (25412): {assignment: ASSIGN646d3a6d799a963919,
+customer: CUS-646d3775dfe2e58305, status: collected, latitude: 28.4869,
+longitude: 77.5015}
+[   +1 ms] I/flutter (25412): 
+[  +75 ms] I/flutter (25412): *** Response ***
+[        ] I/flutter (25412): uri:
+http://192.168.5.92:8000/api/desktop/role-assign/assignment-customer-statuse
+s/
+[        ] I/flutter (25412): statusCode: 201
+[        ] I/flutter (25412): headers:
+[        ] I/flutter (25412):  date: Fri, 26 Dec 2025 04:54:41 GMT
+[        ] I/flutter (25412):  vary: Accept, origin
+[        ] I/flutter (25412):  content-length: 356
+[        ] I/flutter (25412):  referrer-policy: same-origin
+[        ] I/flutter (25412):  cross-origin-opener-policy: same-origin
+[        ] I/flutter (25412):  content-type: application/json
+[        ] I/flutter (25412):  x-frame-options: DENY
+[        ] I/flutter (25412):  x-content-type-options: nosniff
+[        ] I/flutter (25412):  server: WSGIServer/0.2 CPython/3.13.5
+[        ] I/flutter (25412):  allow: GET, POST, HEAD, OPTIONS
+[   +1 ms] I/flutter (25412): Response Text:
+[        ] I/flutter (25412):
+{"id":1,"assignment":"ASSIGN646d3a6d799a963919","customer":"CUS-646d3775dfe2
+e58305","customer_name":"Sameer","status":"collected","skip_reason":null,"la
+titude":"28.486900","longitude":"77.501500","updated_by":"USER646d3776004812
+8177","updated_by_name":"Rahul","created_at":"2025-12-26T10:24:41.130589+05:
+30","updated_at":"2025-12-26T10:24:41.130532+05:30"}
+[   +1 ms] I/flutter (25412): 
+[+56116 ms] V/AutofillManager(25412): requestHideFillUi(null): anchor = null
+
+But even after submitting the weight saved offline, the operator assignment status is not marked as  "completed" in the assignment carousel. Keep in mind that even if the weigths are saved offline, it must need to be marked as completed.

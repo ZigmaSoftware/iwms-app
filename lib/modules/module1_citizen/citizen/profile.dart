@@ -202,7 +202,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     label: 'Collection Details',
                     textColor: textColor,
                     highlightColor: highlightColor,
-                    onTap: () => context.push(AppRoutePaths.citizenDriverDetails),
+                    onTap: () => context.push(AppRoutePaths.citizenHistory),
                   ),
                   _ProfileOptionTile(
                     icon: Icons.history,

@@ -227,6 +227,50 @@ class CollectionLogEntry {
   }
 }
 
+class AssignmentCustomerStatusEntry {
+  final int id;
+  final String customerId;
+  final String customerName;
+  final String status;
+  final String? skipReason;
+  final DateTime? updatedAt;
+
+  AssignmentCustomerStatusEntry({
+    required this.id,
+    required this.customerId,
+    required this.customerName,
+    required this.status,
+    this.skipReason,
+    this.updatedAt,
+  });
+
+  factory AssignmentCustomerStatusEntry.fromJson(Map<String, dynamic> json) {
+    return AssignmentCustomerStatusEntry(
+      id: json['id'] ?? 0,
+      customerId: json['customer']?.toString() ?? '',
+      customerName: json['customer_name']?.toString() ?? 'Citizen',
+      status: json['status']?.toString() ?? 'pending',
+      skipReason: json['skip_reason'],
+      updatedAt: json['updated_at'] != null
+          ? DateTime.tryParse(json['updated_at'])
+          : null,
+    );
+  }
+
+  String get statusLabel {
+    switch (status.toLowerCase()) {
+      case 'collected':
+        return 'Collected';
+      case 'skipped':
+        return 'Skipped';
+      case 'later':
+        return 'Later';
+      default:
+        return 'Pending';
+    }
+  }
+}
+
 class EnhancedAssignmentModel {
   final int id;
   final String uniqueId;
@@ -249,6 +293,7 @@ class EnhancedAssignmentModel {
   final String? cancelledReason;
   final List<AssignmentStatusHistoryEntry> statusHistory;
   final List<CollectionLogEntry> collectionLogs;
+  final List<AssignmentCustomerStatusEntry> customerStatuses;
   final int totalStatusChanges;
 
   EnhancedAssignmentModel({
@@ -273,6 +318,7 @@ class EnhancedAssignmentModel {
     this.cancelledReason,
     this.statusHistory = const [],
     this.collectionLogs = const [],
+    this.customerStatuses = const [],
     this.totalStatusChanges = 0,
   });
 
@@ -318,6 +364,12 @@ class EnhancedAssignmentModel {
           [],
       collectionLogs: (json['collection_logs'] as List?)
               ?.map((e) => CollectionLogEntry.fromJson(
+                    Map<String, dynamic>.from(e as Map),
+                  ))
+              .toList() ??
+          [],
+      customerStatuses: (json['customer_statuses'] as List?)
+              ?.map((e) => AssignmentCustomerStatusEntry.fromJson(
                     Map<String, dynamic>.from(e as Map),
                   ))
               .toList() ??

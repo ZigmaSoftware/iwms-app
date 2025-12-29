@@ -610,14 +610,21 @@ class _MapScreenState extends State<MapScreen> {
           const Icon(Icons.search, color: Colors.black54, size: 18),
           const SizedBox(width: 7),
           Expanded(
-          child: TextField(
-            decoration: InputDecoration(
-              contentPadding: const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
-              hintText: localizations.mapSearchHint,
-              hintStyle: const TextStyle(color: Color.fromARGB(137, 0, 0, 0)),
-              border: InputBorder.none,
-            ),
-              onChanged: (value) => setState(() => _searchQuery = value.trim()),
+            child: TextField(
+              style: const TextStyle(color: Colors.black87),
+              cursorColor: Colors.black54,
+              decoration: InputDecoration(
+                filled: true,
+                fillColor: Colors.white,
+                contentPadding:
+                    const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                hintText: localizations.mapSearchHint,
+                hintStyle:
+                    const TextStyle(color: Color.fromARGB(137, 0, 0, 0)),
+                border: InputBorder.none,
+              ),
+              onChanged: (value) =>
+                  setState(() => _searchQuery = value.trim()),
             ),
           ),
           if (_searchQuery.isNotEmpty)
@@ -872,18 +879,18 @@ class _VehicleMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final statusColor = getVehicleStatusColor(vehicle.status);
-    final size = isSelected ? 30.0 : 22.0;
+    final iconSize = isSelected ? 32.0 : 26.0;
 
     return Column(
       children: [
         AnimatedContainer(
           duration: const Duration(milliseconds: 200),
-          height: size,
-          width: size,
-          child: Image.asset(
-            'assets/images/arrow.png',
+          height: iconSize,
+          width: iconSize,
+          child: Icon(
+            Icons.location_on_rounded,
             color: statusColor,
-            fit: BoxFit.contain,
+            size: iconSize,
           ),
         ),
 

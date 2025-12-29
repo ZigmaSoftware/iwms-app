@@ -5,6 +5,8 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:dio/dio.dart';
+import 'package:dynamic_tabbar/dynamic_tabbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -13,7 +15,9 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../../core/di.dart';
 import '../../../../core/geofence_config.dart';
+import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
 import 'package:iwms_citizen_app/data/models/vehicle_model.dart';
+import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
 import '../../../../logic/vehicle_tracking/vehicle_bloc.dart';
 import '../../../../logic/vehicle_tracking/vehicle_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
@@ -25,6 +29,7 @@ import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
 import 'package:iwms_citizen_app/shared/services/notification_service.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 const Color _driverPrimary = Color(0xFF1B5E20);
 const Color _driverAccent = Color(0xFF66BB6A);
@@ -53,7 +58,7 @@ class _DriverAssignmentStop {
   final String assignmentType;
   final String shift;
 
-  _CustomerStatus status;
+  _CustomerStatus status = _CustomerStatus.pending;
   String? skipReason;
 
   _DriverAssignmentStop({
@@ -64,8 +69,6 @@ class _DriverAssignmentStop {
     required this.assignmentType,
     required this.shift,
     this.customerName,
-    this.status = _CustomerStatus.pending,
-    this.skipReason,
   });
 
   // =====================
@@ -83,7 +86,7 @@ class _DriverAssignmentStop {
   String get baseAssignmentId => assignmentId.split('-').first;
 }
 
-enum _DriverTab { home, history, profile, attendance }
+enum _DriverTab { home, assignments, attendance, profile }
 
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({super.key});
@@ -94,16 +97,23 @@ class DriverHomePage extends StatefulWidget {
 
 class _DriverHomePageState extends State<DriverHomePage> {
   _DriverTab _activeTab = _DriverTab.home;
+  late final AssignmentRepository _assignmentRepository;
   final MapController _mapController = MapController();
   List<_DriverAssignmentStop> _customers = [];
+  List<DailyAssignmentModel> _currentAssignments = [];
+  List<DailyAssignmentModel> _historyAssignments = [];
   bool _loadingCustomers = true;
+  bool _loadingAssignments = true;
   String? _customerError;
+  String? _assignmentError;
   final Set<String> _notifiedAssignmentIds = {};
   final Set<String> _notifiedCancelledAssignmentIds = {};
+  bool _notificationsLoaded = false;
 
   @override
   void initState() {
     super.initState();
+    _assignmentRepository = getIt<AssignmentRepository>();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _centerOnDriver(GammaGeofenceConfig.center),
     );
@@ -168,6 +178,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
                       child: _DriverHeader(
+                        key: ValueKey(_activeTab),
                         activeTab: _activeTab,
                         onLogoutTapped: () => _logout(context),
                         empId: empIdFromState ?? '',
@@ -223,16 +234,16 @@ class _DriverHomePageState extends State<DriverHomePage> {
                       label: 'Home',
                     ),
                     BottomNavigationBarItem(
-                      icon: Icon(Icons.history_rounded),
-                      label: 'History',
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.person_outline_rounded),
-                      label: 'Profile',
+                      icon: Icon(Icons.assignment_rounded),
+                      label: 'Assignments',
                     ),
                     BottomNavigationBarItem(
                       icon: Icon(Icons.event_available_rounded),
                       label: 'Attendance',
+                    ),
+                    BottomNavigationBarItem(
+                      icon: Icon(Icons.person_outline_rounded),
+                      label: 'Profile',
                     ),
                   ],
                 ),
@@ -247,7 +258,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
   Future<void> _loadAssignmentsForDriver() async {
     setState(() {
       _loadingCustomers = true;
+      _loadingAssignments = true;
       _customerError = null;
+      _assignmentError = null;
     });
 
     try {
@@ -257,7 +270,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
       if (authState is! AuthStateAuthenticated) {
         setState(() {
           _loadingCustomers = false;
+          _loadingAssignments = false;
           _customerError = 'User not authenticated';
+          _assignmentError = 'User not authenticated';
         });
         return;
       }
@@ -267,7 +282,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
       if (driverId.isEmpty) {
         setState(() {
           _loadingCustomers = false;
+          _loadingAssignments = false;
           _customerError = 'Missing driver id';
+          _assignmentError = 'Missing driver id';
         });
         return;
       }
@@ -285,6 +302,15 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
       final List list =
           resp.data is List ? resp.data : (resp.data['results'] ?? []);
+      final currentAssignments = list
+          .whereType<Map>()
+          .map(
+            (entry) =>
+                DailyAssignmentModel.fromJson(Map<String, dynamic>.from(entry)),
+          )
+          .toList();
+
+      await _loadNotifiedIds();
 
       _notifyNewAssignments(list);
       await _notifyCancelledAssignments(driverId, dateStr);
@@ -292,16 +318,18 @@ class _DriverHomePageState extends State<DriverHomePage> {
       final stops = <_DriverAssignmentStop>[];
 
       // Helper to decode customer list for a ward
-      Future<void> _hydrateWardCustomers({
+      Future<void> hydrateWardCustomers({
         required String wardId,
         required Map m,
         required String assignmentId,
         required String assignmentType,
         required String shift,
+        required bool isEmergency,
+        required String emergencyCustomerId,
       }) async {
         List wardList = [];
 
-        Future<void> _fetchWithParam(String paramKey) async {
+        Future<void> fetchWithParam(String paramKey) async {
           final wardResp = await dio.get(
             ApiConfig.customerList,
             queryParameters: {paramKey: wardId},
@@ -313,9 +341,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
         }
 
         try {
-          await _fetchWithParam('ward');
+          await fetchWithParam('ward');
           if (wardList.isEmpty) {
-            await _fetchWithParam('ward_id');
+            await fetchWithParam('ward_id');
           }
         } catch (_) {
           // ignore, fall back below
@@ -332,7 +360,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
           } else if (rawWard != null) {
             entryWardId = rawWard.toString();
           }
-          return entryWardId != null && entryWardId == wardId;
+          if (entryWardId == null || entryWardId != wardId) return false;
+          if (isEmergency && emergencyCustomerId.isNotEmpty) {
+            final entryId = (entry['unique_id'] ?? entry['customer_id'] ?? '')
+                .toString();
+            return entryId == emergencyCustomerId;
+          }
+          return true;
         }).toList();
 
         if (wardList.isEmpty) {
@@ -363,11 +397,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
           final customerName =
               (entry['customer_name'] ?? entry['name'] ?? '').toString();
 
+          final combinedId = customerId.isNotEmpty
+              ? '$assignmentId-$customerId'
+              : assignmentId;
           stops.add(
             _DriverAssignmentStop(
-              assignmentId: customerId.isNotEmpty
-                  ? '$assignmentId-$customerId'
-                  : assignmentId,
+              assignmentId: combinedId,
               wardId: wardId,
               wardName: m['ward_name']?.toString() ?? 'Ward',
               customerName: customerName.isNotEmpty ? customerName : null,
@@ -384,14 +419,19 @@ class _DriverHomePageState extends State<DriverHomePage> {
         final wardId = (m['ward'] ?? '').toString();
         final assignmentType = m['assignment_type']?.toString() ?? 'primary';
         final shift = m['shift']?.toString() ?? 'full_day';
+        final customerId = (m['customer'] ?? m['customer_id'] ?? '').toString();
+        final isEmergency = assignmentType.toLowerCase() == 'emergency';
 
         final directPos =
             _safeLatLng(m['customer_latitude'], m['customer_longitude']);
 
         if (directPos != null) {
+          final combinedId = customerId.isNotEmpty
+              ? '$assignmentId-$customerId'
+              : assignmentId;
           stops.add(
             _DriverAssignmentStop(
-              assignmentId: assignmentId,
+              assignmentId: combinedId,
               wardId: wardId.isNotEmpty ? wardId : null,
               wardName: m['ward_name']?.toString() ?? 'Ward',
               customerName: m['customer_name'],
@@ -405,18 +445,23 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
         // If assignment has no specific customer point, hydrate ward customers
         if (wardId.isNotEmpty) {
-          await _hydrateWardCustomers(
+          await hydrateWardCustomers(
             wardId: wardId,
             m: m,
             assignmentId: assignmentId,
             assignmentType: assignmentType,
             shift: shift,
+            isEmergency: isEmergency,
+            emergencyCustomerId: customerId,
           );
         } else {
           // Fallback single stop at center
+          final combinedId = customerId.isNotEmpty
+              ? '$assignmentId-$customerId'
+              : assignmentId;
           stops.add(
             _DriverAssignmentStop(
-              assignmentId: assignmentId,
+              assignmentId: combinedId,
               wardId: null,
               wardName: m['ward_name']?.toString() ?? 'Ward',
               customerName: m['customer_name'],
@@ -430,14 +475,63 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
       setState(() {
         _customers = stops;
+        _currentAssignments = currentAssignments;
         _loadingCustomers = false;
       });
+
+      await _loadAssignmentHistory(driverId);
     } catch (e) {
       setState(() {
         _loadingCustomers = false;
+        _loadingAssignments = false;
         _customerError = 'Failed to load assignments';
+        _assignmentError = 'Failed to load assignments';
       });
     }
+  }
+
+  Future<void> _loadAssignmentHistory(String driverId) async {
+    try {
+      final history =
+          await _assignmentRepository.fetchAssignmentHistory(driverId: driverId);
+      final completedHistory =
+          history.where((assignment) => !assignment.isActive).toList()
+            ..sort((a, b) => b.date.compareTo(a.date));
+      setState(() {
+        _historyAssignments = completedHistory;
+        _loadingAssignments = false;
+      });
+    } catch (_) {
+      setState(() {
+        _historyAssignments = [];
+        _loadingAssignments = false;
+      });
+    }
+  }
+
+  Future<void> _loadNotifiedIds() async {
+    if (_notificationsLoaded) return;
+    final prefs = await SharedPreferences.getInstance();
+    _notifiedAssignmentIds.addAll(
+      prefs.getStringList('driver_notified_assignments') ?? <String>[],
+    );
+    _notifiedCancelledAssignmentIds.addAll(
+      prefs.getStringList('driver_notified_cancelled_assignments') ??
+          <String>[],
+    );
+    _notificationsLoaded = true;
+  }
+
+  Future<void> _saveNotifiedIds() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList(
+      'driver_notified_assignments',
+      _notifiedAssignmentIds.toList(),
+    );
+    await prefs.setStringList(
+      'driver_notified_cancelled_assignments',
+      _notifiedCancelledAssignmentIds.toList(),
+    );
   }
 
   void _notifyNewAssignments(List<dynamic> assignments) {
@@ -462,6 +556,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
       title: title,
       message: message,
     );
+    _saveNotifiedIds();
   }
 
   Future<void> _notifyCancelledAssignments(
@@ -485,11 +580,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
           ? decoded
           : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
 
+      bool changed = false;
       for (final item in list) {
         if (item is! Map) continue;
         final id = item['unique_id']?.toString();
         if (id == null || id.isEmpty) continue;
         if (!_notifiedCancelledAssignmentIds.add(id)) continue;
+        changed = true;
 
         final wardName = item['ward_name']?.toString() ?? 'Assignment';
         final reason =
@@ -500,6 +597,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
           title: 'Assignment cancelled',
           message: '$wardName • $reason',
         );
+      }
+      if (changed) {
+        await _saveNotifiedIds();
       }
     } catch (_) {
       // Ignore notification failures.
@@ -583,12 +683,18 @@ class _DriverHomePageState extends State<DriverHomePage> {
           onRefresh: _loadAssignmentsForDriver,
           onStatusChanged: _updateCustomerStatus,
         );
-      case _DriverTab.history:
-        return _HistoryTab(
-          customers: _customers,
-          loading: _loadingCustomers,
-          error: _customerError,
+      case _DriverTab.assignments:
+        return _AssignmentsTab(
+          currentAssignments: _currentAssignments,
+          historyAssignments: _historyAssignments,
+          loading: _loadingAssignments,
+          error: _assignmentError,
           onRefresh: _loadAssignmentsForDriver,
+        );
+      case _DriverTab.attendance:
+        return AttendancePageDriver(
+          operatorName: nameFromState,
+          operatorCode: empIdFromState,
         );
       case _DriverTab.profile:
         return _ProfileTab(
@@ -597,22 +703,17 @@ class _DriverHomePageState extends State<DriverHomePage> {
           empId: empIdFromState,
           vehicle: vehicle,
         );
-      case _DriverTab.attendance:
-        return AttendancePageDriver(
-          operatorName: nameFromState,
-          operatorCode: empIdFromState,
-        );
     }
   }
 
   _DriverTab _tabFromIndex(int index) {
     switch (index) {
       case 1:
-        return _DriverTab.history;
+        return _DriverTab.assignments;
       case 2:
-        return _DriverTab.profile;
-      case 3:
         return _DriverTab.attendance;
+      case 3:
+        return _DriverTab.profile;
       case 0:
       default:
         return _DriverTab.home;
@@ -696,43 +797,6 @@ class _DriverHeader extends StatelessWidget {
             ),
         ],
       ),
-    );
-  }
-}
-
-class _StatItem extends StatelessWidget {
-  const _StatItem({
-    required this.label,
-    required this.value,
-    required this.icon,
-  });
-
-  final String label;
-  final String value;
-  final IconData icon;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      children: [
-        Icon(icon, color: Colors.white70, size: 18),
-        const SizedBox(height: 4),
-        Text(
-          value,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-          ),
-        ),
-        Text(
-          label,
-          style: const TextStyle(
-            color: Colors.white70,
-            fontSize: 11,
-          ),
-        ),
-      ],
     );
   }
 }
@@ -901,13 +965,31 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   }
 
   void _updateCustomerStatus(String id, _CustomerStatus status) {
+    final isDone = status == _CustomerStatus.collected ||
+        status == _CustomerStatus.skipped;
+    final shouldExitNavigation =
+        _navMode == _NavigationMode.navigating && _activeNavigationId == id;
+
     setState(() {
-      for (final c in _customers) {
-        if (c.id == id) {
-          c.status = status;
+      if (isDone) {
+        _customers.removeWhere((c) => c.id == id);
+        if (shouldExitNavigation) {
+          _activeNavigationId = null;
+          _navMode = _NavigationMode.overview;
+        }
+      } else {
+        for (final c in _customers) {
+          if (c.id == id) {
+            c.status = status;
+          }
         }
       }
     });
+
+    if (shouldExitNavigation) {
+      _navAnimController.reverse();
+      _animateToOverview();
+    }
     widget.onStatusChanged(id, status);
   }
 
@@ -919,6 +1001,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       _customers = widget.customers
           .where((c) =>
               c.status == _CustomerStatus.pending ||
+              c.status == _CustomerStatus.later ||
               c.status == _CustomerStatus.navigating)
           .toList();
       _computeRoute();
@@ -1033,8 +1116,6 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     final driverPos = _orsRoute.first;
 
     // Calculate offset to position driver marker at bottom third
-    final screenHeight = MediaQuery.of(context).size.height;
-    final mapHeight = screenHeight - 200; // approximate map height
     final offsetLat = 0.003; // Adjust this value based on zoom level
 
     final targetCenter = LatLng(
@@ -1076,21 +1157,49 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   }
 
   Future<void> _reportCompletion(_DriverAssignmentStop customer) async {
-    try {
-      final dio = await authorizedDio();
-      final assignmentId = customer.baseAssignmentId;
-      String? driverId;
-      final authState = context.read<AuthBloc>().state;
-      if (authState is AuthStateAuthenticated) {
-        final trimmed = authState.userId.trim();
-        if (trimmed.isNotEmpty) {
-          driverId = trimmed;
-        }
+    final assignmentId = customer.baseAssignmentId;
+    String? driverId;
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthStateAuthenticated) {
+      final trimmed = authState.userId.trim();
+      if (trimmed.isNotEmpty) {
+        driverId = trimmed;
       }
+    }
+    final dio = await authorizedDio();
 
+    try {
       await dio.post(
         '${ApiConfig.assignments}$assignmentId/complete/',
       );
+    } on DioException catch (e) {
+      final alreadyCompleted =
+          await _verifyAssignmentCompletion(dio, assignmentId);
+      if (alreadyCompleted) return;
+      final message = _extractDioMessage(e) ?? 'Failed to sync completion';
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    } catch (_) {
+      final alreadyCompleted =
+          await _verifyAssignmentCompletion(dio, assignmentId);
+      if (alreadyCompleted) return;
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Failed to sync completion'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    try {
       await dio.post(
         ApiConfig.collectionLogs,
         data: {
@@ -1101,15 +1210,35 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
           'longitude': widget.driverLocation.longitude,
         },
       );
-    } catch (e) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Failed to sync completion'),
-          backgroundColor: Colors.redAccent,
-        ),
-      );
+    } catch (_) {
+      // ignore log failures once completion succeeded
     }
+  }
+
+  String? _extractDioMessage(DioException error) {
+    final data = error.response?.data;
+    if (data is Map) {
+      final detail = data['detail'] ?? data['reason'] ?? data['message'];
+      if (detail != null) return detail.toString();
+    }
+    return null;
+  }
+
+  Future<bool> _verifyAssignmentCompletion(
+    Dio dio,
+    String assignmentId,
+  ) async {
+    try {
+      final resp = await dio.get('${ApiConfig.assignments}$assignmentId/');
+      final data = resp.data;
+      if (data is Map) {
+        final status = data['current_status']?.toString().toLowerCase();
+        return status == 'completed' ||
+            status == 'skipped' ||
+            status == 'cancelled';
+      }
+    } catch (_) {}
+    return false;
   }
 
   Future<void> _handleCollect(_DriverAssignmentStop customer) async {
@@ -1353,6 +1482,16 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final isNavigating = _navMode == _NavigationMode.navigating;
+    _DriverAssignmentStop? activeCustomer;
+    if (_activeNavigationId != null) {
+      for (final c in _customers) {
+        if (c.id == _activeNavigationId) {
+          activeCustomer = c;
+          break;
+        }
+      }
+    }
+    final navigationCustomer = isNavigating ? activeCustomer : null;
 
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
@@ -1455,18 +1594,34 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
           ),
 
           // Navigation header
-          if (isNavigating && _activeNavigationId != null)
+          if (navigationCustomer != null)
             Positioned(
               top: 0,
               left: 0,
               right: 0,
               child: _NavigationHeader(
-                customer:
-                    _customers.firstWhere((c) => c.id == _activeNavigationId),
-                distance: _getDistanceToCustomer(
-                  _customers.firstWhere((c) => c.id == _activeNavigationId),
-                ),
+                customer: navigationCustomer,
+                distance: _getDistanceToCustomer(navigationCustomer),
                 onStop: _stopNavigation,
+              ),
+            ),
+
+          // Navigation action tray
+          if (navigationCustomer != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 12,
+              child: AnimatedContainer(
+                duration: _kNavigationTransitionDuration,
+                curve: Curves.easeInOut,
+                height: 120,
+                child: _NavigationActionCard(
+                  customer: navigationCustomer,
+                  distance: _getDistanceToCustomer(navigationCustomer),
+                  onComplete: () => _handleCollect(navigationCustomer),
+                  onSkip: () => _handleSkip(navigationCustomer),
+                ),
               ),
             ),
 
@@ -1637,6 +1792,153 @@ class _NavigationHeader extends StatelessWidget {
   }
 }
 
+class _NavigationActionCard extends StatelessWidget {
+  const _NavigationActionCard({
+    required this.customer,
+    required this.distance,
+    required this.onComplete,
+    required this.onSkip,
+  });
+
+  final _DriverAssignmentStop customer;
+  final String distance;
+  final VoidCallback onComplete;
+  final VoidCallback onSkip;
+
+  @override
+  Widget build(BuildContext context) {
+    final displayName = customer.customerName?.trim().isNotEmpty == true
+        ? customer.customerName!
+        : customer.wardName;
+    final isDone = customer.status == _CustomerStatus.collected ||
+        customer.status == _CustomerStatus.skipped;
+
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 16),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.12),
+            blurRadius: 14,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: Colors.blue.shade50,
+            child: Text(
+              displayName[0].toUpperCase(),
+              style: TextStyle(
+                fontWeight: FontWeight.w800,
+                color: Colors.blue.shade700,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  displayName,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  distance,
+                  style: TextStyle(
+                    color: Colors.grey.shade600,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  customer.shift.replaceAll('_', ' ').toUpperCase(),
+                  style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                Text(
+                  'Type: ${customer.assignmentType.toUpperCase()}',
+                  style: TextStyle(
+                    color: Colors.grey.shade500,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (customer.wardName.trim().isNotEmpty &&
+                    customer.wardName.trim() != displayName.trim())
+                  Text(
+                    'Ward: ${customer.wardName}',
+                    style: TextStyle(
+                      color: Colors.grey.shade500,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            children: [
+              SizedBox(
+                height: 32,
+                child: ElevatedButton(
+                  onPressed: isDone ? null : onComplete,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    backgroundColor: Colors.green.shade700,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Complete',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              SizedBox(
+                height: 28,
+                child: OutlinedButton(
+                  onPressed: isDone ? null : onSkip,
+                  style: OutlinedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  child: const Text(
+                    'Skip',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
 class _CustomerCard extends StatelessWidget {
   const _CustomerCard({
     required this.customer,
@@ -1665,7 +1967,6 @@ class _CustomerCard extends StatelessWidget {
       case _CustomerStatus.navigating:
         return Colors.blue;
       case _CustomerStatus.pending:
-      default:
         return Colors.red;
     }
   }
@@ -1697,6 +1998,8 @@ class _CustomerCard extends StatelessWidget {
     final displayName = customer.customerName?.trim().isNotEmpty == true
         ? customer.customerName!
         : customer.wardName;
+    final isDone = customer.status == _CustomerStatus.collected ||
+        customer.status == _CustomerStatus.skipped;
 
     return SizedBox(
       width: 240,
@@ -1795,10 +2098,7 @@ class _CustomerCard extends StatelessWidget {
                       child: SizedBox(
                         height: 32,
                         child: ElevatedButton(
-                          onPressed:
-                              customer.status == _CustomerStatus.collected
-                                  ? null
-                                  : onComplete,
+                          onPressed: isDone ? null : onComplete,
                           style: ElevatedButton.styleFrom(
                             padding: EdgeInsets.zero,
                             backgroundColor: Colors.green.shade700,
@@ -1822,9 +2122,7 @@ class _CustomerCard extends StatelessWidget {
                       child: SizedBox(
                         height: 32,
                         child: OutlinedButton(
-                          onPressed: customer.status == _CustomerStatus.skipped
-                              ? null
-                              : onSkip,
+                          onPressed: isDone ? null : onSkip,
                           style: OutlinedButton.styleFrom(
                             padding: EdgeInsets.zero,
                             shape: RoundedRectangleBorder(
@@ -1850,10 +2148,11 @@ class _CustomerCard extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   height: 32,
-                  child: ElevatedButton.icon(
-                    onPressed: customer.status == _CustomerStatus.navigating
-                        ? null
-                        : onStart,
+                child: ElevatedButton.icon(
+                    onPressed:
+                        isDone || customer.status == _CustomerStatus.navigating
+                            ? null
+                            : onStart,
                     icon: const Icon(Icons.navigation_rounded, size: 13),
                     label: const Text(
                       'Navigate',
@@ -1881,145 +2180,383 @@ class _CustomerCard extends StatelessWidget {
   }
 }
 
-class _HistoryTab extends StatelessWidget {
-  const _HistoryTab({
-    required this.customers,
+class _AssignmentsTab extends StatefulWidget {
+  const _AssignmentsTab({
+    required this.currentAssignments,
+    required this.historyAssignments,
     required this.loading,
     required this.error,
     required this.onRefresh,
   });
 
-  final List<_DriverAssignmentStop> customers;
+  final List<DailyAssignmentModel> currentAssignments;
+  final List<DailyAssignmentModel> historyAssignments;
   final bool loading;
   final String? error;
   final Future<void> Function() onRefresh;
 
   @override
-  Widget build(BuildContext context) {
-    final completedCustomers = customers
-        .where((c) =>
-            c.status == _CustomerStatus.collected ||
-            c.status == _CustomerStatus.skipped)
-        .toList();
+  State<_AssignmentsTab> createState() => _AssignmentsTabState();
+}
 
+class _AssignmentsTabState extends State<_AssignmentsTab> {
+  bool _didSetInitialTab = false;
+
+  List<TabData> _buildTabs() {
+    return [
+      TabData(
+        index: 0,
+        title: const Tab(text: 'Current'),
+        content: _DriverAssignmentList(
+          assignments: widget.currentAssignments,
+          emptyTitle: 'No current assignments',
+          emptySubtitle: 'You are all caught up for now.',
+          onRefresh: widget.onRefresh,
+        ),
+      ),
+      TabData(
+        index: 1,
+        title: const Tab(text: 'History'),
+        content: _DriverAssignmentList(
+          assignments: widget.historyAssignments,
+          emptyTitle: 'No completed assignments',
+          emptySubtitle: 'Completed assignments will appear here.',
+          onRefresh: widget.onRefresh,
+        ),
+      ),
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (widget.loading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+    if (widget.error != null) {
+      return _AssignmentsErrorState(
+        message: widget.error!,
+        onRetry: () => widget.onRefresh(),
+      );
+    }
+
+    return Column(
+      children: [
+        _AssignmentsHeader(
+          currentCount: widget.currentAssignments.length,
+          historyCount: widget.historyAssignments.length,
+        ),
+        const SizedBox(height: 8),
+        Expanded(
+          child: DynamicTabBarWidget(
+            dynamicTabs: _buildTabs(),
+            onTabControllerUpdated: (controller) {
+              if (_didSetInitialTab || controller.length == 0) return;
+              _didSetInitialTab = true;
+              controller.animateTo(0);
+            },
+            onTabChanged: (_) => widget.onRefresh(),
+            isScrollable: false,
+            indicatorColor: _driverPrimary,
+            labelColor: _driverPrimary,
+            unselectedLabelColor: Colors.black54,
+            labelStyle: const TextStyle(fontWeight: FontWeight.w700),
+            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _AssignmentsHeader extends StatelessWidget {
+  const _AssignmentsHeader({
+    required this.currentCount,
+    required this.historyCount,
+  });
+
+  final int currentCount;
+  final int historyCount;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Row(
+        children: [
+          const Text(
+            'Assignments',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+          ),
+          const Spacer(),
+          _CountChip(
+            label: 'Current',
+            count: currentCount,
+            color: _driverPrimary,
+          ),
+          const SizedBox(width: 8),
+          _CountChip(
+            label: 'History',
+            count: historyCount,
+            color: Colors.grey.shade600,
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CountChip extends StatelessWidget {
+  const _CountChip({
+    required this.label,
+    required this.count,
+    required this.color,
+  });
+
+  final String label;
+  final int count;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Text(
+        '$count $label',
+        style: TextStyle(
+          color: color,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _AssignmentsErrorState extends StatelessWidget {
+  const _AssignmentsErrorState({
+    required this.message,
+    required this.onRetry,
+  });
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            message,
+            style: const TextStyle(
+              color: Colors.redAccent,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton(
+            onPressed: onRetry,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: _driverPrimary,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Retry'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DriverAssignmentList extends StatelessWidget {
+  const _DriverAssignmentList({
+    required this.assignments,
+    required this.emptyTitle,
+    required this.emptySubtitle,
+    required this.onRefresh,
+  });
+
+  final List<DailyAssignmentModel> assignments;
+  final String emptyTitle;
+  final String emptySubtitle;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
     return RefreshIndicator(
       onRefresh: onRefresh,
-      child: ListView(
-        padding: const EdgeInsets.all(16),
+      child: assignments.isEmpty
+          ? ListView(
+              padding: const EdgeInsets.all(24),
+              children: [
+                const SizedBox(height: 60),
+                Icon(Icons.assignment_rounded,
+                    size: 56, color: Colors.grey.shade300),
+                const SizedBox(height: 16),
+                Text(
+                  emptyTitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 16,
+                    color: Colors.grey.shade600,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  emptySubtitle,
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: Colors.grey.shade500,
+                  ),
+                ),
+              ],
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
+              itemCount: assignments.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                return _DriverAssignmentCard(
+                  assignment: assignments[index],
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _DriverAssignmentCard extends StatelessWidget {
+  const _DriverAssignmentCard({
+    required this.assignment,
+  });
+
+  final DailyAssignmentModel assignment;
+
+  String _formatDate(DateTime value) {
+    final local = value.toLocal();
+    final month = local.month.toString().padLeft(2, '0');
+    final day = local.day.toString().padLeft(2, '0');
+    return '${local.year}-$month-$day';
+  }
+
+  String? _statusTimestamp() {
+    if (assignment.completedAt != null) {
+      return 'Completed: ${_formatDate(assignment.completedAt!)}';
+    }
+    if (assignment.skippedAt != null) {
+      return 'Skipped: ${_formatDate(assignment.skippedAt!)}';
+    }
+    if (assignment.cancelledAt != null) {
+      return 'Cancelled: ${_formatDate(assignment.cancelledAt!)}';
+    }
+    return null;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final statusNote = _statusTimestamp();
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withValues(alpha: 0.06),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              const Text(
-                'Collection History',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+              Expanded(
+                child: Text(
+                  assignment.ward,
+                  style: const TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
               ),
               Container(
                 padding:
-                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                 decoration: BoxDecoration(
-                  color: _driverPrimary.withValues(alpha: 0.1),
-                  borderRadius: BorderRadius.circular(20),
+                  color: assignment.statusColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
                 ),
                 child: Text(
-                  '${completedCustomers.length} completed',
-                  style: const TextStyle(
-                    color: _driverPrimary,
+                  assignment.statusLabel,
+                  style: TextStyle(
+                    fontSize: 11,
                     fontWeight: FontWeight.w700,
-                    fontSize: 12,
+                    color: assignment.statusColor,
                   ),
                 ),
               ),
             ],
           ),
-          const SizedBox(height: 16),
-          if (loading)
-            const Center(child: CircularProgressIndicator())
-          else if (error != null)
-            Center(
-              child: Text(error!, style: const TextStyle(color: Colors.red)),
-            )
-          else if (completedCustomers.isEmpty)
-            Center(
-              child: Column(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.history_rounded,
-                      size: 64, color: Colors.grey.shade300),
-                  const SizedBox(height: 16),
-                  Text(
-                    'No collection history yet',
-                    style: TextStyle(
-                      fontSize: 16,
-                      color: Colors.grey.shade600,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ],
+          const SizedBox(height: 6),
+          Text(
+            'Shift: ${assignment.shiftDisplay} • ${assignment.typeDisplay}',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          Text(
+            'Operator: ${assignment.operatorName}',
+            style: TextStyle(
+              fontSize: 12,
+              color: Colors.grey.shade600,
+            ),
+          ),
+          if (assignment.customerName != null &&
+              assignment.customerName!.trim().isNotEmpty)
+            Text(
+              'Citizen: ${assignment.customerName}',
+              style: TextStyle(
+                fontSize: 12,
+                color: Colors.grey.shade600,
               ),
-            )
-          else
-            ...completedCustomers.map((c) {
-              final isCollected = c.status == _CustomerStatus.collected;
-              final color = isCollected ? Colors.green : Colors.orange;
-
-              return Container(
-                margin: const EdgeInsets.only(bottom: 12),
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: color, width: 1.5),
-                  color: color.withValues(alpha: 0.08),
+            ),
+          if (statusNote != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                statusNote,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.grey.shade700,
+                  fontWeight: FontWeight.w600,
                 ),
-                child: ListTile(
-                  leading: CircleAvatar(
-                    backgroundColor: color.withValues(alpha: 0.2),
-                    child: Icon(
-                      isCollected ? Icons.check_circle : Icons.warning_rounded,
-                      color: color,
-                    ),
-                  ),
-                  title: Text(
-                    c.name,
-                    style: const TextStyle(fontWeight: FontWeight.w700),
-                  ),
-                  subtitle: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      if (c.address.isNotEmpty) Text(c.address),
-                      if (c.status == _CustomerStatus.skipped &&
-                          c.skipReason != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 4),
-                          child: Text(
-                            'Reason: ${c.skipReason}',
-                            style: TextStyle(
-                              color: color,
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                    ],
-                  ),
-                  trailing: Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: color.withValues(alpha: 0.2),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      isCollected ? 'Collected' : 'Skipped',
-                      style: TextStyle(
-                        color: color,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
+              ),
+            ),
+          if (assignment.skipReason != null &&
+              assignment.skipReason!.trim().isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 6),
+              child: Text(
+                'Reason: ${assignment.skipReason}',
+                style: TextStyle(
+                  fontSize: 12,
+                  color: Colors.orange.shade700,
+                  fontWeight: FontWeight.w600,
                 ),
-              );
-            }),
+              ),
+            ),
         ],
       ),
     );
@@ -2066,6 +2603,8 @@ class _AssignmentScreenState extends State<_AssignmentScreen> {
               customer.customerName?.trim().isNotEmpty == true
                   ? customer.customerName!
                   : customer.wardName;
+          final isDone = customer.status == _CustomerStatus.collected ||
+              customer.status == _CustomerStatus.skipped;
 
           return Container(
             padding: const EdgeInsets.all(14),
@@ -2115,7 +2654,7 @@ class _AssignmentScreenState extends State<_AssignmentScreen> {
                     Expanded(
                       child: ElevatedButton(
                         onPressed:
-                            customer.status == _CustomerStatus.collected
+                            isDone
                                 ? null
                                 : () async {
                                     await widget.onCollect(customer);
@@ -2149,7 +2688,7 @@ class _AssignmentScreenState extends State<_AssignmentScreen> {
                     const SizedBox(width: 8),
                     Expanded(
                       child: OutlinedButton(
-                        onPressed: customer.status == _CustomerStatus.skipped
+                        onPressed: isDone
                             ? null
                             : () async {
                                 await widget.onSkip(customer);

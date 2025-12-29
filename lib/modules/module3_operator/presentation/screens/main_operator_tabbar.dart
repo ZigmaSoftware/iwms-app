@@ -5,6 +5,7 @@ import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
+import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
@@ -39,11 +40,13 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
   OperatorNavTab _activeTab = OperatorNavTab.home;
   OperatorSessionDetails? _sessionDetails;
   DailyAssignmentModel? _selectedAssignment;
+  late final AssignmentRepository _assignmentRepository;
 
   @override
   void initState() {
     super.initState();
     _activeTab = widget.initialTab;
+    _assignmentRepository = getIt<AssignmentRepository>();
     _loadOperatorDetails();
   }
 
@@ -52,9 +55,52 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
     final user = await authRepository.getAuthenticatedUser();
     if (!mounted) return;
 
+    var session = _sessionFromUser(user);
+    session = await _applyAssignmentContext(session, user?.userId ?? '');
+    if (!mounted) return;
     setState(() {
-      _sessionDetails = _sessionFromUser(user);
+      _sessionDetails = session;
     });
+  }
+
+  Future<OperatorSessionDetails> _applyAssignmentContext(
+    OperatorSessionDetails session,
+    String operatorId,
+  ) async {
+    if (operatorId.trim().isEmpty) return session;
+    try {
+      final assignments =
+          await _assignmentRepository.fetchAssignmentsForOperator(
+        operatorId: operatorId.trim(),
+      );
+      if (assignments.isEmpty) return session;
+
+      DailyAssignmentModel? assignment;
+      for (final item in assignments) {
+        assignment ??= item;
+        if (item.isActive) {
+          assignment = item;
+          break;
+        }
+      }
+
+      if (assignment == null) return session;
+      final wardId = assignment.wardId.trim();
+      final wardName = assignment.ward.trim();
+      String wardLabel = session.wardLabel;
+
+      if (wardId.isNotEmpty && wardName.isNotEmpty && wardId != wardName) {
+        wardLabel = '$wardId • $wardName';
+      } else if (wardId.isNotEmpty) {
+        wardLabel = wardId;
+      } else if (wardName.isNotEmpty) {
+        wardLabel = wardName;
+      }
+
+      return session.copyWith(wardLabel: wardLabel);
+    } catch (_) {
+      return session;
+    }
   }
 
   OperatorSessionDetails _sessionFromUser(UserModel? user) {
@@ -98,16 +144,19 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         bloc.state is AuthStateAuthenticated
             ? (bloc.state as AuthStateAuthenticated).userName
             : null);
-             final emp_idFromState = context.select<AuthBloc, String?>((bloc) =>
+    final emp_idFromState = context.select<AuthBloc, String?>((bloc) =>
         bloc.state is AuthStateAuthenticated
             ? (bloc.state as AuthStateAuthenticated).emp_id
             : null);
-            final localizations = AppLocalizations.of(context);
+    final localizations = AppLocalizations.of(context);
+    final resolvedEmpId = (emp_idFromState?.trim().isNotEmpty == true)
+        ? emp_idFromState!
+        : (_sessionDetails?.operatoremp_id ?? "000");
     final session = (_sessionDetails ??
             OperatorSessionDetails(
               displayName: nameFromState ?? "Operator",
               operatorCode: "OP-000",
-              operatoremp_id: emp_idFromState!
+              operatoremp_id: resolvedEmpId,
             ))
         .copyWith(displayName: nameFromState ?? _sessionDetails?.displayName);
 

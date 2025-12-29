@@ -203,6 +203,7 @@ class AppRouter {
               latitude: extra['latitude'],
               longitude: extra['longitude'],
               skipBluetoothInit: extra['skipBluetoothInit'] == true,
+              assignmentId: extra['assignmentId']?.toString(),
             );
           },
         ),

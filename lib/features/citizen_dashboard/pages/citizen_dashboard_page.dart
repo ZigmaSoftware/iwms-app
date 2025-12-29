@@ -319,7 +319,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       QuickAction(
         label: localizations.quickActionCollectionDetails,
         assetPath: 'assets/icons/collection_details.png',
-        onTap: () => context.push(AppRoutePaths.citizenDriverDetails),
+        onTap: () => context.push(AppRoutePaths.citizenHistory),
       ),
       QuickAction(
         label: localizations.quickActionCollectionHistory,

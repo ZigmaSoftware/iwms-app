@@ -1,11 +1,14 @@
 import 'dart:convert';
 import 'dart:io' show File;
 import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
 import '../../../core/constants.dart';
 import '../../../core/di.dart';
+import '../../../logic/auth/auth_bloc.dart';
+import '../../../logic/auth/auth_state.dart';
 import '../../../shared/models/collection_history.dart';
 import '../../../shared/services/collection_history_service.dart';
 import '../../../router/app_router.dart';
@@ -71,8 +74,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
   List<CollectionHistoryEntry> _entriesForSelectedDate(
     List<CollectionHistoryEntry> entries,
+    {String? customerId}
   ) {
+    final trimmedCustomer = customerId?.trim() ?? '';
     return entries.where((entry) {
+      if (trimmedCustomer.isNotEmpty &&
+          entry.customerId.trim() != trimmedCustomer) {
+        return false;
+      }
       final date = entry.collectedAt;
       return date.year == _selectedDate.year &&
           date.month == _selectedDate.month &&
@@ -86,6 +95,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
         DateFormat('EEEE, MMM d, yyyy').format(_selectedDate);
     final formattedHeader = DateFormat('MMMM yyyy').format(_selectedDate);
     final localizations = AppLocalizations.of(context);
+    final authState = context.watch<AuthBloc>().state;
+    final customerId =
+        authState is AuthStateAuthenticated ? authState.userId : '';
 
     return Scaffold(
       appBar: AppBar(
@@ -106,7 +118,10 @@ class _CalendarScreenState extends State<CalendarScreen> {
       body: ValueListenableBuilder<List<CollectionHistoryEntry>>(
         valueListenable: _historyService.entriesNotifier,
         builder: (context, entries, _) {
-          final filtered = _entriesForSelectedDate(entries);
+          final filtered = _entriesForSelectedDate(
+            entries,
+            customerId: customerId,
+          );
           final totalWeightForDate =
               filtered.fold<double>(0, (sum, entry) => sum + entry.totalWeight);
 
@@ -130,28 +145,34 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           const Icon(Icons.calendar_today,
                               size: 28, color: kPrimaryColor),
                           const SizedBox(width: 16),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                localizations.selectDateLabel,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: kPlaceholderColor,
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  localizations.selectDateLabel,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: kPlaceholderColor,
+                                  ),
                                 ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                localizations.viewingDateLabel(formattedDate),
-                                style: const TextStyle(
-                                  fontSize: 18,
-                                  fontWeight: FontWeight.bold,
-                                  color: kTextColor,
+                                const SizedBox(height: 4),
+                                Text(
+                                  localizations.viewingDateLabel(formattedDate),
+                                  maxLines: 2,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: const TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: kTextColor,
+                                  ),
                                 ),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                          const Spacer(),
+                          const SizedBox(width: 8),
                           const Icon(Icons.arrow_forward_ios,
                               size: 18, color: kPlaceholderColor),
                         ],
@@ -162,6 +183,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 const SizedBox(height: 30),
                 Text(
                   localizations.collectionLogFor(formattedHeader),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: Theme.of(context).textTheme.titleLarge!.copyWith(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
@@ -242,6 +265,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
           children: [
             Text(
               localizations.collectedAtLabel(timeLabel),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
@@ -251,8 +276,17 @@ class _CalendarScreenState extends State<CalendarScreen> {
             const SizedBox(height: 4),
             Text(
               localizations.customerIdLabel(entry.customerId),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(color: kPlaceholderColor),
             ),
+            if (entry.customerName.trim().isNotEmpty)
+              Text(
+                'Citizen: ${entry.customerName}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: const TextStyle(color: kPlaceholderColor),
+              ),
             const SizedBox(height: 4),
             Text(
               localizations.entryTotalWeightLabel(
@@ -293,68 +327,92 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final typeLabel =
         '${section.type[0].toUpperCase()}${section.type.substring(1)} Waste';
 
-    return Row(
+    final imageWidget = ClipRRect(
+      borderRadius: BorderRadius.circular(8.0),
+      child: _buildSectionImage(section),
+    );
+
+    final detailColumn = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(8.0),
-          child: _buildSectionImage(section),
+        Text(
+          typeLabel,
+          maxLines: 2,
+          overflow: TextOverflow.ellipsis,
+          style: const TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: kTextColor,
+          ),
         ),
-        const SizedBox(width: 16),
-        Expanded(
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(
-                typeLabel,
-                style: const TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: kTextColor,
-                ),
+        const SizedBox(height: 4),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+          decoration: BoxDecoration(
+            color: color.withValues(alpha: 0.1),
+            border: Border.all(color: color),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Text(
+            weightDisplay,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          width: double.infinity,
+          child: OutlinedButton.icon(
+            onPressed: ((section.imagePath != null &&
+                        section.imagePath!.isNotEmpty) ||
+                    (section.imageBase64 != null &&
+                        section.imageBase64!.isNotEmpty))
+                ? () => _viewProof(context, section)
+                : null,
+            icon: const Icon(Icons.camera_alt_outlined, size: 20),
+            label: Text(
+              localizations.viewProofLabel,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+            ),
+            style: OutlinedButton.styleFrom(
+              foregroundColor: kPrimaryColor,
+              side: const BorderSide(color: kPrimaryColor),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
               ),
-              const SizedBox(height: 4),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.1),
-                  border: Border.all(color: color),
-                  borderRadius: BorderRadius.circular(8),
-                ),
-                child: Text(
-                  weightDisplay,
-                  style: TextStyle(
-                    color: color,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                  child: OutlinedButton.icon(
-                    onPressed: ((section.imagePath != null &&
-                                section.imagePath!.isNotEmpty) ||
-                          (section.imageBase64 != null &&
-                              section.imageBase64!.isNotEmpty))
-                      ? () => _viewProof(context, section)
-                      : null,
-                  icon: const Icon(Icons.camera_alt_outlined, size: 20),
-                  label: Text(localizations.viewProofLabel),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: kPrimaryColor,
-                    side: const BorderSide(color: kPrimaryColor),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                ),
-              ),
-            ],
+            ),
           ),
         ),
       ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final isCompact = constraints.maxWidth < 360;
+        if (isCompact) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              imageWidget,
+              const SizedBox(height: 12),
+              detailColumn,
+            ],
+          );
+        }
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            imageWidget,
+            const SizedBox(width: 16),
+            Expanded(child: detailColumn),
+          ],
+        );
+      },
     );
   }
 

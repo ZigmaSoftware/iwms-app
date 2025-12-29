@@ -111,7 +111,7 @@ class ProfileTab extends StatelessWidget {
               _ProfileTile(
                 icon: Icons.description_outlined,
                 label: localizations.collectionDetails,
-                onTap: () => context.push(AppRoutePaths.citizenDriverDetails),
+                onTap: () => context.push(AppRoutePaths.citizenHistory),
                 textColor: textColor,
                 highlightColor: highlightColor,
               ),
