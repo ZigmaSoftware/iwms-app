@@ -206,6 +206,7 @@ class _MapScreenState extends State<MapScreen> {
 
     return pts;
   }
+
   // POLYGON COLORS
   Color _polygonFillFor(String name) {
     final up = name.toUpperCase();
@@ -249,14 +250,14 @@ class _MapScreenState extends State<MapScreen> {
               final VehicleModel? selectedVehicle =
                   state is VehicleLoaded ? state.selectedVehicle : null;
 
-              final vehicleName =
-                  selectedVehicle?.registrationNumber ?? localizations.mapUnknownVehicle;
+              final vehicleName = selectedVehicle?.registrationNumber ??
+                  localizations.mapUnknownVehicle;
               final headline = selectedVehicle != null
                   ? localizations.mapVehicleHeadline(vehicleName)
                   : localizations.mapLiveHeadline;
 
-              final statusPrimary =
-                  selectedVehicle?.lastUpdated ?? localizations.mapRefreshingTelemetry;
+              final statusPrimary = selectedVehicle?.lastUpdated ??
+                  localizations.mapRefreshingTelemetry;
 
               final statusSecondary =
                   localizations.vehiclesActive(totalVehicles);
@@ -266,40 +267,39 @@ class _MapScreenState extends State<MapScreen> {
                   // -----------------------------------------------------------
                   // HEADER
                   // -----------------------------------------------------------
-              SizedBox(
-                height: headerHeight,
-                width: double.infinity,
-                child: TrackingHeroHeader(
-                  contextLabel:
-                      widget.vehicleNumber ?? localizations.mapGammaCollectionZone,
-                  headline: headline,
-                  statusPrimary: statusPrimary,
-                  statusSecondary: statusSecondary,
-                  statusContent: Padding(
-                    padding: const EdgeInsets.only(top: 8.0),
-                    child: _buildSearchBar(localizations),
-                  ),
-                  onBack: widget.showBackButton
-                      ? () {
-                          if (context.canPop()) {
-                            context.pop();
-                          } else {
+                  SizedBox(
+                    height: headerHeight,
+                    width: double.infinity,
+                    child: TrackingHeroHeader(
+                      contextLabel: widget.vehicleNumber ??
+                          localizations.mapGammaCollectionZone,
+                      headline: headline,
+                      statusPrimary: statusPrimary,
+                      statusSecondary: statusSecondary,
+                      statusContent: Padding(
+                        padding: const EdgeInsets.only(top: 8.0),
+                        child: _buildSearchBar(localizations),
+                      ),
+                      onBack: widget.showBackButton
+                          ? () {
+                              if (context.canPop()) {
+                                context.pop();
+                              } else {
                                 context.go(AppRoutePaths.citizenHome);
                               }
                             }
                           : null,
                       onRefresh: () {
-                        context
-                            .read<VehicleBloc>()
-                            .add(const VehicleFetchRequested(showLoading: true));
+                        context.read<VehicleBloc>().add(
+                            const VehicleFetchRequested(showLoading: true));
                       },
                     ),
                   ),
                   const SizedBox(height: 8),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child:
-                        _buildHeaderFilterSection(context, state, localizations),
+                    child: _buildHeaderFilterSection(
+                        context, state, localizations),
                   ),
                   const SizedBox(height: 8),
 
@@ -326,10 +326,8 @@ class _MapScreenState extends State<MapScreen> {
                           child: Stack(
                             children: [
                               _buildMap(context, state),
-
                               _buildMapStyleSelector(state, localizations),
                               _buildZoomControls(state),
-
                               AnimatedSwitcher(
                                 duration: const Duration(milliseconds: 200),
                                 child: selectedVehicle != null
@@ -338,21 +336,20 @@ class _MapScreenState extends State<MapScreen> {
                                             'selectedVehicleBubble'),
                                         alignment: Alignment.center,
                                         child: TrackingSpeechBubble(
-                                          message: localizations.mapVehicleEnRoute(
-                                            selectedVehicle.registrationNumber ??
+                                          message:
+                                              localizations.mapVehicleEnRoute(
+                                            selectedVehicle
+                                                    .registrationNumber ??
                                                 localizations.mapUnknownVehicle,
                                           ),
-                                          icon:
-                                              Icons.local_shipping_rounded,
+                                          icon: Icons.local_shipping_rounded,
                                         ),
                                       )
                                     : const SizedBox.shrink(),
                               ),
-
                               if (state is VehicleLoading)
                                 const Center(
                                     child: CircularProgressIndicator()),
-
                               if (state is VehicleError)
                                 Align(
                                   alignment: Alignment.topCenter,
@@ -368,8 +365,8 @@ class _MapScreenState extends State<MapScreen> {
                                     ),
                                   ),
                                 ),
-
-                              _buildVehicleInfoPanel(context, state, localizations),
+                              _buildVehicleInfoPanel(
+                                  context, state, localizations),
                             ],
                           ),
                         ),
@@ -446,9 +443,7 @@ class _MapScreenState extends State<MapScreen> {
           alignment: Alignment.bottomCenter,
           child: GestureDetector(
             onTap: () {
-              context
-                  .read<VehicleBloc>()
-                  .add(VehicleSelectionUpdated(v.id));
+              context.read<VehicleBloc>().add(VehicleSelectionUpdated(v.id));
             },
             child: _VehicleMarker(
               vehicle: v,
@@ -476,12 +471,10 @@ class _MapScreenState extends State<MapScreen> {
         initialZoom: 14.5,
         minZoom: 10,
         maxZoom: 18,
-        interactionOptions:
-            const InteractionOptions(flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+        interactionOptions: const InteractionOptions(
+            flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
         onTap: (tapPos, latlng) {
-          context
-              .read<VehicleBloc>()
-              .add(const VehicleSelectionUpdated(null));
+          context.read<VehicleBloc>().add(const VehicleSelectionUpdated(null));
         },
       ),
       children: [
@@ -528,11 +521,12 @@ class _MapScreenState extends State<MapScreen> {
       ],
     );
   }
+
   // ---------------------------------------------------------------------------
   // HEADER FILTER SECTION
   // ---------------------------------------------------------------------------
-  Widget _buildHeaderFilterSection(
-      BuildContext context, VehicleState state, AppLocalizations localizations) {
+  Widget _buildHeaderFilterSection(BuildContext context, VehicleState state,
+      AppLocalizations localizations) {
     final bloc = context.read<VehicleBloc>();
     VehicleFilter activeFilter = VehicleFilter.all;
 
@@ -546,13 +540,13 @@ class _MapScreenState extends State<MapScreen> {
         children: VehicleFilter.values.map((filter) {
           final isSelected = activeFilter == filter;
           final count = bloc.countVehiclesByFilter(filter);
-          final label =
-              '${localizations.vehicleFilterLabel(filter)} ($count)';
+          final label = '${localizations.vehicleFilterLabel(filter)} ($count)';
           final color = _filterColor(filter);
           final textColor =
               filter == VehicleFilter.all ? Colors.black87 : Colors.white;
-          final unselectedTint =
-              filter == VehicleFilter.all ? Colors.black26 : color.withValues(alpha: 0.22);
+          final unselectedTint = filter == VehicleFilter.all
+              ? Colors.black26
+              : color.withValues(alpha: 0.22);
 
           return Padding(
             padding: const EdgeInsets.only(right: 8),
@@ -568,20 +562,17 @@ class _MapScreenState extends State<MapScreen> {
               selected: isSelected,
               showCheckmark: false,
               selectedColor: color,
-              backgroundColor:
-                  isSelected
-                      ? color
-                      : (filter == VehicleFilter.all
-                          ? Colors.white.withValues(alpha: 0.95)
-                          : color.withValues(alpha: 0.12)),
+              backgroundColor: isSelected
+                  ? color
+                  : (filter == VehicleFilter.all
+                      ? Colors.white.withValues(alpha: 0.95)
+                      : color.withValues(alpha: 0.12)),
               side: BorderSide(
                 color: isSelected ? color : unselectedTint,
               ),
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity:
-                  const VisualDensity(horizontal: -2, vertical: -2),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
               onSelected: (_) => bloc.add(VehicleFilterUpdated(filter)),
             ),
           );
@@ -592,14 +583,14 @@ class _MapScreenState extends State<MapScreen> {
 
   Widget _buildSearchBar(AppLocalizations localizations) {
     return Container(
-      height: 37,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: Colors.white, // outer shell
         borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
+            color: Colors.black.withOpacity(0.06),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -608,23 +599,28 @@ class _MapScreenState extends State<MapScreen> {
       child: Row(
         children: [
           const Icon(Icons.search, color: Colors.black54, size: 18),
-          const SizedBox(width: 7),
+          const SizedBox(width: 6),
           Expanded(
             child: TextField(
-              style: const TextStyle(color: Colors.black87),
-              cursorColor: Colors.black54,
+              cursorColor: Colors.black, // ❌ no green cursor
+              style: const TextStyle(color: Colors.black),
+
               decoration: InputDecoration(
-                filled: true,
-                fillColor: Colors.white,
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 5),
+                isDense: true,
+                filled: true, // 🔥 KEY
+                fillColor: Colors.white, // 🔥 KEY
                 hintText: localizations.mapSearchHint,
-                hintStyle:
-                    const TextStyle(color: Color.fromARGB(137, 0, 0, 0)),
+                hintStyle: const TextStyle(
+                  color: Colors.black45,
+                  fontSize: 13,
+                ),
                 border: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                contentPadding: const EdgeInsets.symmetric(vertical: 8),
               ),
-              onChanged: (value) =>
-                  setState(() => _searchQuery = value.trim()),
+
+              onChanged: (v) => setState(() => _searchQuery = v.trim()),
             ),
           ),
           if (_searchQuery.isNotEmpty)
@@ -780,16 +776,17 @@ class _MapScreenState extends State<MapScreen> {
               Row(
                 children: [
                   Expanded(
-              child: Text(
-                vehicle.registrationNumber ?? localizations.mapUnknownVehicle,
+                    child: Text(
+                      vehicle.registrationNumber ??
+                          localizations.mapUnknownVehicle,
                       style: theme.textTheme.titleMedium?.copyWith(
                         fontWeight: FontWeight.w700,
                       ),
                     ),
                   ),
                   Container(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 10, vertical: 6),
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                     decoration: BoxDecoration(
                       color: statusColor.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(12),
@@ -878,44 +875,36 @@ class _VehicleMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = getVehicleStatusColor(vehicle.status);
-    final iconSize = isSelected ? 32.0 : 26.0;
+    final size = isSelected ? 44.0 : 36.0;
 
-    return Column(
-      children: [
-        AnimatedContainer(
-          duration: const Duration(milliseconds: 200),
-          height: iconSize,
-          width: iconSize,
-          child: Icon(
-            Icons.location_on_rounded,
-            color: statusColor,
-            size: iconSize,
-          ),
-        ),
-
-        if (isSelected)
-          Padding(
-            padding: const EdgeInsets.only(top: 4),
+    return AnimatedScale(
+      scale: isSelected ? 1.15 : 1.0,
+      duration: const Duration(milliseconds: 180),
+      child: Stack(
+        alignment: Alignment.center,
+        children: [
+          // Shadow (depth illusion)
+          Positioned(
+            bottom: 2,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                vehicle.registrationNumber ?? '',
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: const TextStyle(
-                  color: kTextColor,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
+              width: size * 0.7,
+              height: 6,
+              // decoration: BoxDecoration(
+              //   color: Colors.black.withOpacity(0.25),
+              //   borderRadius: BorderRadius.circular(50),
+              // ),
             ),
           ),
-      ],
+
+          // 3D Vehicle
+          Image.asset(
+            'assets/images/truck_3d.png',
+            width: size,
+            height: size,
+            fit: BoxFit.contain,
+          ),
+        ],
+      ),
     );
   }
 }

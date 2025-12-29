@@ -329,7 +329,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       QuickAction(
         label: localizations.quickActionRaiseGrievance,
         assetPath: 'assets/icons/raise_grievance.png',
-        onTap: () => _showComingSoon(context, 'Rating feature'),
+        onTap: () => context.push(AppRoutePaths.citizenGrievanceChat),
       ),
       QuickAction(
         label: localizations.quickActionRateCollector,
