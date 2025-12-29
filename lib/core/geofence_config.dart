@@ -3,9 +3,7 @@ import 'package:latlong2/latlong.dart';
 /// Centralised configuration for static geofences used inside the app.
 class GammaGeofenceConfig {
   const GammaGeofenceConfig._();
-
   static const String name = 'Gamma 1';
-
   /// Approximate centre point (used for map camera defaults).
   static final LatLng center = _polygon.fold<LatLng>(
     const LatLng(0, 0),
