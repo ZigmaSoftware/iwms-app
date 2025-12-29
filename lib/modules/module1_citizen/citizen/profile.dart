@@ -259,8 +259,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
                     label: 'Raise Grievance (Help Desk)',
                     textColor: textColor,
                     highlightColor: highlightColor,
-                    onTap: () =>
-                        _showComingSoon(context, 'Grievance redressal module'),
+                     onTap: () => context.push(AppRoutePaths.citizenGrievanceChat),
                   ),
                   const SizedBox(height: 12),
                   _LogoutTile(
