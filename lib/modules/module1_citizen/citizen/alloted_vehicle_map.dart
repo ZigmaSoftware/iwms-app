@@ -997,15 +997,15 @@ class _AssignedVehicleMarker extends StatelessWidget {
       decoration: BoxDecoration(
         shape: BoxShape.circle,
         boxShadow: [
-          BoxShadow(
-            color: shadowColor,
-            blurRadius: 12,
-            offset: const Offset(0, 6),
-          ),
+          // BoxShadow(
+          //   color: shadowColor,
+          //   blurRadius: 12,
+          //   offset: const Offset(0, 6),
+          // ),
         ],
       ),
       child: Image.asset(
-        'assets/images/marker.png',
+        'assets/images/truck_3d.png',
         fit: BoxFit.contain,
       ),
     );

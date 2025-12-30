@@ -890,7 +890,7 @@ class _VehicleMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = isSelected ? 44.0 : 36.0;
+    final size = isSelected ? 40.0 : 30.0;
 
     return AnimatedScale(
       scale: isSelected ? 1.15 : 1.0,
