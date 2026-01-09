@@ -18,3 +18,17 @@ class AuthDio {
       ),
     );
 }
+
+Future<Map<String, String>> authHeader() async {
+  final token = await AuthTokenProvider.getToken();
+
+  final headers = <String, String>{
+    "Accept": "application/json",
+  };
+
+  if (token != null && token.isNotEmpty) {
+    headers["Authorization"] = "Bearer $token";
+  }
+
+  return headers;
+}

@@ -1,17 +1,10 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
+import 'package:iwms_citizen_app/core/network/auth_dio.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
-
-const List<String> _primaryQuickActions = [
-  'Report issue',
-  'Schedule pickup',
-  'Payments',
-  'Pickup status',
-  'Waste tips',
-  'Collector info',
-  'Community alerts',
-  'Feedback',
-];
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ChatMessage {
   final String sender; // 'user' | 'bot'
@@ -34,6 +27,9 @@ class GrievanceChatScreen extends StatefulWidget {
 }
 
 class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
+  // ============================================================
+  // Chat state 
+  // ============================================================
   final List<ChatMessage> messages = [
     ChatMessage(
       sender: 'bot',
@@ -42,507 +38,544 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
     ),
     ChatMessage(
       sender: 'bot',
-      options: _primaryQuickActions,
+      text: 'Loading categories…',
+      typing: true,
     ),
   ];
 
   final TextEditingController _controller = TextEditingController();
 
+  // ============================================================
+  // Backend categories
+  // ============================================================
+  List<dynamic> _mainCategories = [];
+  List<dynamic> _subCategories = [];
+  List<dynamic> _activeSubCategories = [];
+
+  bool _categoriesLoaded = false;
+  bool _loadingCategories = false;
+
+  // ============================================================
   // Flow/context state
-  String _flow = 'idle'; // idle|issue|schedule|bin|payments|feedback
-  String _context = 'idle'; // awaiting_* or idle
+  // ============================================================
+  String _flow = 'dynamic_issue'; // only dynamic flow
+  String _context =
+      'awaiting_main_category'; // awaiting_main_category|awaiting_sub_category|awaiting_details|awaiting_address
   final Map<String, String> _form = {};
   int _ticketSeq = 1001;
+
   bool _inputEnabled = false;
+  bool _awaitingConfirmation = false;
+
+  // ============================================================
+  // INIT
+  // ============================================================
+  @override
+  void initState() {
+    super.initState();
+    _loadCategories();
+  }
+
+  // ============================================================
+  // API CALLS (same endpoints you gave)
+  // ============================================================
+  Future<List<dynamic>> _decodeToList(String body) async {
+    final decoded = jsonDecode(body);
+
+    if (decoded is List) return decoded;
+
+    if (decoded is Map) {
+      if (decoded['results'] is List) return decoded['results'];
+      if (decoded['data'] is List) return decoded['data'];
+      if (decoded['items'] is List) return decoded['items'];
+    }
+
+    throw Exception('Unexpected JSON format: ${decoded.runtimeType}');
+  }
+
+  Future<List<dynamic>> fetchMainCategories() async {
+    final res = await http.get(
+      Uri.parse('http://192.168.4.97:5000/api/mobile/main-category/'),
+      headers: await authHeader(),
+    );
+
+    debugPrint('Main status: ${res.statusCode}');
+    debugPrint('Main body: ${res.body}');
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    }
+
+    return _decodeToList(res.body);
+  }
+
+  Future<List<dynamic>> fetchSubCategories() async {
+    final res = await http.get(
+      Uri.parse('http://192.168.4.97:5000/api/mobile/sub-category/'),
+      headers: await authHeader(),
+    );
+
+    debugPrint('Sub status: ${res.statusCode}');
+    debugPrint('Sub body: ${res.body}');
+
+    if (res.statusCode != 200) {
+      throw Exception('HTTP ${res.statusCode}: ${res.body}');
+    }
+
+    return _decodeToList(res.body);
+  }
+
+  Future<void> _loadCategories() async {
+    if (_loadingCategories) return;
+    setState(() => _loadingCategories = true);
+
+    try {
+      final results = await Future.wait([
+        fetchMainCategories(),
+        fetchSubCategories(),
+      ]);
+
+      _mainCategories = results[0];
+      _subCategories = results[1];
+
+      _categoriesLoaded = true;
+      _flow = 'dynamic_issue';
+      _context = 'awaiting_main_category';
+      _activeSubCategories = [];
+      _form.clear();
+
+      _replaceTypingWith(
+        ChatMessage(
+          sender: 'bot',
+          text: 'Select a category:',
+          options: _mainOptions(),
+        ),
+      );
+
+      _disableInput(); // chip-only for categories
+    } catch (e) {
+      _replaceTypingWith(
+        ChatMessage(
+          sender: 'bot',
+          text: 'Unable to load categories.',
+          options: const ['Retry'],
+        ),
+      );
+      _disableInput();
+    } finally {
+      if (mounted) setState(() => _loadingCategories = false);
+    }
+  }
+
+  // ============================================================
+  // CONFIRMATION
+  // ============================================================
+  void _askConfirmation() {
+    setState(() {
+      _awaitingConfirmation = true;
+      _inputEnabled = false;
+
+      messages.add(
+        ChatMessage(
+          sender: 'bot',
+          text: 'Is this your final description?',
+          options: const [
+            'No (Continue your typing)',
+            'Yes, I want to submit now',
+          ],
+        ),
+      );
+    });
+  }
 
   void _sendMessage([String? preset]) {
+    if (!_inputEnabled && preset == null) return;
+
     final text = (preset ?? _controller.text).trim();
     if (text.isEmpty) return;
-    if (preset == null && !_inputEnabled) return;
 
     setState(() {
-      if (preset != null) {
-        // User clicked a quick action → typing stays off until bot asks for input
-        _inputEnabled = false;
-        _controller.clear();
-      }
-
       messages.add(ChatMessage(sender: 'user', text: text));
-      if (preset == null) {
-        _controller.clear();
-      }
+      if (preset == null) _controller.clear();
     });
+
+    // Chips
+    if (preset != null) {
+      _botResponse(text);
+      return;
+    }
+
+    // Typed details should go through confirmation
+    if (_context == 'awaiting_details') {
+      _form['_draft'] = text;
+      _askConfirmation();
+      return;
+    }
+
     _botResponse(text);
   }
 
+  // ============================================================
+  // SUBMIT COMPLAINT TO BACKEND
+  // ============================================================
+  Future<void> _submitComplaint(String ticketNo) async {
+    try {
+      // Get customer user_id from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final customerId = prefs.getString('authenticated_user') ?? '';
+      
+      debugPrint('✅ Customer ID retrieved: $customerId');
+
+      
+      final body = {
+        'contact_no': '', // Auto-filled from customer profile
+        'address': _form['address'] ?? '',
+        'main_category': _form['main_category_name'] ?? '',
+        'sub_category': _form['sub_category_name'] ?? '',
+        'category': 'OTHER', // Default category - set based on main_category if needed
+        'details': _form['description'] ?? '',
+        // 'image': '', // Optional: for image upload later
+        'status': 'PROGRESSING',
+        'customer': customerId,
+        // customer, zone, ward, is_active, is_deleted will be set by backend
+      };
+
+      final headers = await authHeader();
+      headers['Content-Type'] = 'application/json';
+      debugPrint('Request headers: $headers');
+      debugPrint("AUTH => ${headers['Authorization']}");
+
+      debugPrint('Request body: $body');
+
+      final res = await http.post(
+        Uri.parse('http://192.168.4.97:5000/api/desktop/customers/complaints/'),
+        headers: headers,
+        body: jsonEncode(body),
+      );
+
+      debugPrint('Complaint submit status: ${res.statusCode}');
+      debugPrint('Complaint submit response: ${res.body}');
+      debugPrint('Response length: ${res.body.length} bytes');
+
+      if (res.statusCode != 201 && res.statusCode != 200) {
+        try {
+          final errorBody = jsonDecode(res.body);
+          debugPrint('❌ ERROR DETAILS: $errorBody');
+        } catch (e) {
+          debugPrint('❌ RAW ERROR: ${res.body}');
+        }
+        debugPrint('Failed to submit complaint');
+      } else {
+        debugPrint('✅ Complaint submitted successfully');
+      }
+    } catch (e) {
+      debugPrint('Error submitting complaint: $e');
+    }
+  }
+
+  // ============================================================
+  // BOT LOGIC (dynamic only)
+  // ============================================================
   Future<void> _botResponse(String userInput) async {
+    final normalized = userInput.trim().toLowerCase();
+
+    // ---------- CONFIRMATION HANDLER ----------
+    if (_awaitingConfirmation) {
+      if (normalized.startsWith('no')) {
+        _awaitingConfirmation = false;
+        setState(() => _inputEnabled = true);
+
+        _replaceTypingWith(
+          ChatMessage(sender: 'bot', text: 'Continue typing.'),
+        );
+        return;
+      }
+
+      if (normalized.startsWith('yes')) {
+        _awaitingConfirmation = false;
+
+        final finalText = _form['_draft'] ?? '';
+        _form.remove('_draft');
+
+        // store confirmed description
+        _form['description'] = finalText;
+
+        _context = 'awaiting_address';
+        _replaceTypingWith(
+          ChatMessage(
+            sender: 'bot',
+            text: 'Please share the address related to this issue.',
+          ),
+        );
+        return;
+      }
+    }
+
     setState(() => messages.add(ChatMessage(sender: 'bot', typing: true)));
     await Future.delayed(const Duration(milliseconds: 650));
 
-    final normalized = userInput.toLowerCase();
-
-    // Global resets
-    if (_containsAny(normalized, ['menu', 'main menu', 'home', 'go back'])) {
-      _flow = 'idle';
-      _context = 'idle';
-      _form.clear();
+    // ---------- Retry ----------
+    if (normalized == 'retry') {
       _replaceTypingWith(
         ChatMessage(
           sender: 'bot',
-          text: 'What would you like to do?',
-          options: _primaryQuickActions,
+          text: 'Reloading categories…',
+          typing: true,
+        ),
+      );
+      await _loadCategories();
+      return;
+    }
+
+    // ---------- MAIN MENU ----------
+    if (normalized == 'main menu' ||
+        normalized == 'menu' ||
+        normalized == 'home') {
+      _flow = 'dynamic_issue';
+      _context = 'awaiting_main_category';
+      _form.clear();
+      _activeSubCategories = [];
+
+      if (!_categoriesLoaded) {
+        _replaceTypingWith(
+          ChatMessage(sender: 'bot', text: 'Loading categories…', typing: true),
+        );
+        await _loadCategories();
+        return;
+      }
+
+      _replaceTypingWith(
+        ChatMessage(
+          sender: 'bot',
+          text: 'Select a category:',
+          options: _mainOptions(),
         ),
       );
       _disableInput();
       return;
     }
 
-    // Handle awaited inputs first
-    if (_context.startsWith('awaiting_')) {
-      if (_context == 'awaiting_address') {
-        _form['address'] = userInput;
-        if (_flow == 'issue') {
-          _context = 'awaiting_description';
-          _replaceTypingWith(
-            ChatMessage(
-              sender: 'bot',
-              text:
-                  'Please describe the issue (optional). Type "skip" to continue.',
-            ),
-          );
-          return;
-        }
-        if (_flow == 'schedule') {
-          _context = 'awaiting_datetime';
-          _replaceTypingWith(
-            ChatMessage(
-              sender: 'bot',
-              text: 'Preferred date/time for pickup? (e.g., 18 Nov, 10–12am)',
-            ),
-          );
-          return;
-        }
-        if (_flow == 'bin') {
-          _context = 'awaiting_bin_size';
-          _replaceTypingWith(
-            ChatMessage(
-              sender: 'bot',
-              text: 'What bin size do you need?',
-              options: const ['Small', 'Medium', 'Large', 'Go back'],
-            ),
-          );
-          return;
-        }
-        if (_flow == 'payments') {
-          _context = 'awaiting_account_id';
-          _replaceTypingWith(
-            ChatMessage(
-              sender: 'bot',
-              text: 'Please share your Account ID/Number.',
-            ),
-          );
-          return;
-        }
-      } else if (_context == 'awaiting_description') {
-        _form['description'] = normalized == 'skip' ? '' : userInput;
-        final id = _nextId('ISS');
+    // ---------- awaiting_main_category ----------
+    if (_context == 'awaiting_main_category') {
+      final main = _findMainByName(userInput);
+      if (main == null) {
         _replaceTypingWith(
           ChatMessage(
             sender: 'bot',
-            text:
-                '✅ Complaint submitted (Ticket $id).\nType: ${_form['issue_type']}\nAddress: ${_form['address']}\nWe’ll update you soon.',
-            options: const ['Track request', 'New request', 'Main menu'],
+            text: 'Please select a valid category:',
+            options: _mainOptions(),
           ),
         );
-        _resetFlow();
-        return;
-      } else if (_context == 'awaiting_datetime') {
-        _form['datetime'] = userInput;
-        final id = _nextId('SCH');
-        _replaceTypingWith(
-          ChatMessage(
-            sender: 'bot',
-            text:
-                '📅 Pickup scheduled (Ref $id).\nType: ${_form['pickup_type']}\nWhen: ${_form['datetime']}\nAddress: ${_form['address']}',
-            options: const ['Schedule another', 'Main menu'],
-          ),
-        );
-        _resetFlow();
-        return;
-      } else if (_context == 'awaiting_bin_size') {
-        final size = _matchOne(userInput, ['small', 'medium', 'large']);
-        if (size == null) {
-          _replaceTypingWith(
-            ChatMessage(
-              sender: 'bot',
-              text: 'Please choose a size.',
-              options: const ['Small', 'Medium', 'Large', 'Go back'],
-            ),
-          );
-          return;
-        }
-        _form['bin_size'] = _capitalize(size);
-        final id = _nextId('BIN');
-        _replaceTypingWith(
-          ChatMessage(
-            sender: 'bot',
-            text:
-                '🗑️ Bin request submitted (Ref $id).\nType: ${_form['bin_type']}\nSize: ${_form['bin_size']}\nAddress: ${_form['address']}',
-            options: const ['New request', 'Main menu'],
-          ),
-        );
-        _resetFlow();
-        return;
-      } else if (_context == 'awaiting_account_id') {
-        _form['account'] = userInput;
-        _replaceTypingWith(
-          ChatMessage(
-            sender: 'bot',
-            text:
-                '💳 Account ${_form['account']} found.\nCurrent bill: ₹320 due 20 Nov.\nNeed a receipt or have payment issues?',
-            options: const ['Get receipt', 'Payment issue', 'Main menu'],
-          ),
-        );
-        _context = 'idle';
-        return;
-      } else if (_context == 'awaiting_feedback') {
-        final id = _nextId('FDB');
-        _replaceTypingWith(
-          ChatMessage(
-            sender: 'bot',
-            text:
-                '🙏 Thanks for your feedback! (Ref $id)\nWe appreciate you helping us improve.',
-            options: const ['Main menu'],
-          ),
-        );
-        _resetFlow();
-        return;
-      } else if (_context == 'awaiting_track_id') {
-        _replaceTypingWith(
-          ChatMessage(
-            sender: 'bot',
-            text:
-                '🔎 Status for ${userInput.toUpperCase()}: In progress. We’ll notify you once resolved.',
-            options: const ['Main menu'],
-          ),
-        );
-        _resetFlow();
+        _disableInput();
         return;
       }
-    }
 
-    if (_containsAny(
-        normalized, ['pickup status', 'track pickup', 'pickup tracking'])) {
-      _replaceTypingWith(
-        ChatMessage(
-          sender: 'bot',
-          text:
-              'Your next pickup is scheduled for tomorrow morning. Reply with "Track request" if you need the ticket ID or "Main menu" for more options.',
-          options: const ['Track request', 'Main menu'],
-        ),
-      );
-      return;
-    }
+      final mainId = _safeId(main);
+      final mainName = _safeName(main);
 
-    if (_containsAny(
-        normalized, ['waste tips', 'recycling tips', 'waste best practices'])) {
-      _replaceTypingWith(
-        ChatMessage(
-          sender: 'bot',
-          text:
-              'Tip of the day: Rinse recyclables, bundle loose items, and place them outside before 7am. Small habits keep the city tidy!',
-          options: const ['Main menu'],
-        ),
-      );
-      return;
-    }
+      _form['main_category_id'] = mainId;
+      _form['main_category_name'] = mainName;
 
-    if (_containsAny(normalized,
-        ['collector info', 'collector details', 'collector contact'])) {
-      _replaceTypingWith(
-        ChatMessage(
-          sender: 'bot',
-          text:
-              'Your assigned collector is Ramesh (ID: C-17). He operates on the north-south corridor and is reachable via the in-app call button. Need anything else?',
-          options: const ['Main menu'],
-        ),
-      );
-      return;
-    }
+      _activeSubCategories =
+          _subCategories.where((s) => _safeMainIdFromSub(s) == mainId).toList();
 
-    if (_containsAny(
-        normalized, ['community alerts', 'service alerts', 'city alerts'])) {
-      _replaceTypingWith(
-        ChatMessage(
-          sender: 'bot',
-          text:
-              'Alert: Due to the city marathon on Sunday, pickups in the old town area will run two hours earlier. Keep bins accessible by 5am.',
-          options: const ['Main menu'],
-        ),
-      );
-      return;
-    }
-
-    // Route by high-level intent or quick actions
-    if (_containsAny(normalized, [
-      'report issue',
-      'complaint',
-      'missed',
-      'spill',
-      'overflow',
-      'broken bin',
-      'staff'
-    ])) {
-      _flow = 'issue';
-      _replaceTypingWith(
-        ChatMessage(
-          sender: 'bot',
-          text: 'Select the issue to report:',
-          options: const [
-            'Missed pickup',
-            'Spillage/Overflow',
-            'Broken bin',
-            'Staff behavior',
-            'Other',
-            'Main menu'
-          ],
-        ),
-      );
-      return;
-    }
-
-    if (_containsAny(normalized,
-        ['schedule pickup', 'pickup', 'bulk', 'garden', 'e-waste', 'ewaste'])) {
-      _flow = 'schedule';
-      _replaceTypingWith(
-        ChatMessage(
-          sender: 'bot',
-          text: 'What type of pickup do you need?',
-          options: const ['Bulk waste', 'Garden waste', 'E-waste', 'Main menu'],
-        ),
-      );
-      return;
-    }
-
-    if (_containsAny(normalized, ['bin request', 'new bin', 'replace bin'])) {
-      _flow = 'bin';
-      _replaceTypingWith(
-        ChatMessage(
-          sender: 'bot',
-          text: 'Choose a bin service:',
-          options: const ['New bin', 'Replace damaged bin', 'Main menu'],
-        ),
-      );
-      return;
-    }
-
-    if (_containsAny(normalized, ['payment', 'bill', 'receipt'])) {
-      _flow = 'payments';
-      _replaceTypingWith(
-        ChatMessage(
-          sender: 'bot',
-          text: 'Payments help — choose an option:',
-          options: const [
-            'View current bill',
-            'Payment issue',
-            'Get receipt',
-            'Main menu'
-          ],
-        ),
-      );
-      return;
-    }
-
-    if (_containsAny(normalized, ['feedback', 'suggestion'])) {
-      _flow = 'feedback';
-      _context = 'awaiting_feedback';
-      _replaceTypingWith(
-        ChatMessage(
-          sender: 'bot',
-          text: 'We’d love your feedback! Type your message and send.',
-        ),
-      );
-      return;
-    }
-
-    // Sub-intents inside flows (selected via chips or typed)
-    if (_flow == 'issue') {
-      final issue = _matchOne(
-        normalized,
-        [
-          'missed pickup',
-          'spillage/overflow',
-          'broken bin',
-          'staff behavior',
-          'other'
-        ],
-      );
-      if (issue != null) {
-        _form['issue_type'] = _pretty(issue);
-        _context = 'awaiting_address';
+      if (_activeSubCategories.isEmpty) {
+        _context = 'awaiting_details';
         _replaceTypingWith(
           ChatMessage(
             sender: 'bot',
-            text: 'Please share the address for this issue.',
+            text: 'Please describe the issue in detail.',
           ),
         );
         return;
       }
-      if (_containsAny(normalized, ['track request'])) {
-        _context = 'awaiting_track_id';
-        _replaceTypingWith(
-          ChatMessage(
-            sender: 'bot',
-            text: 'Please provide your Ticket/Ref ID.',
-          ),
-        );
-        return;
-      }
-    }
 
-    if (_flow == 'schedule') {
-      final type = _matchOne(
-        normalized,
-        ['bulk waste', 'garden waste', 'e-waste', 'ewaste'],
-      );
-      if (type != null) {
-        _form['pickup_type'] = _pretty(type == 'ewaste' ? 'e-waste' : type);
-        _context = 'awaiting_address';
-        _replaceTypingWith(
-          ChatMessage(
-            sender: 'bot',
-            text: 'Great. What’s the pickup address?',
-          ),
-        );
-        return;
-      }
-    }
-
-    if (_flow == 'bin') {
-      final kind = _matchOne(normalized, ['new bin', 'replace damaged bin']);
-      if (kind != null) {
-        _form['bin_type'] = _pretty(kind);
-        _context = 'awaiting_address';
-        _replaceTypingWith(
-          ChatMessage(
-            sender: 'bot',
-            text: 'Please share the delivery address.',
-          ),
-        );
-        return;
-      }
-    }
-
-    if (_flow == 'payments') {
-      if (_containsAny(normalized, ['view current bill'])) {
-        _context = 'awaiting_account_id';
-        _replaceTypingWith(
-          ChatMessage(
-            sender: 'bot',
-            text: 'Please share your Account ID/Number.',
-          ),
-        );
-        return;
-      }
-      if (_containsAny(normalized, ['get receipt'])) {
-        _replaceTypingWith(
-          ChatMessage(
-            sender: 'bot',
-            text:
-                '📨 Receipt sent to your registered email. Need anything else?',
-            options: const ['Main menu'],
-          ),
-        );
-        _resetFlow();
-        return;
-      }
-      if (_containsAny(normalized, ['payment issue', 'failed', 'declined'])) {
-        _replaceTypingWith(
-          ChatMessage(
-            sender: 'bot',
-            text:
-                'If an amount was debited, it auto-refunds in 3–5 days. For urgent help, reply with "View current bill" or "Main menu".',
-            options: const ['View current bill', 'Main menu'],
-          ),
-        );
-        return;
-      }
-    }
-
-    if (_containsAny(normalized, ['new request', 'schedule another'])) {
-      _flow = 'idle';
-      _context = 'idle';
-      _form.clear();
+      _context = 'awaiting_sub_category';
       _replaceTypingWith(
         ChatMessage(
           sender: 'bot',
-          text: 'What would you like to do next?',
-          options: _primaryQuickActions,
+          text: 'Select sub-category:',
+          options: _subOptions(),
         ),
       );
       _disableInput();
       return;
     }
 
-    if (_containsAny(normalized, ['track request'])) {
-      _context = 'awaiting_track_id';
+    // ---------- awaiting_sub_category ----------
+    if (_context == 'awaiting_sub_category') {
+      final sub = _findSubByName(userInput);
+      if (sub == null) {
+        _replaceTypingWith(
+          ChatMessage(
+            sender: 'bot',
+            text: 'Please select a valid sub-category:',
+            options: _subOptions(),
+          ),
+        );
+        _disableInput();
+        return;
+      }
+
+      _form['sub_category_id'] = _safeId(sub);
+      _form['sub_category_name'] = _safeName(sub);
+
+      _context = 'awaiting_details';
       _replaceTypingWith(
         ChatMessage(
           sender: 'bot',
-          text: 'Please provide your Ticket/Ref ID.',
+          text: 'Please describe the issue in detail.',
         ),
       );
       return;
     }
 
-    // Fallback
-    final fallbackOptions =
-        _context.startsWith('awaiting_') ? null : _primaryQuickActions;
+    // ---------- awaiting_details (typed) ----------
+    if (_context == 'awaiting_details') {
+      // should not reach here normally (typed goes to confirmation)
+      _form['_draft'] = userInput;
+      _askConfirmation();
+      return;
+    }
+
+    // ---------- awaiting_address ----------
+    if (_context == 'awaiting_address') {
+      _form['address'] = userInput;
+
+      final ticketNo = _nextId('ISS');
+
+      // Submit to backend
+      await _submitComplaint(ticketNo);
+
+      _replaceTypingWith(
+        ChatMessage(
+          sender: 'bot',
+          text: '✅ Complaint submitted (Ticket $ticketNo)\n'
+              'Category: ${_form['main_category_name'] ?? '-'}\n'
+              'Sub-Category: ${_form['sub_category_name'] ?? '-'}\n'
+              'Address: ${_form['address']}\n'
+              'Description: ${_form['description'] ?? '-'}',
+          options: const ['Main menu'],
+        ),
+      );
+
+      _disableInput();
+      _form.clear();
+      _activeSubCategories = [];
+      _context = 'awaiting_main_category';
+      return;
+    }
+
+    // ---------- fallback ----------
     _replaceTypingWith(
       ChatMessage(
         sender: 'bot',
-        text: 'I didn’t catch that. Try a quick action below.',
-        options: fallbackOptions,
+        text: 'Please use the options.',
+        options: _context == 'awaiting_main_category'
+            ? _mainOptions()
+            : _context == 'awaiting_sub_category'
+                ? _subOptions()
+                : const ['Main menu'],
       ),
     );
-    if (fallbackOptions != null && fallbackOptions.isNotEmpty) {
-      _disableInput();
-    }
-    _flow = 'idle';
-    _context = 'idle';
+    _disableInput();
   }
 
-  // Helpers
-  bool _containsAny(String text, List<String> keys) =>
-      keys.any((k) => text.contains(k));
+  // ============================================================
+  // Helpers (safe getters; handles Map json OR model objects)
+  // ============================================================
+  String _safeName(dynamic obj) {
+    try {
+      if (obj is Map) {
+        return (obj['name'] ??
+                obj['main_categoryName'] ??
+                obj['sub_categoryName'] ??
+                obj['main_category_name'] ??
+                obj['sub_category_name'] ??
+                '')
+            .toString();
+      }
+      return (obj.name ?? obj.mainCategoryName ?? obj.subCategoryName ?? '')
+          .toString();
+    } catch (_) {
+      return '';
+    }
+  }
 
-  String? _matchOne(String text, List<String> keys) {
-    for (final k in keys) {
-      if (text.contains(k)) return k;
+  String _safeId(dynamic obj) {
+    try {
+      if (obj is Map) return (obj['id'] ?? '').toString();
+      return (obj.id ?? '').toString();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String _safeMainIdFromSub(dynamic obj) {
+    try {
+      if (obj is Map) {
+        return (obj['mainCategory'] ??
+                obj['main_category_id'] ??
+                obj['mainCategoryId'] ??
+                obj['main_id'] ??
+                '')
+            .toString();
+      }
+      return (obj.mainCategory ?? obj.mainCategoryId ?? obj.main_category_id ?? obj.mainId ?? '')
+          .toString();
+    } catch (_) {
+      return '';
+    }
+  }
+
+  dynamic _findMainByName(String input) {
+    final n = input.trim().toLowerCase();
+    for (final m in _mainCategories) {
+      if (_safeName(m).trim().toLowerCase() == n) return m;
     }
     return null;
   }
 
+  dynamic _findSubByName(String input) {
+    final n = input.trim().toLowerCase();
+    for (final s in _activeSubCategories) {
+      if (_safeName(s).trim().toLowerCase() == n) return s;
+    }
+    return null;
+  }
+
+  List<String> _mainOptions() => _mainCategories
+      .map((e) => _safeName(e))
+      .where((s) => s.trim().isNotEmpty)
+      .toList();
+
+  List<String> _subOptions() => _activeSubCategories
+      .map((e) => _safeName(e))
+      .where((s) => s.trim().isNotEmpty)
+      .toList();
+
+  // ============================================================
+  // UI helpers
+  // ============================================================
   void _replaceTypingWith(ChatMessage next) {
     final idx = messages.lastIndexWhere((m) => m.typing);
-    final hasOptions = next.options?.isNotEmpty ?? false;
+
+    final expectsTextInput =
+        _context == 'awaiting_details' || _context == 'awaiting_address';
+
+    final sanitized = expectsTextInput
+        ? ChatMessage(sender: next.sender, text: next.text, options: null)
+        : next;
 
     setState(() {
       if (idx != -1) {
-        messages[idx] = next;
+        messages[idx] = sanitized;
       } else {
-        messages.add(next);
+        messages.add(sanitized);
       }
 
-      // Disable typing only while options are being shown
-      if (hasOptions) {
-        _inputEnabled = false;
-        _controller.clear();
-      } else {
-        // Enable typing only if bot message expects manual input
-        final awaitingInput = _context.startsWith('awaiting_');
-        _inputEnabled = awaitingInput;
-      }
+      _inputEnabled = expectsTextInput;
+      if (!expectsTextInput) _controller.clear();
     });
   }
 
@@ -553,23 +586,15 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
     });
   }
 
-  void _resetFlow() {
-    _flow = 'idle';
-    _context = 'idle';
-    _form.clear();
-  }
-
   String _nextId(String prefix) => '$prefix${_ticketSeq++}';
-  String _capitalize(String s) =>
-      s.isEmpty ? s : s[0].toUpperCase() + s.substring(1);
-  String _pretty(String s) => s
-      .split(' ')
-      .map((w) => w.isEmpty ? w : w[0].toUpperCase() + w.substring(1))
-      .join(' ');
 
+  // ============================================================
+  // UI
+  // ============================================================
   @override
   Widget build(BuildContext context) {
     final brand = Colors.green;
+
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -597,6 +622,7 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
                   final showOptions = msg.options != null &&
                       msg.options!.isNotEmpty &&
                       index == messages.length - 1;
+
                   final options = msg.options ?? const [];
 
                   return Align(
@@ -631,14 +657,11 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
-                                children: List.generate(options.length,
-                                    (optionIndex) {
-                                  final option = options[optionIndex];
+                                children: List.generate(options.length, (i) {
+                                  final option = options[i];
                                   return Padding(
                                     padding: EdgeInsets.only(
-                                      bottom: optionIndex == options.length - 1
-                                          ? 0
-                                          : 8,
+                                      bottom: i == options.length - 1 ? 0 : 8,
                                     ),
                                     child: ActionChip(
                                       label: Text(option),
@@ -679,7 +702,6 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
                         hintText: _inputEnabled
                             ? "Type your message..."
                             : "Choose an option to start",
-                        // border: InputBorder.none,
                       ),
                     ),
                   ),
@@ -693,8 +715,6 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
                 ],
               ),
             ),
-         
-         
           ],
         ),
       ),
@@ -705,6 +725,7 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
 class _TypingBubble extends StatefulWidget {
   final Color color;
   const _TypingBubble({required this.color});
+
   @override
   State<_TypingBubble> createState() => _TypingBubbleState();
 }
@@ -712,8 +733,10 @@ class _TypingBubble extends StatefulWidget {
 class _TypingBubbleState extends State<_TypingBubble>
     with SingleTickerProviderStateMixin {
   late final AnimationController _c = AnimationController(
-      vsync: this, duration: const Duration(milliseconds: 900))
-    ..repeat();
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat();
+
   @override
   void dispose() {
     _c.dispose();
@@ -744,7 +767,9 @@ class _TypingBubbleState extends State<_TypingBubble>
                   child: Transform.scale(
                     scale: scale,
                     child: const CircleAvatar(
-                        radius: 3, backgroundColor: Colors.grey),
+                      radius: 3,
+                      backgroundColor: Colors.grey,
+                    ),
                   ),
                 );
               },
