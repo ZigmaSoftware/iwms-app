@@ -4,6 +4,7 @@
 
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 
 import 'package:dio/dio.dart';
 import 'package:dynamic_tabbar/dynamic_tabbar.dart';
@@ -86,6 +87,22 @@ class _DriverAssignmentStop {
   String get baseAssignmentId => assignmentId.split('-').first;
 }
 
+class _TripPlannedStop {
+  final String plannedStopId;
+  final int sequence;
+  final LatLng location;
+  final String collectionPointId;
+  final String propertyType;
+
+  const _TripPlannedStop({
+    required this.plannedStopId,
+    required this.sequence,
+    required this.location,
+    required this.collectionPointId,
+    required this.propertyType,
+  });
+}
+
 enum _DriverTab { home, assignments, attendance, profile }
 
 class DriverHomePage extends StatefulWidget {
@@ -100,12 +117,19 @@ class _DriverHomePageState extends State<DriverHomePage> {
   late final AssignmentRepository _assignmentRepository;
   final MapController _mapController = MapController();
   List<_DriverAssignmentStop> _customers = [];
+  List<_TripPlannedStop> _tripStops = [];
+  List<LatLng> _tripPolyline = [];
+  String? _activeTripId;
+  String? _activeRoutePlanId;
+  String? _activeVehicleType;
   List<DailyAssignmentModel> _currentAssignments = [];
   List<DailyAssignmentModel> _historyAssignments = [];
   bool _loadingCustomers = true;
   bool _loadingAssignments = true;
+  bool _loadingTrip = false;
   String? _customerError;
   String? _assignmentError;
+  String? _tripError;
   final Set<String> _notifiedAssignmentIds = {};
   final Set<String> _notifiedCancelledAssignmentIds = {};
   bool _notificationsLoaded = false;
@@ -259,8 +283,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
     setState(() {
       _loadingCustomers = true;
       _loadingAssignments = true;
+      _loadingTrip = true;
       _customerError = null;
       _assignmentError = null;
+      _tripError = null;
     });
 
     try {
@@ -271,8 +297,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
         setState(() {
           _loadingCustomers = false;
           _loadingAssignments = false;
+          _loadingTrip = false;
           _customerError = 'User not authenticated';
           _assignmentError = 'User not authenticated';
+          _tripError = 'User not authenticated';
         });
         return;
       }
@@ -283,13 +311,16 @@ class _DriverHomePageState extends State<DriverHomePage> {
         setState(() {
           _loadingCustomers = false;
           _loadingAssignments = false;
+          _loadingTrip = false;
           _customerError = 'Missing driver id';
           _assignmentError = 'Missing driver id';
+          _tripError = 'Missing driver id';
         });
         return;
       }
 
       final dio = await authorizedDio();
+      await _loadTripRouteForDriver(driverId, dio: dio);
 
       final today = DateTime.now();
       final dateStr =
@@ -484,8 +515,120 @@ class _DriverHomePageState extends State<DriverHomePage> {
       setState(() {
         _loadingCustomers = false;
         _loadingAssignments = false;
+        _loadingTrip = false;
         _customerError = 'Failed to load assignments';
         _assignmentError = 'Failed to load assignments';
+        _tripError = _tripError ?? 'Failed to load trip route';
+      });
+    }
+  }
+
+  Future<void> _loadTripRouteForDriver(
+    String driverId, {
+    Dio? dio,
+  }) async {
+    try {
+      final client = dio ?? await authorizedDio();
+      final resp = await client.get(
+        ApiConfig.tripDriverRoute,
+        queryParameters: {'driver_id': driverId},
+      );
+
+      final data = resp.data;
+      if (data is! Map) {
+        setState(() {
+          _tripStops = [];
+          _tripPolyline = [];
+          _activeTripId = null;
+          _activeRoutePlanId = null;
+          _loadingTrip = false;
+        });
+        return;
+      }
+
+      final trip = data['trip'] as Map?;
+      final routePlan = data['route_plan'] as Map?;
+      final geometry = data['route_geometry'] as Map?;
+      final plannedStops = data['planned_stops'] is List
+          ? data['planned_stops'] as List
+          : const [];
+
+      final stops = <_TripPlannedStop>[];
+      for (final item in plannedStops) {
+        if (item is! Map) continue;
+        final lat = double.tryParse(item['latitude']?.toString() ?? '');
+        final lng = double.tryParse(item['longitude']?.toString() ?? '');
+        if (lat == null || lng == null) continue;
+        final sequenceRaw = item['planned_sequence_number'] ?? item['sequence'];
+        final sequence = int.tryParse(sequenceRaw?.toString() ?? '') ?? 0;
+        final plannedStopId = (item['planned_stop_id'] ??
+                item['planned_route_stop_id'] ??
+                item['unique_id'] ??
+                '')
+            .toString();
+        final pointId = (item['collection_point_id'] ?? '').toString();
+        final propertyType = (item['property_type'] ?? '').toString();
+
+        stops.add(
+          _TripPlannedStop(
+            plannedStopId: plannedStopId,
+            sequence: sequence > 0 ? sequence : stops.length + 1,
+            location: LatLng(lat, lng),
+            collectionPointId: pointId,
+            propertyType: propertyType,
+          ),
+        );
+      }
+
+      stops.sort((a, b) => a.sequence.compareTo(b.sequence));
+
+      final encoded = geometry?['encoded_polyline'];
+      List<LatLng> polyline = [];
+      if (encoded is String && encoded.trim().isNotEmpty) {
+        polyline = ORSService.decodePolyline(encoded.trim());
+      }
+      if (polyline.isEmpty && stops.isNotEmpty) {
+        polyline = stops.map((s) => s.location).toList();
+      }
+
+      setState(() {
+        _tripStops = stops;
+        _tripPolyline = polyline;
+        _activeTripId = trip?['unique_id']?.toString();
+        _activeRoutePlanId = routePlan?['unique_id']?.toString();
+        _activeVehicleType = routePlan?['vehicle_type']?.toString();
+        _loadingTrip = false;
+        _tripError = null;
+      });
+    } on DioException catch (e) {
+      final status = e.response?.statusCode;
+      if (status == 404) {
+        setState(() {
+          _tripStops = [];
+          _tripPolyline = [];
+          _activeTripId = null;
+          _activeRoutePlanId = null;
+          _loadingTrip = false;
+          _tripError = null;
+        });
+        return;
+      }
+      setState(() {
+        _tripStops = [];
+        _tripPolyline = [];
+        _activeTripId = null;
+        _activeRoutePlanId = null;
+        _loadingTrip = false;
+        _tripError = 'Failed to load trip route';
+      });
+    } catch (_) {
+      setState(() {
+        _tripStops = [];
+        _tripPolyline = [];
+        _activeTripId = null;
+        _activeRoutePlanId = null;
+        _loadingTrip = false;
+        _tripError = 'Failed to load trip route';
       });
     }
   }
@@ -678,6 +821,13 @@ class _DriverHomePageState extends State<DriverHomePage> {
           driverLocation: driverLocation,
           onCenter: () => _centerOnDriver(driverLocation),
           customers: _customers,
+          tripStops: _tripStops,
+          tripPolyline: _tripPolyline,
+          activeTripId: _activeTripId,
+          activeRoutePlanId: _activeRoutePlanId,
+          activeVehicleType: _activeVehicleType,
+          tripLoading: _loadingTrip,
+          tripError: _tripError,
           loading: _loadingCustomers,
           error: _customerError,
           onRefresh: _loadAssignmentsForDriver,
@@ -915,6 +1065,13 @@ class _HomeTab extends StatefulWidget {
     required this.driverLocation,
     required this.onCenter,
     required this.customers, // ✅ DECLARED
+    required this.tripStops,
+    required this.tripPolyline,
+    required this.activeTripId,
+    required this.activeRoutePlanId,
+    required this.activeVehicleType,
+    required this.tripLoading,
+    required this.tripError,
     required this.loading,
     required this.error,
     required this.onRefresh,
@@ -925,6 +1082,13 @@ class _HomeTab extends StatefulWidget {
   final LatLng driverLocation;
   final VoidCallback onCenter;
   final List<_DriverAssignmentStop> customers; // ✅ ADD THIS
+  final List<_TripPlannedStop> tripStops;
+  final List<LatLng> tripPolyline;
+  final String? activeTripId;
+  final String? activeRoutePlanId;
+  final String? activeVehicleType;
+  final bool tripLoading;
+  final String? tripError;
   final bool loading;
   final String? error;
   final Future<void> Function() onRefresh;
@@ -936,26 +1100,60 @@ class _HomeTab extends StatefulWidget {
 
 class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   List<LatLng> _orsRoute = [];
+  List<LatLng> _tripPolyline = [];
   double _driverBearing = 0.0;
   List<_DriverAssignmentStop> _customers = [];
+  List<_TripPlannedStop> _tripStops = [];
   _NavigationMode _navMode = _NavigationMode.overview;
   String? _activeNavigationId;
   late AnimationController _navAnimController;
+  LatLng _driverLocation = GammaGeofenceConfig.center;
+  bool _manualDriverOverride = false;
+  bool _isDraggingDriver = false;
+  Point<double>? _driverScreenPoint;
+  String? _tripId;
+  String? _routePlanId;
+  String? _vehicleType;
+  bool _rerouting = false;
+  String? _rerouteError;
+  int _tripRouteRequestId = 0;
+  List<String> _lastActualSequence = [];
+  bool _autoRerouteDone = false;
 
   @override
   void initState() {
     super.initState();
+    _driverLocation = _sanitizeDriverLocation(widget.driverLocation);
     _customers = widget.customers
         .where((c) =>
             c.status == _CustomerStatus.pending ||
             c.status == _CustomerStatus.later ||
             c.status == _CustomerStatus.navigating)
         .toList();
+    _tripStops = widget.tripStops;
+    _tripPolyline = widget.tripPolyline;
+    _tripId = widget.activeTripId;
+    _routePlanId = widget.activeRoutePlanId;
+    _vehicleType = widget.activeVehicleType;
+    _lastActualSequence = _tripStops
+        .map((stop) => stop.plannedStopId)
+        .where((id) => id.isNotEmpty)
+        .toList();
     _navAnimController = AnimationController(
       vsync: this,
       duration: _kNavigationTransitionDuration,
     );
     _computeRoute();
+    _computeTripRoadRoute();
+    _maybeAutoReroute();
+  }
+
+  LatLng _sanitizeDriverLocation(LatLng location) {
+    if (GammaGeofenceConfig.contains(location) ||
+        GammaGeofenceConfig.isNear(location)) {
+      return location;
+    }
+    return GammaGeofenceConfig.center;
   }
 
   @override
@@ -996,15 +1194,49 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   @override
   void didUpdateWidget(covariant _HomeTab oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.customers != widget.customers ||
-        oldWidget.driverLocation != widget.driverLocation) {
+    final customersChanged = oldWidget.customers != widget.customers;
+    final driverChanged = oldWidget.driverLocation != widget.driverLocation;
+    final tripChanged = oldWidget.tripStops != widget.tripStops ||
+        oldWidget.tripPolyline != widget.tripPolyline ||
+        oldWidget.activeTripId != widget.activeTripId ||
+        oldWidget.activeRoutePlanId != widget.activeRoutePlanId;
+
+    if (driverChanged && !_manualDriverOverride && !_isDraggingDriver) {
+      _driverLocation = _sanitizeDriverLocation(widget.driverLocation);
+    }
+
+    if (customersChanged) {
       _customers = widget.customers
           .where((c) =>
               c.status == _CustomerStatus.pending ||
               c.status == _CustomerStatus.later ||
               c.status == _CustomerStatus.navigating)
           .toList();
+    }
+
+    if (tripChanged) {
+      _tripStops = widget.tripStops;
+      _tripPolyline = widget.tripPolyline;
+      _tripId = widget.activeTripId;
+      _routePlanId = widget.activeRoutePlanId;
+      _vehicleType = widget.activeVehicleType;
+      _autoRerouteDone = false;
+      _lastActualSequence = _tripStops
+          .map((stop) => stop.plannedStopId)
+          .where((id) => id.isNotEmpty)
+          .toList();
+    }
+
+    if (customersChanged || driverChanged) {
       _computeRoute();
+    }
+
+    if (tripChanged || driverChanged) {
+      _computeTripRoadRoute();
+    }
+
+    if (tripChanged && !_autoRerouteDone) {
+      _maybeAutoReroute();
     }
   }
 
@@ -1019,7 +1251,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     }
 
     final List<List<double>> coords = [
-      [widget.driverLocation.longitude, widget.driverLocation.latitude],
+      [_driverLocation.longitude, _driverLocation.latitude],
       ..._customers.map((c) => [c.location.longitude, c.location.latitude]),
     ];
 
@@ -1059,8 +1291,23 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     final nextCustomer = _customers.first;
 
     final bounds = LatLngBounds.fromPoints([
-      widget.driverLocation,
+      _driverLocation,
       nextCustomer.location,
+    ]);
+
+    widget.mapController.fitCamera(
+      CameraFit.bounds(
+        bounds: bounds,
+        padding: const EdgeInsets.all(80),
+      ),
+    );
+  }
+
+  void _fitTripRoute() {
+    if (_tripStops.isEmpty) return;
+    final bounds = LatLngBounds.fromPoints([
+      _driverLocation,
+      ..._tripStops.map((stop) => stop.location),
     ]);
 
     widget.mapController.fitCamera(
@@ -1105,7 +1352,11 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     if (_navMode == _NavigationMode.navigating) {
       _animateToNavigationView();
     } else {
-      _fitDriverAndNextCustomer();
+      if (_customers.isEmpty && _tripStops.isNotEmpty) {
+        _fitTripRoute();
+      } else {
+        _fitDriverAndNextCustomer();
+      }
     }
   }
 
@@ -1132,13 +1383,17 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
 
   void _animateToOverview() {
     if (_customers.isEmpty) {
-      widget.mapController.move(widget.driverLocation, 15.0);
-      widget.mapController.rotate(0);
+      if (_tripStops.isNotEmpty) {
+        _fitTripRoute();
+      } else {
+        widget.mapController.move(_driverLocation, 15.0);
+        widget.mapController.rotate(0);
+      }
       return;
     }
 
     final allPoints = [
-      widget.driverLocation,
+      _driverLocation,
       ..._customers.map((c) => c.location),
     ];
 
@@ -1154,6 +1409,258 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       );
       widget.mapController.rotate(0);
     });
+  }
+
+  void _centerOnDriver() {
+    if (_manualDriverOverride) {
+      widget.mapController.move(_driverLocation, 15.0);
+    } else {
+      widget.onCenter();
+    }
+  }
+
+  void _startDriverDrag(DragStartDetails details) {
+    _isDraggingDriver = true;
+    _driverScreenPoint =
+        widget.mapController.camera.latLngToScreenPoint(_driverLocation);
+  }
+
+  void _updateDriverDrag(DragUpdateDetails details) {
+    if (_driverScreenPoint == null) return;
+    final nextPoint = Point<double>(
+      _driverScreenPoint!.x + details.delta.dx,
+      _driverScreenPoint!.y + details.delta.dy,
+    );
+    final nextLocation =
+        widget.mapController.camera.pointToLatLng(nextPoint);
+    setState(() {
+      _manualDriverOverride = true;
+      _driverLocation = nextLocation;
+    });
+    _driverScreenPoint = nextPoint;
+  }
+
+  void _endDriverDrag(DragEndDetails details) {
+    _isDraggingDriver = false;
+    _driverScreenPoint = null;
+    _computeRoute();
+    _rerouteTripFromDriver();
+  }
+
+  void _resetDriverLocation() {
+    setState(() {
+      _manualDriverOverride = false;
+      _driverLocation = _sanitizeDriverLocation(widget.driverLocation);
+    });
+    _computeRoute();
+  }
+
+  void _maybeAutoReroute() {
+    if (_autoRerouteDone) return;
+    if (widget.tripLoading || widget.tripError != null) return;
+    if (_tripStops.length < 2) return;
+    if (_vehicleType == null || _vehicleType!.trim().isEmpty) return;
+    if (_tripId == null || _tripId!.isEmpty) return;
+
+    _autoRerouteDone = true;
+    _rerouteTripFromDriver();
+  }
+
+  bool _isSameSequence(List<String> next, List<String> previous) {
+    if (next.length != previous.length) return false;
+    for (var i = 0; i < next.length; i++) {
+      if (next[i] != previous[i]) return false;
+    }
+    return true;
+  }
+
+  Future<void> _postActualSequence(
+    String tripId,
+    List<_TripPlannedStop> stops,
+  ) async {
+    final ordered = stops
+        .where((stop) => stop.plannedStopId.isNotEmpty)
+        .toList();
+    if (ordered.isEmpty) return;
+
+    final dio = await authorizedDio();
+    for (var i = 0; i < ordered.length; i++) {
+      final stop = ordered[i];
+      await dio.post(
+        ApiConfig.tripExecutionStops,
+        data: {
+          'trip_id': tripId,
+          'planned_route_stop_id': stop.plannedStopId,
+          'actual_sequence_number': i + 1,
+          'gps_lat': _driverLocation.latitude,
+          'gps_lng': _driverLocation.longitude,
+        },
+      );
+    }
+  }
+
+  Future<void> _computeTripRoadRoute({bool force = false}) async {
+    if (_tripStops.isEmpty) return;
+
+    final needsRoad = _tripPolyline.isEmpty ||
+        _tripPolyline.length <= _tripStops.length + 1;
+    if (!force && !needsRoad) return;
+
+    final requestId = ++_tripRouteRequestId;
+    final orderedStops = _tripStops.map((s) => s.location).toList();
+    final route = await ORSService.fetchRoadRoute(
+      driver: _driverLocation,
+      stops: orderedStops,
+    );
+
+    if (!mounted || requestId != _tripRouteRequestId) return;
+    if (route.isEmpty) return;
+
+    setState(() {
+      _tripPolyline = route;
+    });
+  }
+
+  Future<void> _rerouteTripFromDriver() async {
+    if (_rerouting) return;
+    if (_tripStops.isEmpty) return;
+    final tripId = _tripId;
+    final vehicleType = _vehicleType;
+    if (tripId == null || tripId.isEmpty) return;
+    if (vehicleType == null || vehicleType.trim().isEmpty) return;
+
+    final collectionPointIds = _tripStops
+        .map((stop) => stop.collectionPointId)
+        .where((id) => id.isNotEmpty)
+        .toList();
+
+    if (collectionPointIds.isEmpty) return;
+
+    setState(() {
+      _rerouting = true;
+      _rerouteError = null;
+    });
+
+    try {
+      final dio = await authorizedDio();
+      final payload = <String, dynamic>{
+        'trip_id': tripId,
+        'start_lat': _driverLocation.latitude,
+        'start_lng': _driverLocation.longitude,
+        'collection_point_ids': collectionPointIds,
+        'vehicle_type': vehicleType,
+        'generated_by': 'ORS',
+        'generated_reason': 'MANUAL',
+      };
+
+      final parentRoutePlanId = _routePlanId;
+      if (parentRoutePlanId != null && parentRoutePlanId.isNotEmpty) {
+        payload['parent_route_plan_id'] = parentRoutePlanId;
+      }
+
+      final resp =
+          await dio.post(ApiConfig.tripRoutePlanGenerate, data: payload);
+      final data = resp.data;
+
+      final plan = data is Map ? data['route_plan'] : null;
+      final plannedStops = data is Map && data['planned_stops'] is List
+          ? data['planned_stops'] as List
+          : const [];
+
+      final stops = <_TripPlannedStop>[];
+      for (final item in plannedStops) {
+        if (item is! Map) continue;
+        final lat = double.tryParse(
+          item['collection_point_latitude']?.toString() ?? '',
+        );
+        final lng = double.tryParse(
+          item['collection_point_longitude']?.toString() ?? '',
+        );
+        if (lat == null || lng == null) continue;
+        final seqRaw = item['planned_sequence_number'] ?? item['sequence'];
+        final sequence = int.tryParse(seqRaw?.toString() ?? '') ?? 0;
+        final plannedStopId = (item['unique_id'] ?? '').toString();
+        final pointId = (item['collection_point_id'] ?? '').toString();
+        final propertyType = (item['collection_point_type'] ?? '').toString();
+
+        stops.add(
+          _TripPlannedStop(
+            plannedStopId: plannedStopId,
+            sequence: sequence > 0 ? sequence : stops.length + 1,
+            location: LatLng(lat, lng),
+            collectionPointId: pointId,
+            propertyType: propertyType,
+          ),
+        );
+      }
+
+      stops.sort((a, b) => a.sequence.compareTo(b.sequence));
+
+      final geometry =
+          data is Map && data['route_geometry'] is Map ? data['route_geometry'] as Map : null;
+      final encoded = geometry?['encoded_polyline'];
+      List<LatLng> polyline = [];
+      if (encoded is String && encoded.trim().isNotEmpty) {
+        polyline = ORSService.decodePolyline(encoded.trim());
+      }
+      if (polyline.isEmpty && stops.isNotEmpty) {
+        polyline = stops.map((s) => s.location).toList();
+      }
+
+      if (!mounted) return;
+      final newSequence = stops
+          .map((stop) => stop.plannedStopId)
+          .where((id) => id.isNotEmpty)
+          .toList();
+      final sequenceChanged =
+          newSequence.isNotEmpty && !_isSameSequence(newSequence, _lastActualSequence);
+
+      setState(() {
+        _tripStops = stops.isEmpty ? _tripStops : stops;
+        _tripPolyline = polyline;
+        _routePlanId = plan is Map ? plan['unique_id']?.toString() : _routePlanId;
+        _rerouting = false;
+      });
+
+      if (sequenceChanged && tripId.isNotEmpty) {
+        try {
+          await _postActualSequence(tripId, stops);
+          if (!mounted) return;
+          setState(() {
+            _lastActualSequence = newSequence;
+          });
+        } catch (_) {
+          if (!mounted) return;
+          setState(() {
+            _rerouteError = 'Failed to log actual sequence';
+          });
+        }
+      }
+
+      if (stops.isNotEmpty) {
+        _fitTripRoute();
+      }
+      await _computeTripRoadRoute(force: true);
+    } on DioException catch (e) {
+      final message = _extractDioMessage(e) ?? 'Reroute failed';
+      if (!mounted) return;
+      setState(() {
+        _rerouting = false;
+        _rerouteError = message;
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+      );
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _rerouting = false;
+        _rerouteError = 'Reroute failed';
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Reroute failed'), backgroundColor: Colors.redAccent),
+      );
+    }
   }
 
   Future<void> _reportCompletion(_DriverAssignmentStop customer) async {
@@ -1206,8 +1713,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
           'assignment': assignmentId,
           if (driverId != null) 'driver': driverId,
           'action': 'collection_completed',
-          'latitude': widget.driverLocation.latitude,
-          'longitude': widget.driverLocation.longitude,
+          'latitude': _driverLocation.latitude,
+          'longitude': _driverLocation.longitude,
         },
       );
     } catch (_) {
@@ -1435,8 +1942,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
           'assignment': assignmentId,
           'action': 'skipped',
           'skip_reason': reason,
-          'latitude': widget.driverLocation.latitude,
-          'longitude': widget.driverLocation.longitude,
+          'latitude': _driverLocation.latitude,
+          'longitude': _driverLocation.longitude,
         },
       );
     } catch (e) {
@@ -1468,7 +1975,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   String _getDistanceToCustomer(_DriverAssignmentStop customer) {
     final distance = const Distance().as(
       LengthUnit.Meter,
-      widget.driverLocation,
+      _driverLocation,
       customer.location,
     );
 
@@ -1502,7 +2009,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
             child: FlutterMap(
               mapController: widget.mapController,
               options: MapOptions(
-                initialCenter: widget.driverLocation,
+                initialCenter: _driverLocation,
                 initialZoom: 14.5,
                 minZoom: 10,
                 maxZoom: 18,
@@ -1529,34 +2036,60 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                       ),
                     ],
                   ),
-                if (_customers.isNotEmpty)
-                  MarkerLayer(
-                    markers: [
-                      Marker(
-                        width: 42,
-                        height: 42,
-                        point: _orsRoute.isNotEmpty
-                            ? _orsRoute.first
-                            : widget.driverLocation,
+                if (_tripPolyline.isNotEmpty)
+                  PolylineLayer(
+                    polylines: [
+                      Polyline(
+                        points: _tripPolyline,
+                        color: Colors.deepOrangeAccent,
+                        strokeWidth: 4.0,
+                      ),
+                    ],
+                  ),
+                MarkerLayer(
+                  markers: [
+                    Marker(
+                      width: 42,
+                      height: 42,
+                      point: _orsRoute.isNotEmpty
+                          ? _orsRoute.first
+                          : _driverLocation,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.opaque,
+                        onPanStart: _startDriverDrag,
+                        onPanUpdate: _updateDriverDrag,
+                        onPanEnd: _endDriverDrag,
                         child: _DriverMarker(
                           isActive: true,
                           rotation: _driverBearing,
                         ),
                       ),
-                      ..._customers.map(
-                        (c) => Marker(
-                          width: 36,
-                          height: 36,
-                          point: c.location,
-                          child: _HouseMarker(
-                            color: _statusColor(c.status),
-                            label: c.name.substring(0, 1).toUpperCase(),
-                            pulse: c.id == _activeNavigationId,
-                          ),
+                    ),
+                    ..._customers.map(
+                      (c) => Marker(
+                        width: 36,
+                        height: 36,
+                        point: c.location,
+                        child: _HouseMarker(
+                          color: _statusColor(c.status),
+                          label: c.name.substring(0, 1).toUpperCase(),
+                          pulse: c.id == _activeNavigationId,
                         ),
                       ),
-                    ],
-                  ),
+                    ),
+                    ..._tripStops.map(
+                      (stop) => Marker(
+                        width: 34,
+                        height: 34,
+                        point: stop.location,
+                        child: _TripStopMarker(
+                          sequence: stop.sequence,
+                          propertyType: stop.propertyType,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
               ],
             ),
           ),
@@ -1576,7 +2109,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                 if (!isNavigating) ...[
                   _MapButton(
                     icon: Icons.my_location_rounded,
-                    onPressed: widget.onCenter,
+                    onPressed: _centerOnDriver,
                     tooltip: 'Center on me',
                   ),
                   const SizedBox(height: 8),
@@ -1588,10 +2121,32 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                     },
                     tooltip: 'Refresh',
                   ),
+                  if (_manualDriverOverride) ...[
+                    const SizedBox(height: 8),
+                    _MapButton(
+                      icon: Icons.gps_fixed_rounded,
+                      onPressed: _resetDriverLocation,
+                      tooltip: 'Reset GPS',
+                    ),
+                  ],
                 ],
               ],
             ),
           ),
+
+          if (_tripStops.isNotEmpty || widget.tripLoading || widget.tripError != null)
+            Positioned(
+              top: 64,
+              left: 12,
+              right: 12,
+              child: _TripRouteSummaryCard(
+                tripId: _tripId ?? widget.activeTripId,
+                routePlanId: _routePlanId ?? widget.activeRoutePlanId,
+                stopCount: _tripStops.length,
+                loading: widget.tripLoading || _rerouting,
+                error: _rerouteError ?? widget.tripError,
+              ),
+            ),
 
           // Navigation header
           if (navigationCustomer != null)
@@ -3054,6 +3609,158 @@ class _HouseMarker extends StatelessWidget {
           fontSize: 12,
         ),
       ),
+    );
+  }
+}
+
+class _TripStopMarker extends StatelessWidget {
+  const _TripStopMarker({
+    required this.sequence,
+    required this.propertyType,
+  });
+
+  final int sequence;
+  final String propertyType;
+
+  Color _colorForType() {
+    switch (propertyType.toLowerCase()) {
+      case 'industry':
+        return const Color(0xFFFB8C00);
+      case 'commercial':
+        return const Color(0xFF6D4C41);
+      case 'house':
+      default:
+        return const Color(0xFF00897B);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = _colorForType();
+    return Container(
+      decoration: BoxDecoration(
+        color: color,
+        shape: BoxShape.circle,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.2),
+            blurRadius: 4,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      alignment: Alignment.center,
+      child: Text(
+        sequence.toString(),
+        style: const TextStyle(
+          color: Colors.white,
+          fontWeight: FontWeight.w700,
+          fontSize: 12,
+        ),
+      ),
+    );
+  }
+}
+
+class _TripRouteSummaryCard extends StatelessWidget {
+  const _TripRouteSummaryCard({
+    required this.tripId,
+    required this.routePlanId,
+    required this.stopCount,
+    required this.loading,
+    required this.error,
+  });
+
+  final String? tripId;
+  final String? routePlanId;
+  final int stopCount;
+  final bool loading;
+  final String? error;
+
+  @override
+  Widget build(BuildContext context) {
+    if (loading) {
+      return _buildContainer(
+        child: Row(
+          children: const [
+            SizedBox(
+              height: 18,
+              width: 18,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            ),
+            SizedBox(width: 12),
+            Expanded(
+              child: Text(
+                'Loading trip route...',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (error != null) {
+      return _buildContainer(
+        child: Text(
+          error!,
+          style: const TextStyle(
+            color: Colors.redAccent,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+      );
+    }
+
+    if (tripId == null && stopCount == 0) {
+      return const SizedBox.shrink();
+    }
+
+    return _buildContainer(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Trip Route Plan',
+            style: TextStyle(
+              fontWeight: FontWeight.w700,
+              fontSize: 13,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            'Trip: ${tripId ?? 'N/A'}',
+            style: const TextStyle(fontSize: 12),
+          ),
+          if (routePlanId != null)
+            Text(
+              'Route Plan: $routePlanId',
+              style: const TextStyle(fontSize: 12),
+            ),
+          Text(
+            'Stops: $stopCount',
+            style: const TextStyle(fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildContainer({required Widget child}) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.08),
+            blurRadius: 8,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: child,
     );
   }
 }

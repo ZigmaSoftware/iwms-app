@@ -264,7 +264,7 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
   /// Optional API request (non-blocking)
   /// ---------------------------------------------------------
   Future<Map<String, dynamic>?> _fetchCustomer(String uid) async {
-    final uri = Uri.parse("${ApiConfig.mobileBase}waste/customer/")
+    final uri = Uri.parse("${ApiConfig.desktopBase}waste/customer/")
         .replace(queryParameters: {"unique_id": uid});
     try {
       final resp = await http.get(uri).timeout(const Duration(seconds: 10));

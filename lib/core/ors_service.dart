@@ -117,6 +117,58 @@ class ORSService {
     return _buildPolyline([driver, ...stops]);
   }
 
+  // ---------------------------------------------------------------------------
+  // ROAD ROUTE FOR ORDERED STOPS (NO RE-SEQUENCING)
+  // ---------------------------------------------------------------------------
+  static Future<List<LatLng>> fetchRoadRoute({
+    required LatLng driver,
+    required List<LatLng> stops,
+  }) async {
+    if (stops.isEmpty) return [];
+
+    final coords = [
+      [driver.longitude, driver.latitude],
+      ...stops.map((s) => [s.longitude, s.latitude]),
+    ];
+
+    try {
+      final resp = await http
+          .post(
+            Uri.parse('https://api.openrouteservice.org/v2/directions/driving-car/geojson'),
+            headers: {
+              'Authorization': _key,
+              'Content-Type': 'application/json',
+            },
+            body: jsonEncode({"coordinates": coords}),
+          )
+          .timeout(const Duration(seconds: 20));
+
+      if (resp.statusCode != 200) {
+        debugPrint('ORS ROAD ROUTE ERROR ${resp.statusCode}: ${resp.body}');
+        return [];
+      }
+
+      final data = jsonDecode(resp.body);
+      final features = data is Map ? data['features'] : null;
+      if (features is! List || features.isEmpty) return [];
+
+      final geometry = features[0]?['geometry']?['coordinates'];
+      if (geometry is! List || geometry.isEmpty) return [];
+
+      return geometry
+          .map<LatLng>(
+            (c) => LatLng(
+              (c[1] as num).toDouble(),
+              (c[0] as num).toDouble(),
+            ),
+          )
+          .toList();
+    } catch (e) {
+      debugPrint('ORS ROAD ROUTE EXCEPTION: $e');
+      return [];
+    }
+  }
+
   static Future<List<LatLng>?> _tryOptimization(
     LatLng driver,
     List<LatLng> stops,
@@ -263,7 +315,7 @@ class ORSService {
           if (firstRoute['geometry'] is String) {
             debugPrint('GEOMETRY: Found encoded polyline string');
             final encoded = firstRoute['geometry'] as String;
-            return _decodePolyline(encoded);
+            return decodePolyline(encoded);
           }
           
           // Check for geometry object
@@ -296,7 +348,7 @@ class ORSService {
   // ---------------------------------------------------------------------------
   // POLYLINE DECODER (for encoded geometry strings)
   // ---------------------------------------------------------------------------
-  static List<LatLng> _decodePolyline(String encoded) {
+  static List<LatLng> decodePolyline(String encoded) {
     final List<LatLng> points = [];
     int index = 0;
     int lat = 0;

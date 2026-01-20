@@ -18,6 +18,7 @@ import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/assignment_details_screen.dart';
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/citizen_collection_screen.dart';
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/staff_management_screen.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/trip_assignment_screen.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'assign_form_sheet.dart';
 import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
@@ -2277,6 +2278,18 @@ class MoreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_MoreItem>[
       _MoreItem(Icons.person_outline, 'Profile'),
+      _MoreItem(
+        Icons.route_outlined,
+        'Trip Assignment',
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const TripAssignmentScreen(),
+            ),
+          );
+        },
+      ),
       _MoreItem(
         Icons.people_alt_outlined,
         'Staffs',

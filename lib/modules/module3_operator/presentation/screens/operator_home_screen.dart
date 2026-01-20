@@ -311,7 +311,7 @@ class _NextStopSectionState extends State<_NextStopSection> {
 
   Future<String?> _resolveCustomerId(String scannedId) async {
     try {
-      final uri = Uri.parse("${ApiConfig.mobileBase}waste/customer/")
+      final uri = Uri.parse("${ApiConfig.desktopBase}waste/customer/")
           .replace(queryParameters: {"unique_id": scannedId});
       final resp = await http.get(uri).timeout(const Duration(seconds: 10));
       if (resp.statusCode != 200) return null;

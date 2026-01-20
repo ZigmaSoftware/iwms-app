@@ -26,13 +26,10 @@ Dio createDioClient() {
 class ApiConfig {
   static const String _legacyBase = 'https://zigma.in/iwms_app/iwms_app/';
 
-  /// Base URL used by the Flutter apps for mobile endpoints.
-  static const String mobileBase = kMobileBase;
-  static const String wasteSummaryEndpoint =
-      '${mobileBase}waste/citizen-summary/';
-
   /// Desktop endpoints (open lists) used for driver-side data pulls.
   static const String desktopBase = kDesktopBase;
+  static const String wasteSummaryEndpoint =
+      '${desktopBase}waste/citizen-summary/';
   static const String customerList = '${desktopBase}customers/customercreations/';
   static const String assignments = '${desktopBase}role-assign/assignments/';
   static const String staffAssignments = '${desktopBase}role-assign/staff-assignments/';
@@ -40,30 +37,49 @@ class ApiConfig {
   static const String assignmentCustomerStatuses =
       '${desktopBase}role-assign/assignment-customer-statuses/';
   static const String citizenAssignments = '${desktopBase}role-assign/citizen-assignments/';
+  static const String tripAssignments = '${desktopBase}trip-assign/trips/';
+  static const String tripShifts = '${desktopBase}trip-assign/shifts/';
+  static const String tripCollectionPoints =
+      '${desktopBase}trip-assign/collection-points/';
+  static const String tripRoutePlans = '${desktopBase}trip-assign/route-plans/';
+  static const String tripPlannedStops =
+      '${desktopBase}trip-assign/planned-route-stops/';
+  static const String tripRouteGeometry =
+      '${desktopBase}trip-assign/route-geometry/';
+  static const String tripExecutionStops =
+      '${desktopBase}trip-assign/trip-execution-stops/';
+  static const String tripRoutePlanGenerate =
+      '${desktopBase}trip-assign/route-plans/generate/';
+  static const String tripGenerate = '${desktopBase}trip-assign/trips/generate/';
+  static const String tripDriverRoute =
+      '${desktopBase}trip-assign/trips/driver-route/';
+  static const String staffTemplates =
+      '${desktopBase}user-creation/stafftemplate-creation/';
+  static const String vehicles = '${desktopBase}vehicles/vehicle-creation/';
+  static const String users = '${desktopBase}user-creation/users-creation/';
+  static const String subproperties = '${desktopBase}assets/subproperties/';
+  static const String wards = '${desktopBase}masters/wards/';
+  static const String zones = '${desktopBase}masters/zones/';
 
   // TEMP: Hardcoded ORS key (DEBUG / INTERNAL ONLY)
   static const String orsApiKey =
       'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjU3MzI5ZTM0NjM3YTQ2N2ZhZDYwMDM0ZmQ3ZDk0NTc3IiwiaCI6Im11cm11cjY0In0=';
 
   static const String driverNextHouse =
-      'https://192.168.5.92/api/driver/next-house/';
+      'https://192.168.7.176/api/driver/next-house/';
   static const String updateAssignmentStatus =
-      'https://192.168.5.92/driver/assignment/update-status/';
+      'https://192.168.7.176/driver/assignment/update-status/';
 
-  // static const String orsApiKey = String.fromEnvironment(
-  //   'ORS_API_KEY',
-  //   defaultValue:
-  //       'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjU3MzI5ZTM0NjM3YTQ2N2ZhZDYwMDM0ZmQ3ZDk0NTc3IiwiaCI6Im11cm11cjY0In0=',
-  // );
+  
 
-  static const String driverLogin = '${_legacyBase}login.php';
-  static const String citizenRegister = '${_legacyBase}citizen_register.php';
+//   static const String driverLogin = '${_legacyBase}login.php';
+//   static const String citizenRegister = '${_legacyBase}citizen_register.php';
 
   /// Django backend endpoint for citizen authentication.
   // static const String _defaultCitizenLogin = '${_localMobileBase}customer/login/';
-  static const String _defaultCitizenLogin = '${mobileBase}login/';
+  static const String _defaultCitizenLogin = '${desktopBase}login/login-user/';
   static const String citizenLogin = String.fromEnvironment('CITIZEN_LOGIN_URL',
-      defaultValue: _defaultCitizenLogin);
+defaultValue: _defaultCitizenLogin);
   static const String staffLogin = '${desktopBase}login/login-user/';
 
   /// Default user type identifier expected by the Django login API.
