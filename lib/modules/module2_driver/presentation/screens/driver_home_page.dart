@@ -18,7 +18,7 @@ import '../../../../core/di.dart';
 import '../../../../core/geofence_config.dart';
 import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
 import 'package:iwms_citizen_app/data/models/vehicle_model.dart';
-import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
+import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
 import '../../../../logic/vehicle_tracking/vehicle_bloc.dart';
 import '../../../../logic/vehicle_tracking/vehicle_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';

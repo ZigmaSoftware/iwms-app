@@ -33,7 +33,6 @@ Future<Dio> authorizedDio() async {
   final authRepo = getIt<AuthRepository>();
 
   final user = await authRepo.getAuthenticatedUser();
-
   dio.options.headers['Content-Type'] = 'application/json';
 
   if (user?.authToken != null && user!.authToken!.isNotEmpty) {

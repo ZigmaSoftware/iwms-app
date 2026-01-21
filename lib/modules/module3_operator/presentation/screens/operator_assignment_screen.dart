@@ -13,7 +13,7 @@ import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
 import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
 import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
-import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
+import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';

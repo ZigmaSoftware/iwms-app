@@ -56,12 +56,12 @@ class AssignmentRepository {
       debugPrint('❌ DioException fetching assignments: ${e.message}');
       
       if (e.response?.statusCode == 401) {
-        throw Exception('Unauthorized. Please login again.');
+        throw Exception('Please login again.');
       }
-      
+
       if (e.response?.statusCode == 403) {
-        debugPrint('🚫 Permission denied: ${e.response?.data}');
-        throw Exception('You do not have permission to view assignments.');
+        debugPrint('🚫 Access blocked: ${e.response?.data}');
+        throw Exception('Request not allowed.');
       }
       
       if (e.response?.statusCode == 404) {
@@ -105,7 +105,7 @@ class AssignmentRepository {
       debugPrint('❌ Error fetching assignments for $dateStr: ${e.message}');
       
       if (e.response?.statusCode == 403) {
-        throw Exception('You do not have permission to view assignments.');
+        throw Exception('Request not allowed.');
       }
       
       rethrow;

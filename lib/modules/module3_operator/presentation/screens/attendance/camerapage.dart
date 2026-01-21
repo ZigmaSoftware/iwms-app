@@ -334,7 +334,7 @@ Future<void> _takePicture() async {
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://10.164.86.186:8000/api/mobile/recognize/'),
+        Uri.parse('http://10.164.86.186:8000/api/mobile/recognize/'),  //can use local ip or domain name
       );
 
       request.fields["emp_id"] = widget.employeeId;

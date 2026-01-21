@@ -8,7 +8,7 @@ import 'package:mobile_scanner/mobile_scanner.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
-import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
+import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/locationservices.dart';

@@ -31,6 +31,7 @@ class AuthRepository {
   static const String _nameKey = 'user_name';
   static const String _tokenKey = 'auth_token';
   static const String _emp_idKey = 'emp_id';
+  static const String _permissionsKey = 'user_permissions';
 
   AuthRepository(this._dio, this._prefs);
 
@@ -186,12 +187,16 @@ Future<UserModel> loginCitizen({
         throw AuthRepositoryException("Incomplete staff login payload.");
       }
 
+      final permissions =
+          data["permissions"] is Map<String, dynamic> ? data["permissions"] : null;
+
       return UserModel(
         userId: data["unique_id"].toString(),
         userName: data["name"].toString(),
         role: data["role"].toString().toLowerCase(),
         authToken: data["access_token"].toString(),
         emp_id: data["emp_id"]?.toString(),
+        permissions: permissions,
       );
     } on DioException catch (dioError, stackTrace) {
       final message = _handleDioError(dioError);
@@ -265,6 +270,16 @@ Future<UserModel> loginCitizen({
     final userName = _prefs.getString(_nameKey);
     final emp_id = _prefs.getString(_emp_idKey);
     final token = _prefs.getString(_tokenKey);
+    final permissionsRaw = _prefs.getString(_permissionsKey);
+    Map<String, dynamic>? permissions;
+    if (permissionsRaw != null && permissionsRaw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(permissionsRaw);
+        if (decoded is Map<String, dynamic>) {
+          permissions = decoded;
+        }
+      } catch (_) {}
+    }
 
     if (userId != null && role != null && userName != null) {
       final normalizedRole = role.toLowerCase();
@@ -278,7 +293,8 @@ Future<UserModel> loginCitizen({
         userName: userName,
         role: role,
         authToken: token,
-        emp_id: emp_id
+        emp_id: emp_id,
+        permissions: permissions,
       );
     }
     return null;
@@ -290,6 +306,7 @@ Future<UserModel> loginCitizen({
     await _prefs.remove(_emp_idKey);
     await _prefs.remove(_nameKey);
     await _prefs.remove(_tokenKey);
+    await _prefs.remove(_permissionsKey);
   }
 
   Future<void> saveUser(UserModel user) async {
@@ -310,6 +327,13 @@ Future<UserModel> loginCitizen({
       await _prefs.setString(_tokenKey, user.authToken!);
     } else {
       await _prefs.remove(_tokenKey);
+    }
+
+    final perms = user.permissions;
+    if (perms != null && perms.isNotEmpty) {
+      await _prefs.setString(_permissionsKey, jsonEncode(perms));
+    } else {
+      await _prefs.remove(_permissionsKey);
     }
   }
 

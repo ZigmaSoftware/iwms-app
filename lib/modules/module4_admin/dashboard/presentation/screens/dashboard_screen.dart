@@ -18,12 +18,10 @@ import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/assignment_details_screen.dart';
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/citizen_collection_screen.dart';
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/staff_management_screen.dart';
-import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/trip_assignment_screen.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
-import 'assign_form_sheet.dart';
+import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
 import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
 import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
-import 'package:iwms_citizen_app/data/repositories/assignment_repository.dart';
 
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart'
     as citizen_map;
@@ -72,7 +70,6 @@ class _DashboardShellState extends State<_DashboardShell> {
 
   late final TrackService _trackService;
   late final VehicleRepository _vehicleRepository;
-  late final AssignmentRepository _assignmentRepository;
   late Future<_DashboardData> _dashboardFuture;
 
   @override
@@ -80,7 +77,6 @@ class _DashboardShellState extends State<_DashboardShell> {
     super.initState();
     _trackService = TrackService();
     _vehicleRepository = getIt<VehicleRepository>();
-    _assignmentRepository = getIt<AssignmentRepository>(); // ✅ ADD THIS
     _dashboardFuture = _loadDashboardData();
   }
 
@@ -91,24 +87,6 @@ class _DashboardShellState extends State<_DashboardShell> {
   }
 
   Future<_DashboardData> _loadDashboardData() async {
-    final assignmentsFuture =
-        _assignmentRepository.fetchTodayAssignments().then((list) {
-      debugPrint('ASSIGNMENTS COUNT: ${list.length}');
-      final now = DateTime.now();
-      final filtered = list.where((assignment) {
-        if (assignment.currentStatus == AssignmentStatus.completed &&
-            assignment.completedAt != null) {
-          final diff = now.difference(assignment.completedAt!);
-          return diff.inMinutes < 5;
-        }
-        return true;
-      }).toList();
-      return filtered;
-    }).catchError((e) {
-      debugPrint('ASSIGNMENTS ERROR: $e');
-      return <DailyAssignmentModel>[];
-    });
-
     final today = DateTime.now();
     final todayKey = DateFormat('yyyy-MM-dd').format(today);
     final fromDate = DateTime(today.year, today.month, 1);
@@ -140,7 +118,7 @@ class _DashboardShellState extends State<_DashboardShell> {
     final dateRangeSummaries = await dateRangeFuture;
     final dayTickets = await dayTicketsFuture;
     final vehicleWeights = await vehicleWeightsFuture;
-    final assignments = await assignmentsFuture;
+    const assignments = <DailyAssignmentModel>[];
 
     return _DashboardData(
       summary: summary,
@@ -290,7 +268,6 @@ class _DashboardHomeContent extends StatelessWidget {
               children: [
                 _DailyWasteCard(summary: summary, slices: wasteSlices),
                 const SizedBox(height: 12),
-                const _AssignCard(),
                 const SizedBox(height: 16),
                 _AttendanceRow(
                   statusCounts: statusCounts,
@@ -684,25 +661,6 @@ class _HeaderHero extends StatelessWidget {
   }
 }
 
-void _showAssignSheet(BuildContext context) {
-  showModalBottomSheet<bool>(
-    context: context,
-    showDragHandle: true,
-    isScrollControlled: true,
-    backgroundColor: Colors.white,
-    shape: const RoundedRectangleBorder(
-      borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-    ),
-    builder: (ctx) => const AssignFormSheet(),
-  ).then((created) {
-    if (created == true) {
-      final shell = context.findAncestorStateOfType<_DashboardShellState>();
-      shell?._reloadDashboard();
-      shell?._assignmentsReloadToken++;
-    }
-  });
-}
-
 class _DailyWasteCard extends StatelessWidget {
   const _DailyWasteCard({required this.summary, required this.slices});
 
@@ -876,53 +834,6 @@ class _DailyWasteCard extends StatelessWidget {
               ).textTheme.bodySmall?.copyWith(color: _iconGray),
             ),
           ],
-        ],
-      ),
-    );
-  }
-}
-
-class _AssignCard extends StatelessWidget {
-  const _AssignCard();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: _cardDecoration(),
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Icon(Icons.assignment_ind_rounded, color: _primaryGreen),
-              const SizedBox(width: 8),
-              Text(
-                'Assign Driver & Operator',
-                style: Theme.of(
-                  context,
-                ).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800),
-              ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          const Text(
-            'Select ward (e.g., Gamma), then pick available driver and operator from the database.',
-            style: TextStyle(color: _iconGray),
-          ),
-          const SizedBox(height: 12),
-          Align(
-            alignment: Alignment.centerRight,
-            child: ElevatedButton(
-              onPressed: () => _showAssignSheet(context),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: _primaryGreen,
-                foregroundColor: Colors.white,
-              ),
-              child: const Text('Assign'),
-            ),
-          ),
         ],
       ),
     );
@@ -2278,18 +2189,6 @@ class MoreScreen extends StatelessWidget {
   Widget build(BuildContext context) {
     final items = <_MoreItem>[
       _MoreItem(Icons.person_outline, 'Profile'),
-      _MoreItem(
-        Icons.route_outlined,
-        'Trip Assignment',
-        onTap: () {
-          Navigator.push(
-            context,
-            MaterialPageRoute(
-              builder: (_) => const TripAssignmentScreen(),
-            ),
-          );
-        },
-      ),
       _MoreItem(
         Icons.people_alt_outlined,
         'Staffs',

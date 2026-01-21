@@ -36,6 +36,7 @@ class UserModel extends Equatable {
   final String role;
   final String? authToken;
   final String? emp_id;
+  final Map<String, dynamic>? permissions;
 
   const UserModel({
     required this.userId,
@@ -43,26 +44,31 @@ class UserModel extends Equatable {
     required this.role,
     this.authToken,
     this.emp_id,
+    this.permissions,
   });
 
   factory UserModel.fromApi(Map<String, dynamic> json) {
+    final perms = json["permissions"];
     return UserModel(
       userId: json["unique_id"]?.toString() ?? "",
       userName: json["name"]?.toString() ?? "",
       role: json["role"]?.toString().toLowerCase() ?? "citizen",
       authToken: json["access_token"]?.toString(),
       emp_id: json["emp_id"]?.toString(),
+      permissions: perms is Map<String, dynamic> ? perms : null,
     );
   }
 
   /// Use this when restoring user from offline DB
   factory UserModel.fromJson(Map<String, dynamic> json) {
+    final perms = json["permissions"];
     return UserModel(
       userId: json["unique_id"] ?? "",
       userName: json["username"] ?? "",
       role: json["role"] ?? "",
       authToken: json["access_token"],
       emp_id: json["emp_id"],
+      permissions: perms is Map<String, dynamic> ? perms : null,
     );
   }
 
@@ -74,6 +80,7 @@ class UserModel extends Equatable {
       "role": role,
       "access_token": authToken,
       "emp_id": emp_id,
+      "permissions": permissions,
     };
   }
 
@@ -84,5 +91,6 @@ class UserModel extends Equatable {
         role,
         authToken,
         emp_id,
+        permissions,
       ];
 }
