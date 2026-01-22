@@ -1071,7 +1071,9 @@ class _OperatorAssignmentsSectionState extends State<_OperatorAssignmentsSection
 
   void _refreshAssignments() {
     if (!mounted) return;
-    setState(() => _future = _loadAssignments());
+    setState(() {
+      _future = _loadAssignments();
+    });
   }
 
   Future<List<DailyAssignmentModel>> _loadAssignments() async {

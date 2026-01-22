@@ -2,6 +2,8 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
@@ -42,6 +44,7 @@ class OperatorHeader extends StatefulWidget {
 }
 
 class _OperatorHeaderState extends State<OperatorHeader> {
+  static const String _baseUrl = "http://192.168.7.176:8000";
   bool hasProfile = false;
   bool imageLoading = true;
   String? imageName;
@@ -56,11 +59,15 @@ class _OperatorHeaderState extends State<OperatorHeader> {
     final client = HttpClient();
     try {
       final url =
-          "http://10.164.86.186:8000/api/mobile/staff-profile/?staff_id_id=${widget.empId}";
+          "$_baseUrl/api/desktop/staff-profile/?staff_id_id=${widget.empId}";
 
-      final request = await client
-          .getUrl(Uri.parse(url))
-          .timeout(const Duration(seconds: 5));
+      final request =
+          await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 5));
+      final token = await _getAuthToken();
+      if (token != null && token.isNotEmpty) {
+        request.headers
+            .set(HttpHeaders.authorizationHeader, 'Bearer $token');
+      }
       final response =
           await request.close().timeout(const Duration(seconds: 5));
       final body = await response.transform(utf8.decoder).join();
@@ -95,7 +102,7 @@ class _OperatorHeaderState extends State<OperatorHeader> {
   String convertToUrl(String path) {
     final clean = path.replaceAll("\\", "/");
     final filename = clean.split("/").last;
-    return "http://10.164.86.186:8000/media/emp_image/$filename";
+    return "$_baseUrl/media/emp_image/$filename";
   }
 
   String toTitleCase(String s) {
@@ -105,6 +112,14 @@ class _OperatorHeaderState extends State<OperatorHeader> {
             ? ""
             : "${w[0].toUpperCase()}${w.substring(1).toLowerCase()}")
         .join(" ");
+  }
+
+  Future<String?> _getAuthToken() async {
+    final authRepo = getIt<AuthRepository>();
+    final user = await authRepo.getAuthenticatedUser();
+    final token = user?.authToken?.trim();
+    if (token == null || token.isEmpty) return null;
+    return token;
   }
 
   @override

@@ -973,7 +973,7 @@ class _DriverAvatarState extends State<DriverAvatar> {
   Future<void> fetchEmployeeImage() async {
     try {
       final url =
-          "http://10.164.86.186:8000/api/mobile/staff-profile/?staff_id_id=${widget.empId}";
+          "http://10.164.86.186:8000/api/desktop/staff-profile/?staff_id_id=${widget.empId}";
 
       final request = await HttpClient().getUrl(Uri.parse(url));
       final response = await request.close();

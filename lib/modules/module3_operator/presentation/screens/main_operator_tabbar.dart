@@ -18,6 +18,7 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/o
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_profile_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendance_home_operator.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'package:go_router/go_router.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
@@ -48,6 +49,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
     _activeTab = widget.initialTab;
     _assignmentRepository = getIt<AssignmentRepository>();
     _loadOperatorDetails();
+    AttendanceBlinkStore.startPeriodicReminder();
   }
 
   Future<void> _loadOperatorDetails() async {
@@ -139,6 +141,12 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
   }
 
   @override
+  void dispose() {
+    AttendanceBlinkStore.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final nameFromState = context.select<AuthBloc, String?>((bloc) =>
         bloc.state is AuthStateAuthenticated
@@ -191,11 +199,11 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
             showUnselectedLabels: true,
             selectedFontSize: 11,
             unselectedFontSize: 11,
-            items: [
-              BottomNavigationBarItem(
-                icon: const Icon(Icons.home_rounded),
-                label: localizations.operatorNavHome,
-              ),
+        items: [
+          BottomNavigationBarItem(
+            icon: const Icon(Icons.home_rounded),
+            label: localizations.operatorNavHome,
+          ),
               BottomNavigationBarItem(
                 icon: const Icon(Icons.assignment_outlined),
                 label: localizations.operatorNavAssignments,
@@ -204,10 +212,10 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
                 icon: const Icon(Icons.dashboard_outlined),
                 label: localizations.operatorNavOverview,
               ),
-              BottomNavigationBarItem(
-                icon: const Icon(Icons.fact_check_outlined),
-                label: localizations.operatorNavAttendance,
-              ),
+          BottomNavigationBarItem(
+            icon: _buildAttendanceIcon(),
+            label: localizations.operatorNavAttendance,
+          ),
               BottomNavigationBarItem(
                 icon: const Icon(Icons.person_outline_rounded),
                 label: localizations.operatorNavProfile,
@@ -216,6 +224,45 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildAttendanceIcon() {
+    return ValueListenableBuilder<bool>(
+      valueListenable: AttendanceBlinkStore.notifier,
+      builder: (context, isBlinking, child) {
+        return Stack(
+          clipBehavior: Clip.none,
+          children: [
+            child!,
+            if (isBlinking)
+              Positioned(
+                right: -2,
+                top: -2,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 260),
+                  opacity: isBlinking ? 1 : 0,
+                  child: Container(
+                    width: 12,
+                    height: 12,
+                    decoration: BoxDecoration(
+                      color: Colors.redAccent,
+                      shape: BoxShape.circle,
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.redAccent.withOpacity(0.6),
+                          blurRadius: 4,
+                          spreadRadius: 1,
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+      child: const Icon(Icons.fact_check_outlined),
     );
   }
 

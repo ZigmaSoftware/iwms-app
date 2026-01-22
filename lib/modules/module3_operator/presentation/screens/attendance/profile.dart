@@ -7,6 +7,8 @@ import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 
 class ProfilePage extends StatefulWidget {
   final String empId;
@@ -23,7 +25,7 @@ class _ProfilePageState extends State<ProfilePage> {
   XFile? _image;
   String? imageName;
 
-  final String baseUrl = "http://10.164.86.186:8000";
+  final String baseUrl = "http://192.168.7.176:8000";
 
   // Read-only fields
   String employeeName = "";
@@ -44,8 +46,15 @@ class _ProfilePageState extends State<ProfilePage> {
   // ----------------------------------------------------------------------
   Future<void> _fetchProfile() async {
     try {
+      final token = await _getAuthToken();
+      final headers = <String, String>{};
+      if (token != null && token.isNotEmpty) {
+        headers[HttpHeaders.authorizationHeader] = 'Bearer $token';
+      }
+
       final res = await http.get(
-        Uri.parse("$baseUrl/api/mobile/staff-profile/?staff_id_id=${widget.empId}"),
+        Uri.parse("$baseUrl/api/desktop/staff-profile/?staff_id_id=${widget.empId}"),
+        headers: headers.isEmpty ? null : headers,
       );
 
       final jsonRes = jsonDecode(res.body);
@@ -85,8 +94,13 @@ class _ProfilePageState extends State<ProfilePage> {
     }
 
     try {
-      final url = Uri.parse("$baseUrl/api/mobile/register/");
+      final token = await _getAuthToken();
+      final url = Uri.parse("$baseUrl/api/desktop/register/");
       final req = http.MultipartRequest("POST", url);
+
+      if (token != null && token.isNotEmpty) {
+        req.headers[HttpHeaders.authorizationHeader] = 'Bearer $token';
+      }
 
       req.fields["emp_id"] = widget.empId;
       req.fields["name"] = employeeName;
@@ -102,7 +116,12 @@ class _ProfilePageState extends State<ProfilePage> {
 
       final res = await req.send();
       final resBody = await res.stream.bytesToString();
-      final json = jsonDecode(resBody);
+      final dynamic parsed = jsonDecode(resBody);
+      if (parsed is! Map<String, dynamic>) {
+        _toast("Invalid server response (${res.statusCode}).");
+        return;
+      }
+      final json = parsed;
 
       if (json["message"] == "Employee registered successfully") {
         _toast("Employee registered");
@@ -155,6 +174,14 @@ class _ProfilePageState extends State<ProfilePage> {
         behavior: SnackBarBehavior.floating,
       ),
     );
+  }
+
+  Future<String?> _getAuthToken() async {
+    final authRepo = getIt<AuthRepository>();
+    final user = await authRepo.getAuthenticatedUser();
+    final token = user?.authToken?.trim();
+    if (token == null || token.isEmpty) return null;
+    return token;
   }
 
   // ----------------------------------------------------------------------

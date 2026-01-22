@@ -4,6 +4,8 @@ import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_attendance.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:camera/camera.dart';
@@ -12,6 +14,7 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:path/path.dart' as path;
+import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
 
 class CameraScreen extends StatefulWidget {
   final String employeeId;
@@ -96,15 +99,19 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     }
 
     if (position != null) {
-      setState(() {
-        latitude = position!.latitude.toString();
-        longitude = position.longitude.toString();
-      });
+      if (mounted) {
+        setState(() {
+          latitude = position!.latitude.toString();
+          longitude = position.longitude.toString();
+        });
+      }
     } else {
       print("❌ Failed to fetch location");
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('GPS not detected. Move outside for better signal.'), backgroundColor: Colors.orange),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('GPS not detected. Move outside for better signal.'), backgroundColor: Colors.orange),
+        );
+      }
     }
   }
 
@@ -202,34 +209,27 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       print('Camera permission denied');
     }
   }
-Future<void> _takePicture() async {
+   Future<void> _takePicture() async {
   if (_isCaptured) return;
-
-  if (_cameraController == null ||
-      !_cameraController!.value.isInitialized) {
-    return;
-  }
+  if (_cameraController == null || !_cameraController!.value.isInitialized) return;
 
   try {
     setState(() => _isCaptured = true);
 
-    final image = await _cameraController!.takePicture();
+    final ctrl = _cameraController!;
+    final image = await ctrl.takePicture();
 
-    // 🔴 CRITICAL: stop camera preview immediately
-    await _cameraController!.stopImageStream();
-    await _cameraController!.dispose();
-    _cameraController = null;
+    // remove preview first
+    setState(() => _cameraController = null);
+
+    await ctrl.dispose();
 
     final compressedImage = await _compressImage(image);
-
     if (!mounted) return;
 
-    setState(() {
-      _image = compressedImage;
-    });
+    setState(() => _image = compressedImage);
 
     await _sendDataToBackend();
-
   } catch (e) {
     print('❌ Error capturing image: $e');
   }
@@ -265,7 +265,7 @@ Future<void> _takePicture() async {
   //   try {
   //     var request = http.MultipartRequest(
   //       'POST',
-  //       Uri.parse('http://10.64.151.226:8000/api/mobile/recognize/'),
+  //       Uri.parse('http://10.64.151.226:8000/api/desktop/recognize/'),
   //     );
   //     request.fields['emp_id'] = widget.employeeId;
   //     request.fields['name'] = widget.employeeName;
@@ -329,13 +329,20 @@ Future<void> _takePicture() async {
   // }
 
   Future<void> _sendDataToBackend() async {
-    setState(() => _isLoading = true);
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
 
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://10.164.86.186:8000/api/mobile/recognize/'),  //can use local ip or domain name
+        Uri.parse('http://192.168.7.176:8000/api/desktop/recognize/'),  //can use local ip or domain name
       );
+
+      final token = await _getAuthToken();
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
 
       request.fields["emp_id"] = widget.employeeId;
       request.fields["name"] = widget.employeeName;
@@ -349,12 +356,13 @@ Future<void> _takePicture() async {
 
       var response = await request.send();
 
-      if (response.statusCode == 200) {
-        _speak("Attendance marked successfully");
-        Navigator.pop(context, true);
-      } else {
-        throw Exception("Face mismatch");
-      }
+        if (response.statusCode == 200) {
+          _speak("Attendance marked successfully");
+          AttendanceBlinkStore.triggerBlink();
+          if (mounted) Navigator.pop(context, true);
+        } else {
+          throw Exception("Face mismatch");
+        }
 
     } catch (e) {
       // ---------------------------------------------------------
@@ -368,16 +376,28 @@ Future<void> _takePicture() async {
         longitude: longitude,
       );
 
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text("No internet. Attendance saved offline."),
-        backgroundColor: Colors.orange,
-      ));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text("No internet. Attendance saved offline."),
+          backgroundColor: Colors.orange,
+        ));
+      }
 
       _speak("Attendance saved offline");
-      Navigator.pop(context, true);
+      if (mounted) Navigator.pop(context, true);
     }
 
-    setState(() => _isLoading = false);
+    if (mounted) {
+      setState(() => _isLoading = false);
+    }
+  }
+
+  Future<String?> _getAuthToken() async {
+    final authRepo = getIt<AuthRepository>();
+    final user = await authRepo.getAuthenticatedUser();
+    final token = user?.authToken?.trim();
+    if (token == null || token.isEmpty) return null;
+    return token;
   }
   Future<XFile> _compressImage(XFile image) async {
     final imageBytes = await image.readAsBytes();
@@ -396,7 +416,7 @@ Widget build(BuildContext context) {
 
   return SafeArea(
     child: Scaffold(
-      body: _cameraController == null
+      body: _cameraController == null || !_cameraController!.value.isInitialized
           ? const Center(child: CircularProgressIndicator())
           : CameraPreview(_cameraController!),
     ),
