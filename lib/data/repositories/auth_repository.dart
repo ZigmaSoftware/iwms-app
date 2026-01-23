@@ -31,6 +31,7 @@ class AuthRepository {
   static const String _nameKey = 'user_name';
   static const String _tokenKey = 'auth_token';
   static const String _emp_idKey = 'emp_id';
+  static const String _displayEmpIdKey = 'display_emp_id';
   static const String _permissionsKey = 'user_permissions';
 
   AuthRepository(this._dio, this._prefs);
@@ -196,6 +197,7 @@ Future<UserModel> loginCitizen({
         role: data["role"].toString().toLowerCase(),
         authToken: data["access_token"].toString(),
         emp_id: data["emp_id"]?.toString(),
+        employeeId: data["employee_id"]?.toString(),
         permissions: permissions,
       );
     } on DioException catch (dioError, stackTrace) {
@@ -253,6 +255,7 @@ Future<UserModel> loginCitizen({
         "role": user.role,
         "access_token": user.authToken,
         "emp_id": user.emp_id,
+        "employee_id": user.employeeId,
       },
       password,
     );
@@ -269,6 +272,7 @@ Future<UserModel> loginCitizen({
     final role = _prefs.getString(_roleKey);
     final userName = _prefs.getString(_nameKey);
     final emp_id = _prefs.getString(_emp_idKey);
+    final displayEmpId = _prefs.getString(_displayEmpIdKey);
     final token = _prefs.getString(_tokenKey);
     final permissionsRaw = _prefs.getString(_permissionsKey);
     Map<String, dynamic>? permissions;
@@ -294,6 +298,7 @@ Future<UserModel> loginCitizen({
         role: role,
         authToken: token,
         emp_id: emp_id,
+        employeeId: displayEmpId,
         permissions: permissions,
       );
     }
@@ -321,6 +326,11 @@ Future<UserModel> loginCitizen({
       await _prefs.setString(_emp_idKey, user.emp_id!);
     } else {
       await _prefs.remove(_emp_idKey);
+    }
+    if (user.employeeId != null && user.employeeId!.isNotEmpty) {
+      await _prefs.setString(_displayEmpIdKey, user.employeeId!);
+    } else {
+      await _prefs.remove(_displayEmpIdKey);
     }
 
     if (user.authToken != null && user.authToken!.isNotEmpty) {

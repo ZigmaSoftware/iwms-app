@@ -36,6 +36,7 @@ class UserModel extends Equatable {
   final String role;
   final String? authToken;
   final String? emp_id;
+  final String? employeeId;
   final Map<String, dynamic>? permissions;
 
   const UserModel({
@@ -44,6 +45,7 @@ class UserModel extends Equatable {
     required this.role,
     this.authToken,
     this.emp_id,
+    this.employeeId,
     this.permissions,
   });
 
@@ -55,6 +57,7 @@ class UserModel extends Equatable {
       role: json["role"]?.toString().toLowerCase() ?? "citizen",
       authToken: json["access_token"]?.toString(),
       emp_id: json["emp_id"]?.toString(),
+      employeeId: json["employee_id"]?.toString(),
       permissions: perms is Map<String, dynamic> ? perms : null,
     );
   }
@@ -68,6 +71,7 @@ class UserModel extends Equatable {
       role: json["role"] ?? "",
       authToken: json["access_token"],
       emp_id: json["emp_id"],
+      employeeId: json["employee_id"],
       permissions: perms is Map<String, dynamic> ? perms : null,
     );
   }
@@ -80,6 +84,7 @@ class UserModel extends Equatable {
       "role": role,
       "access_token": authToken,
       "emp_id": emp_id,
+      "employee_id": employeeId,
       "permissions": permissions,
     };
   }
@@ -91,6 +96,7 @@ class UserModel extends Equatable {
         role,
         authToken,
         emp_id,
+        employeeId,
         permissions,
       ];
 }

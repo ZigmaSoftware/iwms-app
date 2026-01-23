@@ -93,9 +93,9 @@ class DB {
 
     _database = await openDatabase(
       path,
-      version: 2,              // 🔥 UPDATED
+      version: 3,
       onCreate: _createDB,
-      onUpgrade: _upgradeDB,   // 🔥 NEW
+      onUpgrade: _upgradeDB,
     );
 
     return _database!;
@@ -108,6 +108,7 @@ class DB {
         unique_id TEXT,
         username TEXT UNIQUE,
         emp_id TEXT,
+        employee_id TEXT,
         name TEXT,
         role TEXT,
         access_token TEXT,
@@ -118,7 +119,8 @@ class DB {
     await db.execute("""
       CREATE TABLE offline_attendance (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        emp_id TEXT,
+      emp_id TEXT,
+      employee_id TEXT,
         name TEXT,
         image_path TEXT,
         latitude TEXT,
@@ -144,6 +146,14 @@ class DB {
         );
       """);
     }
+
+    if (oldVersion < 3) {
+      try {
+        await db.execute("""
+          ALTER TABLE operator_user ADD COLUMN employee_id TEXT;
+        """);
+      } catch (_) {}
+    }
   }
 }
 
@@ -163,6 +173,7 @@ Future<void> saveOperatorToDB(Map<String, dynamic> apiData, String password) asy
       "role": apiData["role"]?.toString(),
       "access_token": apiData["access_token"]?.toString(),
       "emp_id": apiData["emp_id"]?.toString(),
+      "employee_id": apiData["employee_id"]?.toString(),
       "password_hash": passHash,
     },
     conflictAlgorithm: ConflictAlgorithm.replace,

@@ -23,17 +23,19 @@ class AuthStateAuthenticated extends AuthState {
   final String role; // citizen, operator, driver, admin
   final String userId;
   final String? emp_id; 
+  final String? employeeId;
   final Map<String, dynamic>? permissions;
   const AuthStateAuthenticated({
     required this.userName,
     required this.role,
     required this.userId,
        this.emp_id,
+       this.employeeId,
        this.permissions,
   });
 
   @override
-  List<Object?> get props => [userName, role, userId, emp_id, permissions];
+  List<Object?> get props => [userName, role, userId, emp_id, employeeId, permissions];
 }
 
 /// Logged out

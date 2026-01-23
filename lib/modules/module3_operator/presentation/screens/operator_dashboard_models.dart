@@ -197,6 +197,7 @@ class OperatorSessionDetails {
   const OperatorSessionDetails({
     required this.displayName,
     required this.operatoremp_id,
+    required this.employeeCode,
     required this.operatorCode,
     this.wardLabel = '',
     this.zoneLabel = '',
@@ -207,6 +208,7 @@ class OperatorSessionDetails {
   final String displayName;
   final String operatorCode;
   final String operatoremp_id;
+  final String employeeCode;
   final String wardLabel;
   final String zoneLabel;
   final String shift;
@@ -219,6 +221,7 @@ class OperatorSessionDetails {
     String? zoneLabel,
     String? shift,
     OperatorContactInfo? contactInfo,
+    String? employeeCode,
   }) {
     return OperatorSessionDetails(
       displayName: displayName ?? this.displayName,
@@ -227,7 +230,8 @@ class OperatorSessionDetails {
       zoneLabel: zoneLabel ?? this.zoneLabel,
       shift: shift ?? this.shift,
       contactInfo: contactInfo ?? this.contactInfo,
-      operatoremp_id:operatoremp_id
+      operatoremp_id: operatoremp_id,
+      employeeCode: employeeCode ?? this.employeeCode,
     );
   }
 }

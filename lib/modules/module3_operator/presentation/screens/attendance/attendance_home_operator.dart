@@ -11,9 +11,12 @@ import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:provider/provider.dart';
 import 'package:geolocator/geolocator.dart'; // Import geolocator package
 import 'package:http/http.dart' as http;
+import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
 // import 'package:zigma_payroll/attendance/userimage.dart';
 
 // import '../provider/username.dart';
@@ -21,6 +24,11 @@ import 'camerapage.dart';
 
 const Color _operatorPrimary = AppColors.primary;
 const Color _operatorAccent = AppColors.primaryVariant;
+
+// Easily tweakable timings
+const Duration kTripBlinkInterval = Duration(minutes: 2);
+const Duration kTripBlinkDuration = Duration(minutes: 2);
+const Duration kTripAttendanceCooldown = Duration(minutes: 1);
 
 class AttendancePage extends StatefulWidget {
   const AttendancePage({
@@ -46,12 +54,20 @@ class _AttendancePageState extends State<AttendancePage> {
   final bool _isActive = false;
   String _latitude = '--';
   String _longitude = '--';
-  DateTime? _checkInTime;
-  DateTime? _checkOutTime;
+  String _checkInDisplay = "--:--";
+  String _checkOutDisplay = "--:--";
+  bool _isCheckedIn = false;
+  bool _isCheckedOut = false;
+  bool _isStatusLoading = false;
+  int _presentDays = 0;
+  int _leaveDays = 0;
+  int _permissionDays = 0;
+  DateTime? _lastTripAttendanceAt;
   late String _time;
   late String _date;
   Timer? _timer; // Declare a Timer variable
   Timer? _clockTimer;
+  Timer? _tripCooldownTimer;
   StreamSubscription<ConnectivityResult>? _connectivitySub;
   bool _isOnline = true;
 
@@ -59,6 +75,8 @@ class _AttendancePageState extends State<AttendancePage> {
   String? imageName;
   bool isLoading = true;
   List<Map<String, dynamic>> _pendingSync = [];
+  bool _tripWindowActive = false;
+  late VoidCallback _blinkWindowListener;
 
   // Helper method to format duration
   String _formatDuration(Duration duration) {
@@ -67,6 +85,18 @@ class _AttendancePageState extends State<AttendancePage> {
     return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
   }
 
+  bool _isTripOnCooldown() {
+    if (_lastTripAttendanceAt == null) return false;
+    return DateTime.now().difference(_lastTripAttendanceAt!) <
+        kTripAttendanceCooldown;
+  }
+
+  Duration _tripCooldownRemaining() {
+    if (_lastTripAttendanceAt == null) return Duration.zero;
+    final elapsed = DateTime.now().difference(_lastTripAttendanceAt!);
+    if (elapsed >= kTripAttendanceCooldown) return Duration.zero;
+    return kTripAttendanceCooldown - elapsed;
+  }
 
 
 
@@ -92,21 +122,29 @@ class _AttendancePageState extends State<AttendancePage> {
     _timer = Timer.periodic(const Duration(minutes: 1), (Timer timer) {
       // _fetchAttendanceData();
     });
-   
-    _pendingSync = [
-      {
-        "type": "Check In",
-        "timestamp": "2025-01-20 09:15 AM",
-        "lat": "11.0205",
-        "long": "76.9760",
-      },
-      {
-        "type": "Check Out",
-        "timestamp": "2025-01-20 05:45 PM",
-        "lat": "11.0210",
-        "long": "76.9781",
-      },
-    ];
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadAttendanceStatus();
+      _loadAttendanceSummary();
+    });
+
+    _blinkWindowListener = () {
+      final isActive = AttendanceBlinkStore.windowNotifier.value;
+      if (mounted) {
+        if (_isTripOnCooldown()) {
+          if (_tripWindowActive) {
+            setState(() => _tripWindowActive = false);
+          }
+          return;
+        }
+        setState(() {
+          _tripWindowActive = isActive;
+        });
+      }
+    };
+    AttendanceBlinkStore.windowNotifier.addListener(_blinkWindowListener);
+
+    _pendingSync = [];
   }
 
   void _checkInternetInitial() async {
@@ -121,7 +159,9 @@ class _AttendancePageState extends State<AttendancePage> {
   void dispose() {
     _clockTimer?.cancel();
     _timer?.cancel();
+    _tripCooldownTimer?.cancel();
     _connectivitySub?.cancel();
+    AttendanceBlinkStore.windowNotifier.removeListener(_blinkWindowListener);
     super.dispose();
   }
 
@@ -152,6 +192,112 @@ class _AttendancePageState extends State<AttendancePage> {
     setState(() {
       _time = formattedDateTime;
     });
+  }
+
+  String? _resolveStaffUniqueId() {
+    final authState = context.read<AuthBloc>().state;
+    if (authState is AuthStateAuthenticated) {
+      final id = authState.emp_id?.trim();
+      if (id != null && id.isNotEmpty) return id;
+    }
+    return widget.emp_id.trim().isNotEmpty ? widget.emp_id.trim() : null;
+  }
+
+  Future<void> _loadAttendanceStatus() async {
+    final staffId = _resolveStaffUniqueId();
+    if (staffId == null) return;
+
+    setState(() => _isStatusLoading = true);
+    try {
+      final dio = await authorizedDio();
+      final response = await dio.get(
+        '${ApiConfig.desktopBase}attendance-list/today/',
+        queryParameters: {'emp_id': staffId},
+      );
+      final data = response.data;
+      if (data is Map && data['status'] == 'success') {
+        final checkIn = (data['check_in_time'] ?? '--:--').toString();
+        final checkOut = (data['check_out_time'] ?? '--:--').toString();
+        final checkedIn = data['checked_in'] == true;
+        final checkedOut = data['checked_out'] == true;
+        if (!mounted) return;
+        setState(() {
+          _checkInDisplay = checkIn;
+          _checkOutDisplay = checkOut;
+          _isCheckedIn = checkedIn;
+          _isCheckedOut = checkedOut;
+          _isStatusLoading = false;
+        });
+        _updateBlinkState();
+      } else {
+        if (!mounted) return;
+        setState(() => _isStatusLoading = false);
+      }
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _isStatusLoading = false);
+    }
+  }
+
+  Future<void> _loadAttendanceSummary() async {
+    final staffId = _resolveStaffUniqueId();
+    if (staffId == null) return;
+
+    try {
+      final now = DateTime.now();
+      final dio = await authorizedDio();
+      final response = await dio.get(
+        '${ApiConfig.desktopBase}attendance-list/summary/',
+        queryParameters: {
+          'emp_id': staffId,
+          'month': now.month,
+          'year': now.year,
+        },
+      );
+      final data = response.data;
+      if (data is Map && data['status'] == 'success') {
+        if (!mounted) return;
+        setState(() {
+          _presentDays = (data['present_days'] ?? 0) as int;
+          _leaveDays = (data['leave_days'] ?? 0) as int;
+          _permissionDays = (data['permission_days'] ?? 0) as int;
+        });
+      }
+    } catch (_) {}
+  }
+
+  void _updateBlinkState() {
+    final shouldBlink = _isCheckedIn && !_isCheckedOut;
+    _tripCooldownTimer?.cancel();
+
+    if (!shouldBlink) {
+      AttendanceBlinkStore.dispose();
+      if (mounted && _tripWindowActive) {
+        setState(() => _tripWindowActive = false);
+      }
+      return;
+    }
+
+    if (_isTripOnCooldown()) {
+      AttendanceBlinkStore.dispose();
+      if (mounted && _tripWindowActive) {
+        setState(() => _tripWindowActive = false);
+      }
+      final remaining = _tripCooldownRemaining();
+      if (remaining > Duration.zero) {
+        _tripCooldownTimer = Timer(remaining, () {
+          if (!mounted) return;
+          _updateBlinkState();
+        });
+      }
+      return;
+    }
+
+    AttendanceBlinkStore.startPeriodicReminder(
+      interval: kTripBlinkInterval,
+      blinkDuration: kTripBlinkDuration,
+      initialDelay: kTripBlinkInterval,
+    );
   }
 
   String _formatDateTime(DateTime dateTime) {
@@ -365,9 +511,9 @@ class _AttendancePageState extends State<AttendancePage> {
                 child: Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      _kpiItem(Icons.calendar_today, "20", "Presence"),
-                      _kpiItem(Icons.timer_off_rounded, "3", "Leaves"),
-                      _kpiItem(Icons.access_time_filled, "2", "Permission"),
+                      _kpiItem(Icons.calendar_today, "$_presentDays", "Presence"),
+                      _kpiItem(Icons.timer_off_rounded, "$_leaveDays", "Leaves"),
+                      _kpiItem(Icons.access_time_filled, "$_permissionDays", "Permission"),
                     ]),
               ),
 
@@ -403,17 +549,15 @@ class _AttendancePageState extends State<AttendancePage> {
                       children: [
                         _checkBox(
                           title: "Check In",
-                          time: _checkInTime != null
-                              ? "${_checkInTime!.hour}:${_checkInTime!.minute.toString().padLeft(2, '0')}"
-                              : "--:--",
+                          time: _checkInDisplay,
                           color: Colors.green,
+                          isActive: _isCheckedIn,
                         ),
                         _checkBox(
                           title: "Check Out",
-                          time: _checkOutTime != null
-                              ? "${_checkOutTime!.hour}:${_checkOutTime!.minute.toString().padLeft(2, '0')}"
-                              : "--:--",
+                          time: _checkOutDisplay,
                           color: Colors.orange,
+                          isActive: _isCheckedOut,
                         ),
                       ],
                     ),
@@ -423,8 +567,10 @@ class _AttendancePageState extends State<AttendancePage> {
 
               SizedBox(height: 20),
 
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 12,
+                runSpacing: 12,
                 children: [
                   _quickAction(Icons.logout, "Leave"),
                   _quickAction(Icons.place, "Visit"),
@@ -453,15 +599,45 @@ class _AttendancePageState extends State<AttendancePage> {
                 onTapUp: (_) => setState(() => _punchPressed = false),
                 onTapCancel: () => setState(() => _punchPressed = false),
                 onTap: () async {
+                  // Trip reminder window: capture selfie and submit trip attendance
                   try {
-                    await Navigator.of(context).push(
+                    if (_isCheckedIn && !_isCheckedOut && _tripWindowActive) {
+                      final markedTrip = await Navigator.of(context).push<bool>(
+                            MaterialPageRoute(
+                              builder: (_) => CameraScreen(
+                                employeeName: nameFromState!,
+                                employeeId: emp_idFromState!,
+                                isTripAttendance: true,
+                              ),
+                            ),
+                          ) ??
+                          false;
+
+                      if (markedTrip) {
+                        _lastTripAttendanceAt = DateTime.now();
+                        AttendanceBlinkStore.dispose();
+                        if (mounted) {
+                          setState(() => _tripWindowActive = false);
+                        }
+                      }
+
+                      await _loadAttendanceStatus();
+                      await _loadAttendanceSummary();
+                      return;
+                    }
+
+                    await Navigator.of(context).push<bool>(
                       MaterialPageRoute(
                         builder: (_) => CameraScreen(
                           employeeName: nameFromState!,
                           employeeId: emp_idFromState!,
+                          isTripAttendance: false,
                         ),
                       ),
                     );
+
+                    await _loadAttendanceStatus();
+                    await _loadAttendanceSummary();
                   } catch (e) {
                     ScaffoldMessenger.of(context).showSnackBar(
                       SnackBar(content: Text('Unable to open camera: $e')),
@@ -492,7 +668,7 @@ class _AttendancePageState extends State<AttendancePage> {
                           size: 40, color: Colors.green.shade800),
                       SizedBox(width: 12),
                       Text(
-                        "Punch Attendance",
+                        _tripWindowActive ? "Punch Trip Attendance" : "Punch Attendance",
                         style: AppTextStyles.heading2.copyWith(
                           color: _operatorPrimary,
                         ),
@@ -528,22 +704,18 @@ class _AttendancePageState extends State<AttendancePage> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          Text(
-                            "Pending Sync",
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.deepOrange,
+                          Expanded(
+                            child: Text(
+                              "Pending Sync",
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.w800,
+                                color: Colors.deepOrange,
+                              ),
                             ),
                           ),
-                           Text(
-                            "${emp_idFromState}",
-                            style: TextStyle(
-                              fontSize: 18,
-                              fontWeight: FontWeight.w800,
-                              color: Colors.deepOrange,
-                            ),
-                          ),
+                          SizedBox(width: 8),
                           Icon(Icons.sync_problem, color: Colors.deepOrange),
                         ],
                       ),
@@ -603,12 +775,16 @@ class _AttendancePageState extends State<AttendancePage> {
 
   /// CHECK IN / OUT BOX
   Widget _checkBox(
-      {required String title, required String time, required Color color}) {
+      {required String title,
+      required String time,
+      required Color color,
+      required bool isActive}) {
+    final activeColor = isActive ? color : Colors.grey;
     return Container(
       width: 130,
       padding: EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: activeColor.withOpacity(0.15),
         borderRadius: BorderRadius.circular(18),
       ),
       child: Column(
@@ -616,7 +792,9 @@ class _AttendancePageState extends State<AttendancePage> {
         children: [
           Text(time,
               style: TextStyle(
-                  fontSize: 26, fontWeight: FontWeight.bold, color: color)),
+                  fontSize: 26,
+                  fontWeight: FontWeight.bold,
+                  color: activeColor)),
           SizedBox(height: 6),
           Text(title,
               style: TextStyle(

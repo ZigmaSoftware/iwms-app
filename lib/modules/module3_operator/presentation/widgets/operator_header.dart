@@ -20,6 +20,7 @@ class OperatorHeader extends StatefulWidget {
     super.key,
     required this.name,
     required this.empId, // Changed from emp_id
+    this.displayId,
     required this.badge,
     required this.ward,
     required this.zone,
@@ -34,6 +35,7 @@ class OperatorHeader extends StatefulWidget {
   final String ward;
   final String zone;
   final String empId; // Changed from emp_id
+  final String? displayId;
   final String? subtitle;
   final VoidCallback onLogout;
   final VoidCallback? onMenuTap;
@@ -163,6 +165,10 @@ class _OperatorHeaderState extends State<OperatorHeader> {
   }
 
   Widget _buildTitleSection(AppLocalizations t) {
+    final displayId =
+        (widget.displayId != null && widget.displayId!.trim().isNotEmpty)
+            ? widget.displayId!
+            : widget.empId;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -188,7 +194,7 @@ class _OperatorHeaderState extends State<OperatorHeader> {
             ),
             const SizedBox(width: 4),
             Text(
-              "(${widget.empId})",
+              "(${displayId})",
               style: const TextStyle(
                 fontSize: 18,
                 color: Colors.white70,

@@ -37,6 +37,7 @@ class OperatorHomeScreen extends StatelessWidget {
     required this.operatorName,
     required this.operatorCode,
     required this.emp_id,
+    required this.employeeCode,
     required this.wardLabel,
     required this.zoneLabel,
     required this.onScanPressed,
@@ -55,6 +56,7 @@ class OperatorHomeScreen extends StatelessWidget {
   final String operatorCode;
   final String wardLabel;
   final String emp_id;
+  final String employeeCode;
   final String zoneLabel;
   final VoidCallback onScanPressed;
   final VoidCallback onLogout;
@@ -83,6 +85,7 @@ class OperatorHomeScreen extends StatelessWidget {
             OperatorHeader(
               name: operatorName,
               empId: emp_id,
+              displayId: employeeCode,
               badge: operatorCode,
               ward: wardLabel,
               zone: zoneLabel,

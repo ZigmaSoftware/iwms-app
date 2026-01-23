@@ -14,17 +14,18 @@ import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 import 'package:path/path.dart' as path;
-import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
 
 class CameraScreen extends StatefulWidget {
   final String employeeId;
   final String employeeName;
+  final bool isTripAttendance;
   // String latitude;
   // String longitude;
   // final VoidCallback onAttendanceMarked;
   const CameraScreen({super.key, 
     required this.employeeId,
     required this.employeeName,
+    this.isTripAttendance = false,
     // required this.latitude,
     // required this.longitude,
     // required this.onAttendanceMarked,
@@ -38,9 +39,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   CameraController? _cameraController;
   XFile? _image;
   bool _isLoading = false;
-  bool _isCaptured = false;
-  bool _isRecognized = false;
-  bool _recognitionFinished = false;
+  bool _isProcessingCapture = false;
+  bool _autoCaptureScheduled = false;
   final FlutterTts _flutterTts = FlutterTts();
    late String latitude;
   late String longitude;
@@ -49,6 +49,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WakelockPlus.enable();
     latitude = "0.0";
     longitude = "0.0";
     _checkGpsAndInitialize();
@@ -199,8 +200,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           setState(() {
             _cameraController!.setFocusMode(FocusMode.auto);
           });
+          _scheduleAutoCapture();
         }
-
     
       } catch (e) {
         print('Error initializing camera: $e');
@@ -209,31 +210,53 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       print('Camera permission denied');
     }
   }
-   Future<void> _takePicture() async {
-  if (_isCaptured) return;
-  if (_cameraController == null || !_cameraController!.value.isInitialized) return;
 
-  try {
-    setState(() => _isCaptured = true);
-
-    final ctrl = _cameraController!;
-    final image = await ctrl.takePicture();
-
-    // remove preview first
-    setState(() => _cameraController = null);
-
-    await ctrl.dispose();
-
-    final compressedImage = await _compressImage(image);
-    if (!mounted) return;
-
-    setState(() => _image = compressedImage);
-
-    await _sendDataToBackend();
-  } catch (e) {
-    print('❌ Error capturing image: $e');
+  void _scheduleAutoCapture() {
+    if (_autoCaptureScheduled) return;
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return;
+    }
+    _autoCaptureScheduled = true;
+    Future.delayed(const Duration(milliseconds: 600), () {
+      if (mounted) _takePicture();
+    });
   }
-}
+
+  Future<void> _takePicture() async {
+    if (_isProcessingCapture || _isLoading) return;
+    if (_cameraController == null || !_cameraController!.value.isInitialized) {
+      return;
+    }
+
+    try {
+      setState(() => _isProcessingCapture = true);
+
+      final ctrl = _cameraController!;
+      final image = await ctrl.takePicture();
+
+      final compressedImage = await _compressImage(image);
+      if (!mounted) return;
+
+      setState(() => _image = compressedImage);
+
+      if (widget.isTripAttendance) {
+        await _sendTripAttendance();
+      } else {
+        await _sendDataToBackend();
+      }
+    } catch (e) {
+      print('❌ Error capturing image: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Failed to capture image. Please retry.')),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isProcessingCapture = false);
+      }
+    }
+  }
 
   Future<void> _speak(String message) async {
     await _flutterTts.speak(message);
@@ -329,6 +352,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
   // }
 
   Future<void> _sendDataToBackend() async {
+    if (_image == null) return;
+
     if (mounted) {
       setState(() => _isLoading = true);
     }
@@ -355,14 +380,14 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       ));
 
       var response = await request.send();
+      final responseBody = await response.stream.bytesToString();
 
-        if (response.statusCode == 200) {
-          _speak("Attendance marked successfully");
-          AttendanceBlinkStore.triggerBlink();
-          if (mounted) Navigator.pop(context, true);
-        } else {
-          throw Exception("Face mismatch");
-        }
+      if (response.statusCode == 200) {
+        _speak("Attendance marked successfully");
+        if (mounted) Navigator.pop(context, true);
+      } else {
+        throw Exception("Face mismatch");
+      }
 
     } catch (e) {
       // ---------------------------------------------------------
@@ -392,6 +417,78 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     }
   }
 
+  Future<void> _sendTripAttendance() async {
+    if (_image == null) return;
+
+    if (mounted) {
+      setState(() => _isLoading = true);
+    }
+
+    try {
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse(
+            'http://192.168.7.176:8000/api/desktop/vehicles/trip-attendance/'),
+      );
+
+      final token = await _getAuthToken();
+      if (token != null && token.isNotEmpty) {
+        request.headers['Authorization'] = 'Bearer $token';
+      }
+
+      request.fields["latitude"] = latitude;
+      request.fields["longitude"] = longitude;
+      request.fields["source"] = "MOBILE";
+
+      request.files.add(await http.MultipartFile.fromPath(
+        "photo",
+        _image!.path,
+      ));
+
+      var response = await request.send();
+      final responseBody = await response.stream.bytesToString();
+
+      if (response.statusCode == 200 || response.statusCode == 201) {
+        _speak("Trip attendance recorded");
+        if (mounted) Navigator.pop(context, true);
+        return;
+      }
+
+      String message = "Trip attendance failed.";
+      try {
+        final data = json.decode(responseBody);
+        if (data is Map) {
+          if (data["detail"] != null) {
+            message = data["detail"].toString();
+          } else if (data["non_field_errors"] is List &&
+              data["non_field_errors"].isNotEmpty) {
+            message = data["non_field_errors"].first.toString();
+          }
+        }
+      } catch (_) {}
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(message), backgroundColor: Colors.red),
+        );
+      }
+      _speak(message);
+      if (mounted) Navigator.pop(context, false);
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Trip attendance failed.")),
+        );
+      }
+      _speak("Trip attendance failed");
+      if (mounted) Navigator.pop(context, false);
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
+    }
+  }
+
   Future<String?> _getAuthToken() async {
     final authRepo = getIt<AuthRepository>();
     final user = await authRepo.getAuthenticatedUser();
@@ -404,23 +501,84 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     final compressedBytes = await FlutterImageCompress.compressWithList(imageBytes, minWidth: 640, minHeight: 480, quality: 50);
     return XFile.fromData(Uint8List.fromList(compressedBytes), path: image.path);
   }
-@override
-Widget build(BuildContext context) {
-  if (_cameraController != null &&
-      _cameraController!.value.isInitialized &&
-      !_isCaptured) {
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _takePicture();
-    });
+
+  Widget _cameraPreview() {
+    final controller = _cameraController;
+    if (controller == null || !controller.value.isInitialized) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    final previewSize = controller.value.previewSize;
+    final screenSize = MediaQuery.of(context).size;
+    final width = previewSize?.height ?? screenSize.width;
+    final height = previewSize?.width ?? screenSize.height;
+
+    return FittedBox(
+      fit: BoxFit.cover,
+      child: SizedBox(
+        width: width,
+        height: height,
+        child: CameraPreview(controller),
+      ),
+    );
   }
 
-  return SafeArea(
-    child: Scaffold(
-      body: _cameraController == null || !_cameraController!.value.isInitialized
-          ? const Center(child: CircularProgressIndicator())
-          : CameraPreview(_cameraController!),
-    ),
-  );
-}
+  @override
+  Widget build(BuildContext context) {
+    _scheduleAutoCapture();
 
+    return Scaffold(
+      backgroundColor: Colors.black,
+      body: Stack(
+        children: [
+          Positioned.fill(child: _cameraPreview()),
+          Positioned(
+            top: 36,
+            left: 16,
+            child: IconButton(
+              icon: const Icon(Icons.close, color: Colors.white),
+              onPressed: _isLoading ? null : () => Navigator.of(context).pop(false),
+            ),
+          ),
+          Positioned(
+            bottom: 30,
+            left: 20,
+            right: 20,
+            child: ElevatedButton.icon(
+              onPressed: _isLoading ? null : _takePicture,
+              icon: const Icon(Icons.camera_alt_outlined),
+              label: Text(
+                widget.isTripAttendance
+                    ? "Capture Trip Attendance"
+                    : "Capture Attendance",
+              ),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(double.infinity, 54),
+                backgroundColor: Colors.green.shade700,
+              ),
+            ),
+          ),
+          if (_isProcessingCapture || _isLoading)
+            Positioned.fill(
+              child: Container(
+                color: Colors.black54,
+                child: const Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 12),
+                      Text(
+                        "Hold still, recognizing face...",
+                        style: TextStyle(color: Colors.white),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
 }

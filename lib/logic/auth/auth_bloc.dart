@@ -41,6 +41,7 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
       role: user.role.toLowerCase(),
       userId: user.userId,
       emp_id: user.emp_id,
+      employeeId: user.employeeId,
       permissions: user.permissions,
     ));
   }
@@ -87,6 +88,7 @@ Future<void> _onCitizenLoginRequested(
       role: user.role.toLowerCase(),
       userId: user.userId,
       emp_id: user.emp_id,
+      employeeId: user.employeeId,
       permissions: user.permissions,
     ));
   } catch (e) {
@@ -130,6 +132,7 @@ Future<void> _onCitizenLoginRequested(
       role: offlineUser.role,
       userId: offlineUser.userId,
       emp_id: offlineUser.emp_id,
+      employeeId: offlineUser.employeeId,
       permissions: offlineUser.permissions,
     ));
   }

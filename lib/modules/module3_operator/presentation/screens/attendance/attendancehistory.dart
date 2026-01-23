@@ -8,6 +8,8 @@ import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
 import 'package:http/http.dart' as http;
 import 'package:latlong2/latlong.dart';
+import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 
 class AttendanceDetailPage extends StatefulWidget {
   final Map<String, dynamic> record;
@@ -509,8 +511,6 @@ bool _isValidAttendance(Map<String, String> data) {
   void initState() {
     super.initState();
     fetchAttendanceData();
-    fetchLeavePermissionTickets();
-    fetchHolidays();
   }
 
   Future<void> fetchHolidays() async {
@@ -547,14 +547,19 @@ bool _isValidAttendance(Map<String, String> data) {
 Future<void> fetchAttendanceData() async {
   setState(() => isLoading = true);
 
-  final url =
-      "https://zigmaglobal.in/zigma_desk_app_updated/get_attendance_new.php?empid=${widget.empId}&month=${_focusedDay.month}&year=${_focusedDay.year}";
-
   try {
-    final response = await http.get(Uri.parse(url));
-    final data = json.decode(response.body);
+    final dio = await authorizedDio();
+    final response = await dio.get(
+      '${ApiConfig.desktopBase}attendance-list/',
+      queryParameters: {
+        'emp_id': widget.empId,
+        'month': _focusedDay.month,
+        'year': _focusedDay.year,
+      },
+    );
+    final data = response.data;
 
-    if (data['records'] != null && data['records'] is List) {
+    if (data is Map && data['records'] != null && data['records'] is List) {
       // ✅ Typed correctly
       Map<DateTime, Map<String, String>> parsed = {};
 
