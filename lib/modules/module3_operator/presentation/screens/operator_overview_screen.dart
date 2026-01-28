@@ -186,7 +186,7 @@ class _OperatorOverviewScreenState extends State<OperatorOverviewScreen> {
                   const SizedBox(height: 16),
                   Text(
                     "No collections recorded",
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                           color: AppColors.textPrimary,
                           fontWeight: FontWeight.w600,
                         ),
@@ -198,10 +198,13 @@ class _OperatorOverviewScreenState extends State<OperatorOverviewScreen> {
                           color: AppColors.textSecondary,
                         ),
                   ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
                   OutlinedButton.icon(
                     onPressed: _pickDate,
                     icon: const Icon(Icons.calendar_today),
+                    style: OutlinedButton.styleFrom(
+                      fixedSize: const Size(200, 40),
+                    ),
                     label: const Text('Select different date'),
                   ),
                 ],

@@ -32,6 +32,8 @@ class HomeTab extends StatelessWidget {
     required this.onStatsTap,
   });
 
+
+ 
   final BannerController bannerController;
   final TrackController trackController;
   final NotificationController notificationController;
