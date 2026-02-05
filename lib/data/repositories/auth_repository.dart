@@ -174,6 +174,7 @@ Future<UserModel> loginCitizen({
         data: {
           "username": username,
           "password": password,
+          "login_type": "staff",
         },
       );
 
@@ -213,6 +214,7 @@ Future<UserModel> loginCitizen({
       data: {
         "username": username,
         "password": password,
+        "login_type": "customer",
       },
     );
 

@@ -65,22 +65,26 @@ class ApiConfig {
   static const String orsApiKey =
       'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjU3MzI5ZTM0NjM3YTQ2N2ZhZDYwMDM0ZmQ3ZDk0NTc3IiwiaCI6Im11cm11cjY0In0=';
 
-  static const String driverNextHouse =
-      'https://192.168.7.176/api/driver/next-house/';
+  static const String driverNextHouse = '${kApiBase}/driver/next-house/';
   static const String updateAssignmentStatus =
-      'https://192.168.7.176/driver/assignment/update-status/';
+      '${kApiBase}/driver/assignment/update-status/';
 
   
 
 //   static const String driverLogin = '${_legacyBase}login.php';
 //   static const String citizenRegister = '${_legacyBase}citizen_register.php';
 
-  /// Django backend endpoint for citizen authentication.
-  // static const String _defaultCitizenLogin = '${_localMobileBase}customer/login/';
-  static const String _defaultCitizenLogin = '${desktopBase}login/login-user/';
-  static const String citizenLogin = String.fromEnvironment('CITIZEN_LOGIN_URL',
-defaultValue: _defaultCitizenLogin);
-  static const String staffLogin = '${desktopBase}login/login-user/';
+  /// Django backend endpoint for mobile authentication.
+  /// Mobile login is registered at `/api/desktop/login/` via the grouped router.
+  static const String _defaultMobileLogin = '${desktopBase}login/';
+  static const String _defaultCitizenLogin = _defaultMobileLogin;
+  static const String citizenLogin = String.fromEnvironment(
+    'CITIZEN_LOGIN_URL',
+    defaultValue: _defaultCitizenLogin,
+  );
+  // Mobile apps should use the unified mobile login endpoint.
+  static const String staffLogin = _defaultMobileLogin;
+  static const String mobileLogin = _defaultMobileLogin;
 
   /// Default user type identifier expected by the Django login API.
   static const String citizenUserType = 'citizen';
