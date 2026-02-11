@@ -1,7 +1,7 @@
 import 'package:latlong2/latlong.dart';
 
-import '../../../../core/geofence_config.dart';
-import '../../../../data/models/vehicle_model.dart';
+import 'package:iwms_citizen_app/core/geofence_config.dart';
+import 'package:iwms_citizen_app/data/models/vehicle_model.dart';
 
 class GeofenceEvaluator {
   const GeofenceEvaluator();

@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
-import '../../../features/citizen_dashboard/pages/citizen_dashboard_page.dart';
-import '../../../features/citizen_dashboard/pages/onboarding_success_page.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/pages/citizen_dashboard_page.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/pages/onboarding_success_page.dart';
 
 /// Wrapper to keep the existing route intact for the onboarding success screen.
 class HomeScreen extends StatelessWidget {

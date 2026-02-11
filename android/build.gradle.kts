@@ -8,6 +8,7 @@ private fun LibraryExtension.enforceSdkLevels() {
     if ((compileSdk ?: 0) < 34) {
         compileSdk = 34
     }
+    ndkVersion = "27.0.12077973"
     defaultConfig {
         if (targetSdk == null || targetSdk!! < 34) {
             targetSdk = 34
@@ -26,6 +27,7 @@ private fun ApplicationExtension.enforceSdkLevels() {
     if ((compileSdk ?: 0) < 34) {
         compileSdk = 34
     }
+    ndkVersion = "27.0.12077973"
     defaultConfig {
         if (targetSdk == null || targetSdk!! < 34) {
             targetSdk = 34
@@ -62,6 +64,18 @@ subprojects {
     layout.buildDirectory.set(sharedBuildDir.dir(project.name))
     if (path != ":app") {
         evaluationDependsOn(":app")
+    }
+
+    configurations.configureEach {
+        resolutionStrategy {
+            force(
+                "org.jetbrains.kotlin:kotlin-stdlib:2.1.0",
+                "org.jetbrains.kotlin:kotlin-stdlib-common:2.1.0",
+                "org.jetbrains.kotlin:kotlin-stdlib-jdk7:2.1.0",
+                "org.jetbrains.kotlin:kotlin-stdlib-jdk8:2.1.0",
+                "org.jetbrains.kotlin:kotlin-reflect:2.1.0"
+            )
+        }
     }
 
     runNowOrAfterEvaluate {

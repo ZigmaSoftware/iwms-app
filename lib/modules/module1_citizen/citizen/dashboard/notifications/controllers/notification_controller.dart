@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
+import 'package:iwms_citizen_app/shared/services/notification_service.dart';
 
-import '../../../../shared/services/notification_service.dart';
 import '../models/citizen_alert.dart';
 
 class NotificationController extends ChangeNotifier {

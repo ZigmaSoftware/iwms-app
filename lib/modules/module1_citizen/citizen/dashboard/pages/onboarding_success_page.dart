@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../router/app_router.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
+import 'package:iwms_citizen_app/router/app_router.dart';
 
 class OnboardingSuccessPage extends StatelessWidget {
   const OnboardingSuccessPage({

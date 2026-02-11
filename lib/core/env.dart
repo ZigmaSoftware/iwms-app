@@ -13,11 +13,11 @@ const bool kEnforcePermissions =
 // Override the local/prod bases via dart-define if needed.
 const String _localApiOverride = String.fromEnvironment(
   'VITE_API_LOCAL',
-  defaultValue: 'http://192.168.5.20:8000/api/v1',
+  defaultValue: 'http://192.168.6.198:8000/api/v1',
 );
 const String _prodApiOverride = String.fromEnvironment(
   'VITE_API_PROD',
-  defaultValue: 'http://192.168.5.20:8000/api/v1',
+  defaultValue: 'http://192.168.6.198:8000/api/v1',
 );
 
 const String kApiBase = kProd ? _prodApiOverride : _localApiOverride;

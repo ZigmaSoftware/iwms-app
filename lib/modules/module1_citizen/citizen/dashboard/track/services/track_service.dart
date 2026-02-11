@@ -3,7 +3,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
-import '../../../../core/api_config.dart';
+import 'package:iwms_citizen_app/core/api_config.dart';
 import '../models/waste_period.dart';
 import '../models/waste_reports.dart';
 import '../models/waste_summary.dart';
