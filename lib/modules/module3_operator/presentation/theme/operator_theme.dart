@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iwms_citizen_app/core/constants.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/core/ui/app_ui_tokens.dart';
 
 /// Shared color + spacing tokens reused across the revamped operator UI.
 class OperatorTheme {
@@ -12,9 +13,12 @@ class OperatorTheme {
   static const Color mutedText = AppColors.textSecondary;
   static const Color strongText = AppColors.textPrimary;
   static const Color cardBorder = Color(0x1A1B5E20);
+  static const Color attendanceAlert = AppColors.notificationBadge;
 
-  static const BorderRadius cardRadius = BorderRadius.all(Radius.circular(24));
-  static const BorderRadius chipRadius = BorderRadius.all(Radius.circular(18));
+  static const BorderRadius cardRadius =
+      BorderRadius.all(Radius.circular(AppUiTokens.spacing24));
+  static const BorderRadius chipRadius =
+      BorderRadius.all(Radius.circular(AppUiTokens.radiusMedium));
 
   static const LinearGradient headerGradient = LinearGradient(
     colors: [primary, primaryAccent],
@@ -23,17 +27,13 @@ class OperatorTheme {
   );
 
   static const LinearGradient quickActionGradient = LinearGradient(
-    colors: [Color(0xFF2E7D5A), Color(0xFF5DB075)],
+    colors: [primaryAccent, AppColors.operatorAccent],
     begin: Alignment.topCenter,
     end: Alignment.bottomCenter,
   );
 
   static const List<BoxShadow> softShadow = [
-    BoxShadow(
-      color: Color(0x1A000000),
-      blurRadius: 18,
-      offset: Offset(0, 10),
-    ),
+    AppUiTokens.softLogoShadow,
   ];
 
   static const EdgeInsets pagePadding =

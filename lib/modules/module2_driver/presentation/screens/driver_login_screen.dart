@@ -1,10 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:iwms_citizen_app/core/constants.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/core/ui/app_copy.dart';
+import 'package:iwms_citizen_app/core/ui/app_ui_tokens.dart';
+import 'package:iwms_citizen_app/shared/widgets/app_primary_button.dart';
 
 import '../../../../router/app_router.dart';
 
-const Color _driverPrimary = Color(0xFF1B5E20);
-const Color _driverAccent = Color(0xFF66BB6A);
+const Color _driverPrimary = kPrimaryColor;
+const Color _driverAccent = AppColors.driverAccent;
 
 class DriverLoginScreen extends StatelessWidget {
   const DriverLoginScreen({super.key});
@@ -35,14 +40,8 @@ class DriverLoginScreen extends StatelessWidget {
                   padding: const EdgeInsets.all(20),
                   decoration: BoxDecoration(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(16),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.15),
-                        blurRadius: 18,
-                        offset: const Offset(0, 10),
-                      ),
-                    ],
+                    borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
+                    boxShadow: const [AppUiTokens.softLogoShadow],
                   ),
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
@@ -58,7 +57,7 @@ class DriverLoginScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 16),
                       Text(
-                        'Driver Console',
+                        AppCopy.driverConsoleTitle,
                         style: textTheme.titleLarge?.copyWith(
                           fontWeight: FontWeight.w800,
                           color: Colors.black87,
@@ -66,32 +65,22 @@ class DriverLoginScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 8),
                       Text(
-                        'Mock login: tap below to enter the driver dashboard.',
+                        AppCopy.driverConsoleSubtitle,
                         textAlign: TextAlign.center,
                         style: textTheme.bodyMedium?.copyWith(
                           color: Colors.black.withOpacity(0.7),
                         ),
                       ),
                       const SizedBox(height: 20),
-                      SizedBox(
-                        width: double.infinity,
-                        child: ElevatedButton(
-                          onPressed: () =>
-                              context.go(AppRoutePaths.driverHome),
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: _driverPrimary,
-                            padding: const EdgeInsets.symmetric(vertical: 14),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(14),
-                            ),
-                          ),
-                          child: const Text(
-                            'Enter Driver Dashboard',
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
+                      AppPrimaryButton(
+                        label: AppCopy.enterDriverDashboard,
+                        onPressed: () => context.go(AppRoutePaths.driverHome),
+                        backgroundColor: _driverPrimary,
+                        verticalPadding: 14,
+                        borderRadius: 14,
+                        textStyle: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
                         ),
                       ),
                     ],

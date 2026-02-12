@@ -61,9 +61,8 @@ class ApiConfig {
   static const String wards = '${desktopBase}masters/wards/';
   static const String zones = '${desktopBase}masters/zones/';
 
-  // TEMP: Hardcoded ORS key (DEBUG / INTERNAL ONLY)
-  static const String orsApiKey =
-      'eyJvcmciOiI1YjNjZTM1OTc4NTExMTAwMDFjZjYyNDgiLCJpZCI6IjU3MzI5ZTM0NjM3YTQ2N2ZhZDYwMDM0ZmQ3ZDk0NTc3IiwiaCI6Im11cm11cjY0In0=';
+  // ORS key is sourced from build-time env (`VITE_ORS_API_KEY`).
+  static const String orsApiKey = kOrsApiKey;
 
   static const String driverNextHouse = '${kApiBase}/driver/next-house/';
   static const String updateAssignmentStatus =
@@ -91,9 +90,8 @@ class ApiConfig {
 }
 
 // Base URL (without query params)
-const String kVehicleApiBaseUrl =
-    "https://api.vamosys.com/mobile/getGrpDataForTrustedClients";
+const String kVehicleApiBaseUrl = kVehicleLiveApiBaseUrl;
 
 // API Parameters (ZIGMA specific credentials - THESE MUST BE PROTECTED!)
-const String kProviderName = "BLUEPLANET";
-const String kFCode = "VAM";
+const String kProviderName = kVehicleProviderName;
+const String kFCode = kVehicleFCode;

@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:iwms_citizen_app/core/ui/app_assets.dart';
+import 'package:iwms_citizen_app/core/ui/app_copy.dart';
+import 'package:iwms_citizen_app/core/ui/app_ui_tokens.dart';
+import 'package:iwms_citizen_app/shared/widgets/app_primary_button.dart';
+import 'package:iwms_citizen_app/shared/widgets/brand_logo_badge.dart';
 
 import '../../../logic/auth/auth_bloc.dart';
 import '../../../logic/auth/auth_event.dart';
@@ -64,15 +69,15 @@ class _LoginScreenState extends State<LoginScreen> {
       fillColor: Colors.white,
       contentPadding: const EdgeInsets.symmetric(vertical: 16, horizontal: 18),
       border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
         borderSide: const BorderSide(color: Color(0xFFBBDCC1)),
       ),
       enabledBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
         borderSide: const BorderSide(color: Color(0xFFBBDCC1)),
       ),
       focusedBorder: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(18),
+        borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
         borderSide: const BorderSide(color: Color(0xFF1B5E20), width: 1.8),
       ),
     );
@@ -94,7 +99,7 @@ class _LoginScreenState extends State<LoginScreen> {
         body: Stack(
           fit: StackFit.expand,
           children: [
-                const AuthBackground(),
+            const AuthBackground(),
             SafeArea(
               child: BlocConsumer<AuthBloc, AuthState>(
                 listener: (context, state) {
@@ -116,25 +121,14 @@ class _LoginScreenState extends State<LoginScreen> {
                           children: [
                             Align(
                               alignment: Alignment.topCenter,
-                              child: Container(
-                                width: 82,
-                                height: 82,
-                                decoration: BoxDecoration(
-                                  color: Colors.white,
-                                  shape: BoxShape.circle,
-                                  boxShadow: [
-                                    BoxShadow(
-                                      color: Colors.black.withValues(alpha: 0.2),
-                                      blurRadius: 30,
-                                      offset: const Offset(0, 12),
-                                    ),
-                                  ],
-                                ),
-                                padding: const EdgeInsets.all(16),
-                                child: Image.asset('assets/images/logo.png'),
+                              child: const BrandLogoBadge(
+                                size: 82,
+                                padding: 16,
+                                backgroundOpacity: 1,
+                                shadow: AppUiTokens.elevatedCardShadow,
                               ),
                             ),
-                            const SizedBox(height: 24),
+                            const SizedBox(height: AppUiTokens.spacing24),
                             _LoginCard(
                               formKey: _formKey,
                               phoneController: _phoneController,
@@ -216,17 +210,11 @@ class _LoginCard extends StatelessWidget {
 
     return Container(
       decoration: BoxDecoration(
-        borderRadius: BorderRadius.circular(32),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
-            blurRadius: 36,
-            offset: const Offset(0, 18),
-          ),
-        ],
+        borderRadius: BorderRadius.circular(AppUiTokens.spacing32),
+        boxShadow: const [AppUiTokens.elevatedCardShadow],
       ),
       child: ClipRRect(
-        borderRadius: BorderRadius.circular(32),
+        borderRadius: BorderRadius.circular(AppUiTokens.spacing32),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
@@ -236,7 +224,7 @@ class _LoginCard extends StatelessWidget {
                 fit: StackFit.expand,
                 children: [
                   Image.asset(
-                    'assets/images/loginbackground.jpg',
+                    AppAssets.authBackground,
                     fit: BoxFit.cover,
                   ),
                   Container(
@@ -261,7 +249,7 @@ class _LoginCard extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.end,
                       children: [
                         Text(
-                          'Welcome Back',
+                          AppCopy.loginWelcomeTitle,
                           style: textTheme.headlineSmall?.copyWith(
                             color: Colors.white,
                             fontWeight: FontWeight.w700,
@@ -269,7 +257,7 @@ class _LoginCard extends StatelessWidget {
                         ),
                         const SizedBox(height: 4),
                         Text(
-                          'Login to your account.',
+                          AppCopy.loginWelcomeSubtitle,
                           style: textTheme.bodyMedium?.copyWith(
                             color: Colors.white.withValues(alpha: 0.85),
                           ),
@@ -370,25 +358,11 @@ class _LoginCard extends StatelessWidget {
                       ],
                     ),
                     const SizedBox(height: 8),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        onPressed: isSubmitting ? null : onLogin,
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: _primaryGreen,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(24),
-                          ),
-                        ),
-                        child: const Text(
-                          'Login',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      ),
+                    AppPrimaryButton(
+                      label: AppCopy.login,
+                      onPressed: isSubmitting ? null : onLogin,
+                      backgroundColor: _primaryGreen,
+                      borderRadius: 24,
                     ),
                   ],
                 ),

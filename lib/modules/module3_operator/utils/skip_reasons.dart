@@ -1,9 +1,4 @@
-const List<String> operatorSkipReasons = [
-  'No one at home',
-  'Access blocked / gate locked',
-  'Customer requested later collection',
-  'Waste already collected',
-  'Unsafe conditions',
-  'Incorrect address',
-  'Other operational issue',
-];
+import 'package:iwms_citizen_app/shared/constants/skip_reasons.dart';
+
+// Backward-compatible alias for existing imports in operator module.
+const List<String> operatorSkipReasons = kSkipReasons;

@@ -12,6 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:animations/animations.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/core/ui/app_copy.dart';
 import 'package:latlong2/latlong.dart';
 
 import '../../../../core/di.dart';
@@ -29,22 +31,14 @@ import 'package:iwms_citizen_app/core/ors_service.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
+import 'package:iwms_citizen_app/shared/constants/skip_reasons.dart';
 import 'package:iwms_citizen_app/shared/services/notification_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-const Color _driverPrimary = Color(0xFF1B5E20);
-const Color _driverAccent = Color(0xFF66BB6A);
+const Color _driverPrimary = AppColors.primary;
+const Color _driverAccent = AppColors.driverAccent;
 const Duration _kNavigationTransitionDuration = Duration(milliseconds: 600);
-
-const List<String> _skipReasons = [
-  'No one at home',
-  'Access blocked / gate locked',
-  'Customer requested later collection',
-  'Waste already collected',
-  'Unsafe conditions',
-  'Incorrect address',
-  'Other operational issue',
-];
+const List<String> _skipReasons = kSkipReasons;
 
 enum _NavigationMode { overview, navigating }
 
@@ -195,7 +189,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
             final driverLocation = _resolveDriverLocation(selectedVehicle);
 
             return Scaffold(
-              backgroundColor: const Color(0xFFF7FBF8),
+              backgroundColor: AppColors.driverBackground,
               body: SafeArea(
                 child: Column(
                   children: [
@@ -255,19 +249,19 @@ class _DriverHomePageState extends State<DriverHomePage> {
                   items: const [
                     BottomNavigationBarItem(
                       icon: Icon(Icons.home_rounded),
-                      label: 'Home',
+                      label: AppCopy.driverTabHome,
                     ),
                     BottomNavigationBarItem(
                       icon: Icon(Icons.assignment_rounded),
-                      label: 'Assignments',
+                      label: AppCopy.driverTabAssignments,
                     ),
                     BottomNavigationBarItem(
                       icon: Icon(Icons.event_available_rounded),
-                      label: 'Attendance',
+                      label: AppCopy.driverTabAttendance,
                     ),
                     BottomNavigationBarItem(
                       icon: Icon(Icons.person_outline_rounded),
-                      label: 'Profile',
+                      label: AppCopy.driverTabProfile,
                     ),
                   ],
                 ),
@@ -2839,18 +2833,18 @@ class _AssignmentsHeader extends StatelessWidget {
       child: Row(
         children: [
           const Text(
-            'Assignments',
+            AppCopy.driverAssignments,
             style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
           ),
           const Spacer(),
           _CountChip(
-            label: 'Current',
+            label: AppCopy.driverCurrent,
             count: currentCount,
             color: _driverPrimary,
           ),
           const SizedBox(width: 8),
           _CountChip(
-            label: 'History',
+            label: AppCopy.driverHistory,
             count: historyCount,
             color: Colors.grey.shade600,
           ),

@@ -1,12 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:iwms_citizen_app/core/ui/app_copy.dart';
+import 'package:iwms_citizen_app/core/ui/app_ui_tokens.dart';
+import 'package:iwms_citizen_app/shared/widgets/app_primary_button.dart';
+import 'package:iwms_citizen_app/shared/widgets/brand_logo_badge.dart';
 
 import '../../../router/app_router.dart';
+import 'auth_background.dart';
 
 class CitizenAuthIntroScreen extends StatelessWidget {
   const CitizenAuthIntroScreen({super.key});
-
-  static const Color _buttonColor = Color(0xFF2E7D5A);
 
   @override
   Widget build(BuildContext context) {
@@ -16,86 +19,40 @@ class CitizenAuthIntroScreen extends StatelessWidget {
       body: Stack(
         fit: StackFit.expand,
         children: [
-          Positioned.fill(
-            child: Image.asset(
-              'assets/images/loginbackground.jpg',
-              fit: BoxFit.cover,
-            ),
-          ),
-          Positioned.fill(
-            child: DecoratedBox(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withOpacity(0.65),
-                    Colors.black.withOpacity(0.45),
-                  ],
-                ),
-              ),
+          const Positioned.fill(
+            child: AuthBackground(
+              topOverlayOpacity: 0.65,
+              bottomOverlayOpacity: 0.45,
             ),
           ),
           SafeArea(
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 24),
+              padding: AppUiTokens.authScreenPadding,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.9),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(14),
-                    child: Image.asset('assets/images/logo.png'),
-                  ),
+                  const BrandLogoBadge(),
                   const Spacer(),
                   Text(
-                    'We Let Track Your Waste',
+                    AppCopy.authIntroHeadline,
                     style: textTheme.headlineMedium?.copyWith(
                       color: Colors.white,
                       fontWeight: FontWeight.w700,
                       letterSpacing: 0.5,
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: AppUiTokens.spacing16),
                   Text(
-                    'Join our eco community and stay on top of your daily collections.',
+                    AppCopy.authIntroSubtitle,
                     style: textTheme.bodyLarge?.copyWith(
                       color: Colors.white70,
                       height: 1.4,
                     ),
                   ),
-                  const SizedBox(height: 32),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton(
-                      onPressed: () => context.go(AppRoutePaths.citizenLogin),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _buttonColor,
-                        padding: const EdgeInsets.symmetric(vertical: 16),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30),
-                        ),
-                      ),
-                      child: const Text(
-                        'Sign in',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.w700,
-                        ),
-                      ),
-                    ),
+                  const SizedBox(height: AppUiTokens.spacing32),
+                  AppPrimaryButton(
+                    label: AppCopy.signIn,
+                    onPressed: () => context.go(AppRoutePaths.citizenLogin),
                   ),
                 ],
               ),

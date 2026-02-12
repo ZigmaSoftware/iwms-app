@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'app_colors.dart';
 import 'app_text_styles.dart';
 import 'package:iwms_citizen_app/core/constants.dart'; // Import your kPrimaryColor
+import 'package:iwms_citizen_app/core/ui/app_ui_tokens.dart';
 
 class AppTheme {
   static const PageTransitionsTheme _cupertinoPageTransitions =
@@ -55,7 +56,7 @@ class AppTheme {
           textStyle: AppTextStyles.labelLarge,
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
           ),
         ),
       ),
@@ -65,15 +66,15 @@ class AppTheme {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
           borderSide: const BorderSide(color: kPrimaryColor, width: 2),
         ),
         labelStyle: AppTextStyles.subTitle,
@@ -82,7 +83,9 @@ class AppTheme {
         color: AppColors.surface,
         elevation: 4,
         margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppUiTokens.spacing20),
+        ),
       ),
       listTileTheme: ListTileThemeData(
         iconColor: AppColors.primary,
@@ -133,7 +136,7 @@ class AppTheme {
           textStyle: AppTextStyles.labelLarge,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(12),
+            borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
           ),
         ),
       ),
@@ -143,15 +146,15 @@ class AppTheme {
         contentPadding:
             const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
         border: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
           borderSide: BorderSide.none,
         ),
         focusedBorder: OutlineInputBorder(
-          borderRadius: BorderRadius.circular(12),
+          borderRadius: BorderRadius.circular(AppUiTokens.radiusMedium),
           borderSide: const BorderSide(color: kPrimaryColor, width: 2),
         ),
         labelStyle:
@@ -170,7 +173,9 @@ class AppTheme {
         color: AppColors.darkCard,
         elevation: 0,
         margin: EdgeInsets.zero,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppUiTokens.spacing20),
+        ),
       ),
       listTileTheme: const ListTileThemeData(
         iconColor: Colors.white70,

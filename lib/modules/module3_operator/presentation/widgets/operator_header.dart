@@ -3,23 +3,19 @@ import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/core/env.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
+import 'package:iwms_citizen_app/core/ui/app_copy.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
-import 'package:iwms_citizen_app/localization/app_localizations.dart'; // ADD THIS
-
-const LinearGradient _headerGradient = LinearGradient(
-  colors: [AppColors.primary, AppColors.primaryVariant],
-  begin: Alignment.topLeft,
-  end: Alignment.bottomRight,
-);
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 class OperatorHeader extends StatefulWidget {
   const OperatorHeader({
     super.key,
     required this.name,
-    required this.empId, // Changed from emp_id
+    required this.empId,
     this.displayId,
     required this.badge,
     required this.ward,
@@ -34,7 +30,7 @@ class OperatorHeader extends StatefulWidget {
   final String badge;
   final String ward;
   final String zone;
-  final String empId; // Changed from emp_id
+  final String empId;
   final String? displayId;
   final String? subtitle;
   final VoidCallback onLogout;
@@ -46,7 +42,7 @@ class OperatorHeader extends StatefulWidget {
 }
 
 class _OperatorHeaderState extends State<OperatorHeader> {
-  static const String _baseUrl = "http://192.168.7.176:8000";
+  static const String _baseUrl = kOperatorProfileBaseUrl;
   bool hasProfile = false;
   bool imageLoading = true;
   String? imageName;
@@ -126,12 +122,12 @@ class _OperatorHeaderState extends State<OperatorHeader> {
 
   @override
   Widget build(BuildContext context) {
-    final t = AppLocalizations.of(context); // FIX: Get localizations
-    
+    final t = AppLocalizations.of(context);
+
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
-        gradient: _headerGradient,
+        gradient: OperatorTheme.headerGradient,
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(28),
           bottomRight: Radius.circular(28),
@@ -230,21 +226,23 @@ class _OperatorHeaderState extends State<OperatorHeader> {
                 width: 22,
                 height: 22,
                 child: CircularProgressIndicator(
-                    strokeWidth: 2, color: Colors.green),
+                  strokeWidth: 2,
+                  color: OperatorTheme.primary,
+                ),
               )
             : (!hasProfile)
                 ? Column(
                     mainAxisAlignment: MainAxisAlignment.center,
                     children: const [
                       Icon(Icons.person_add_alt_1,
-                          size: 26, color: Colors.green),
+                          size: 26, color: OperatorTheme.primary),
                       SizedBox(height: 2),
                       Text(
-                        "Register",
+                        AppCopy.register,
                         style: TextStyle(
                           fontSize: 8,
                           fontWeight: FontWeight.bold,
-                          color: Colors.green,
+                          color: OperatorTheme.primary,
                         ),
                       ),
                     ],
