@@ -20,6 +20,10 @@ class AppColors {
   static const Color error = Color(0xFFEF5350);
   static const Color success = Color(0xFF1ABC9C);
   static const Color warning = Color(0xFFFFB74D);
+  static const Color driverAccent = Color(0xFF66BB6A);
+  static const Color driverBackground = Color(0xFFF7FBF8);
+  static const Color operatorAccent = Color(0xFF5DB075);
+  static const Color notificationBadge = Color(0xFFFF5252);
 
   // Dark palette tuned to green brand
   static const Color darkBackground = Color(0xFF04120A);

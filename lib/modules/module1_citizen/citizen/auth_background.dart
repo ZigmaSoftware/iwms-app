@@ -1,8 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/core/ui/app_assets.dart';
 
 /// Shared background used by login-style screens.
 class AuthBackground extends StatelessWidget {
-  const AuthBackground({super.key});
+  const AuthBackground({
+    super.key,
+    this.topOverlayOpacity = 0.55,
+    this.bottomOverlayOpacity = 0.35,
+  });
+
+  final double topOverlayOpacity;
+  final double bottomOverlayOpacity;
 
   @override
   Widget build(BuildContext context) {
@@ -10,7 +18,7 @@ class AuthBackground extends StatelessWidget {
       fit: StackFit.expand,
       children: [
         Image.asset(
-          'assets/images/loginbackground.jpg',
+          AppAssets.authBackground,
           fit: BoxFit.cover,
         ),
         Container(
@@ -19,8 +27,8 @@ class AuthBackground extends StatelessWidget {
               begin: Alignment.topCenter,
               end: Alignment.bottomCenter,
               colors: [
-                Colors.black.withOpacity(0.55),
-                Colors.black.withOpacity(0.35),
+                Colors.black.withValues(alpha: topOverlayOpacity),
+                Colors.black.withValues(alpha: bottomOverlayOpacity),
               ],
             ),
           ),

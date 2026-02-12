@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:go_router/go_router.dart';
+import 'package:iwms_citizen_app/shared/widgets/brand_logo_badge.dart';
 
 import '../../../router/app_router.dart';
 
@@ -136,22 +137,10 @@ class _CitizenIntroSlidesScreenState extends State<CitizenIntroSlidesScreen> {
               padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 20),
               child: Row(
                 children: [
-                  Container(
-                    width: 60,
-                    height: 60,
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.95),
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: Colors.black.withOpacity(0.15),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    padding: const EdgeInsets.all(12),
-                    child: Image.asset('assets/images/logo.png'),
+                  const BrandLogoBadge(
+                    size: 60,
+                    padding: 12,
+                    backgroundOpacity: 0.95,
                   ),
                   const Spacer(),
                   TextButton(
