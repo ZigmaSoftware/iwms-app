@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:iwms_citizen_app/core/ui/app_assets.dart';
 
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
@@ -11,17 +12,6 @@ class OnboardingSuccessPage extends StatelessWidget {
   });
 
   final String userName;
-
-  // Helper widget to display the logo
-  Widget _imageAsset(String fileName,
-      {required double width, required double height}) {
-    return Image.asset(
-      'assets/images/$fileName',
-      width: width,
-      height: height,
-      fit: BoxFit.contain,
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -70,7 +60,12 @@ class OnboardingSuccessPage extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 40),
-              _imageAsset('logo.png', width: 80, height: 80),
+              Image.asset(
+                AppAssets.logo,
+                width: 80,
+                height: 80,
+                fit: BoxFit.contain,
+              ),
               const SizedBox(height: 20),
               Text(
                 localizations.registrationComplete,

@@ -1,16 +1,17 @@
 // lib/core/constants.dart
 
 import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 
 // --- COLOR AND STYLE CONSTANTS ---
-const Color kPrimaryColor = Color(0xFF1B5E20); // Deep green primary
-const Color kAccentColor = Color(0xFF2E7D5A); // Emerald accent
-const Color kSoftTintColor = Color(0xFFEAF6EB); // Soft green background
+const Color kPrimaryColor = AppColors.primary; // Deep green primary
+const Color kAccentColor = AppColors.primaryVariant; // Emerald accent
+const Color kSoftTintColor = AppColors.accentLight; // Soft green background
 
-const Color kTextColor = Color(0xFF0D2F20); // Rich forest text
-const Color kPlaceholderColor = Color(0xFF4E7A65); // Muted herb hints
+const Color kTextColor = AppColors.textPrimary; // Rich forest text
+const Color kPlaceholderColor = AppColors.textSecondary; // Muted herb hints
 const Color kContainerColor = kSoftTintColor; // Light container background
-const Color kBorderColor = Color(0xFF9CC8AA); // Soft green border
+const Color kBorderColor = AppColors.accentMuted; // Soft green border
 
 // --- NEW ENUM FOR FILTERING (Shared by Bloc and UI) ---
 enum VehicleFilter { all, running, idle, parked, noData }

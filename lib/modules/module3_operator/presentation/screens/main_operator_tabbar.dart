@@ -9,7 +9,6 @@ import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_assignment_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
@@ -18,6 +17,7 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/o
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_profile_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendance_home_operator.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'package:go_router/go_router.dart';
@@ -188,7 +188,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         return true;
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: OperatorTheme.background,
         body: SafeArea(
           child: AnimatedSwitcher(
             duration: const Duration(milliseconds: 280),
@@ -205,16 +205,16 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
             type: BottomNavigationBarType.fixed,
             currentIndex: _activeTab.index,
             onTap: (index) => _setTab(OperatorNavTab.values[index]),
-            selectedItemColor: AppColors.primary,
+            selectedItemColor: OperatorTheme.primary,
             unselectedItemColor: Colors.black54,
             showUnselectedLabels: true,
             selectedFontSize: 11,
             unselectedFontSize: 11,
-        items: [
-          BottomNavigationBarItem(
-            icon: const Icon(Icons.home_rounded),
-            label: localizations.operatorNavHome,
-          ),
+            items: [
+              BottomNavigationBarItem(
+                icon: const Icon(Icons.home_rounded),
+                label: localizations.operatorNavHome,
+              ),
               BottomNavigationBarItem(
                 icon: const Icon(Icons.assignment_outlined),
                 label: localizations.operatorNavAssignments,
@@ -223,10 +223,10 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
                 icon: const Icon(Icons.dashboard_outlined),
                 label: localizations.operatorNavOverview,
               ),
-          BottomNavigationBarItem(
-            icon: _buildAttendanceIcon(),
-            label: localizations.operatorNavAttendance,
-          ),
+              BottomNavigationBarItem(
+                icon: _buildAttendanceIcon(),
+                label: localizations.operatorNavAttendance,
+              ),
               BottomNavigationBarItem(
                 icon: const Icon(Icons.person_outline_rounded),
                 label: localizations.operatorNavProfile,
@@ -257,11 +257,11 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
                     width: 12,
                     height: 12,
                     decoration: BoxDecoration(
-                      color: Colors.redAccent,
+                      color: OperatorTheme.attendanceAlert,
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.redAccent.withOpacity(0.6),
+                          color: OperatorTheme.attendanceAlert.withValues(alpha: 0.6),
                           blurRadius: 4,
                           spreadRadius: 1,
                         ),

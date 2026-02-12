@@ -4,15 +4,15 @@ import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 
 import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_citizen_app/core/env.dart';
 import '../models/waste_period.dart';
 import '../models/waste_reports.dart';
 import '../models/waste_summary.dart';
 
 class TrackService {
   TrackService({
-    this.baseUrl =
-        'https://zigma.in/d2d/folders/waste_collected_summary_report/test_waste_collected_data_api.php',
-    this.apiKey = 'ZIGMA-DELHI-WEIGHMENT-2025-SECURE',
+    this.baseUrl = kTrackReportBaseUrl,
+    this.apiKey = kTrackReportApiKey,
     http.Client? client,
   })  : _client = client ?? http.Client(),
         citizenSummaryEndpoint = ApiConfig.wasteSummaryEndpoint;

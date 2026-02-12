@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/core/ui/app_assets.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -50,7 +51,7 @@ class _SplashScreenState extends State<SplashScreen>
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Image.asset(
-                    'assets/images/logo.png',
+                    AppAssets.logo,
                     width: 150,
                     height: 150,
                   ),
@@ -111,4 +112,3 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 }
-
