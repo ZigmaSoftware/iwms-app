@@ -32,7 +32,6 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/o
 
 // Driver
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_home_page.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_login_screen.dart';
 
 // Admin
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/dashboard_screen.dart';
@@ -176,6 +175,11 @@ class AppRouter {
         // ---------------- OPERATOR ROUTES ----------------
 
         GoRoute(
+          path: AppRoutePaths.operatorLogin,
+          builder: (context, state) => const LoginScreen(),
+        ),
+
+        GoRoute(
           path: AppRoutePaths.operatorHome,
           builder: (context, state) => const OperatorHomePage(),
         ),
@@ -235,7 +239,7 @@ class AppRouter {
         // Driver
         GoRoute(
           path: AppRoutePaths.driverLogin,
-          builder: (context, state) => const DriverLoginScreen(),
+          builder: (context, state) => const LoginScreen(),
         ),
         GoRoute(
           path: AppRoutePaths.driverHome,

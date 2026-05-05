@@ -1,0 +1,14 @@
+{
+	"folders": [
+		{
+			"path": "../.."
+		},
+		{
+			"path": "../../../iwms-backend"
+		},
+		{
+			"path": "../../../bp-mobile-app/lib/attendance"
+		}
+	],
+	"settings": {}
+}

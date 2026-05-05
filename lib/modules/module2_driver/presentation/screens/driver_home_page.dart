@@ -1,6 +1,3 @@
-// ============================================================
-// PART 1: Imports, Constants, Enums, and Main Widget Classes
-// ============================================================
 
 import 'dart:convert';
 import 'dart:io';
@@ -231,41 +228,75 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 ),
               ),
               bottomNavigationBar: SafeArea(
-                child: BottomNavigationBar(
-                  type: BottomNavigationBarType.fixed,
-                  currentIndex: _activeTab.index,
-                  selectedItemColor: _driverPrimary,
-                  unselectedItemColor: Colors.black54,
-                  selectedLabelStyle:
-                      const TextStyle(fontWeight: FontWeight.w700),
-                  unselectedLabelStyle:
-                      const TextStyle(fontWeight: FontWeight.w500),
-                  onTap: (index) {
-                    final tab = _tabFromIndex(index);
-                    if (tab != _activeTab) {
-                      setState(() => _activeTab = tab);
-                    }
-                  },
-                  items: const [
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.home_rounded),
-                      label: AppCopy.driverTabHome,
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.assignment_rounded),
-                      label: AppCopy.driverTabAssignments,
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.event_available_rounded),
-                      label: AppCopy.driverTabAttendance,
-                    ),
-                    BottomNavigationBarItem(
-                      icon: Icon(Icons.person_outline_rounded),
-                      label: AppCopy.driverTabProfile,
-                    ),
-                  ],
-                ),
-              ),
+  minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+  child: Container(
+    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+    decoration: BoxDecoration(
+      color: Colors.white,
+      borderRadius: BorderRadius.circular(24),
+      border: Border.all(color: const Color(0xFFE8ECF4)),
+      boxShadow: [
+        BoxShadow(
+          color: Colors.black.withOpacity(0.07),
+          blurRadius: 14,
+          offset: const Offset(0, 4),
+        ),
+      ],
+    ),
+    child: Row(
+      children: [
+        Expanded(
+          child: _DriverBottomNavItem(
+            icon: Icons.home_rounded,
+            label: AppCopy.driverTabHome,
+            selected: _activeTab == _DriverTab.home,
+            onTap: () {
+              if (_activeTab != _DriverTab.home) {
+                setState(() => _activeTab = _DriverTab.home);
+              }
+            },
+          ),
+        ),
+        Expanded(
+          child: _DriverBottomNavItem(
+            icon: Icons.assignment_rounded,
+            label: AppCopy.driverTabAssignments,
+            selected: _activeTab == _DriverTab.assignments,
+            onTap: () {
+              if (_activeTab != _DriverTab.assignments) {
+                setState(() => _activeTab = _DriverTab.assignments);
+              }
+            },
+          ),
+        ),
+        Expanded(
+          child: _DriverBottomNavItem(
+            icon: Icons.event_available_rounded,
+            label: AppCopy.driverTabAttendance,
+            selected: _activeTab == _DriverTab.attendance,
+            onTap: () {
+              if (_activeTab != _DriverTab.attendance) {
+                setState(() => _activeTab = _DriverTab.attendance);
+              }
+            },
+          ),
+        ),
+        Expanded(
+          child: _DriverBottomNavItem(
+            icon: Icons.person_outline_rounded,
+            label: AppCopy.driverTabProfile,
+            selected: _activeTab == _DriverTab.profile,
+            onTap: () {
+              if (_activeTab != _DriverTab.profile) {
+                setState(() => _activeTab = _DriverTab.profile);
+              }
+            },
+          ),
+        ),
+      ],
+    ),
+  ),
+),
             );
           },
         ),
@@ -806,6 +837,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
   //   return out;
   // }
 
+  
+
   Widget _buildTab(_DriverTab tab, LatLng driverLocation, String nameFromState,
       String empIdFromState, VehicleModel? vehicle) {
     switch (tab) {
@@ -837,8 +870,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
         );
       case _DriverTab.attendance:
         return AttendancePageDriver(
-          operatorName: nameFromState,
-          operatorCode: empIdFromState,
+          driverName: nameFromState,
+          driverCode: empIdFromState,
         );
       case _DriverTab.profile:
         return _ProfileTab(
@@ -879,9 +912,62 @@ class _DriverHomePageState extends State<DriverHomePage> {
     });
   }
 }
-// ============================================================
-// PART 2: Header, Stats, and Avatar Widgets
-// ============================================================
+
+
+class _DriverBottomNavItem extends StatelessWidget {
+  const _DriverBottomNavItem({
+    required this.icon,
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    const primary = AppColors.primary;
+    const inactive = Color(0xFF7B8794);
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(18),
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+        decoration: BoxDecoration(
+          color: selected ? primary.withOpacity(0.10) : Colors.transparent,
+          borderRadius: BorderRadius.circular(18),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              icon,
+              size: 23,
+              color: selected ? primary : inactive,
+            ),
+            const SizedBox(height: 4),
+            Text(
+              label,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                fontSize: 11.5,
+                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
+                color: selected ? primary : inactive,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
 
 class _DriverHeader extends StatelessWidget {
   const _DriverHeader({

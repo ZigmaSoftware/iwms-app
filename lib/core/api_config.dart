@@ -24,19 +24,21 @@ Dio createDioClient() {
 }
 
 class ApiConfig {
-  static const String _legacyBase = 'https://zigma.in/iwms_app/iwms_app/';
-
   /// Desktop endpoints (open lists) used for driver-side data pulls.
   static const String desktopBase = kDesktopBase;
   static const String wasteSummaryEndpoint =
       '${desktopBase}waste/citizen-summary/';
-  static const String customerList = '${desktopBase}customers/customercreations/';
+  static const String customerList =
+      '${desktopBase}customers/customercreations/';
   static const String assignments = '${desktopBase}role-assign/assignments/';
-  static const String staffAssignments = '${desktopBase}role-assign/staff-assignments/';
-  static const String collectionLogs = '${desktopBase}role-assign/collection-logs/';
+  static const String staffAssignments =
+      '${desktopBase}role-assign/staff-assignments/';
+  static const String collectionLogs =
+      '${desktopBase}role-assign/collection-logs/';
   static const String assignmentCustomerStatuses =
       '${desktopBase}role-assign/assignment-customer-statuses/';
-  static const String citizenAssignments = '${desktopBase}role-assign/citizen-assignments/';
+  static const String citizenAssignments =
+      '${desktopBase}role-assign/citizen-assignments/';
   static const String tripAssignments = '${desktopBase}trip-assign/trips/';
   static const String tripShifts = '${desktopBase}trip-assign/shifts/';
   static const String tripCollectionPoints =
@@ -50,7 +52,8 @@ class ApiConfig {
       '${desktopBase}trip-assign/trip-execution-stops/';
   static const String tripRoutePlanGenerate =
       '${desktopBase}trip-assign/route-plans/generate/';
-  static const String tripGenerate = '${desktopBase}trip-assign/trips/generate/';
+  static const String tripGenerate =
+      '${desktopBase}trip-assign/trips/generate/';
   static const String tripDriverRoute =
       '${desktopBase}trip-assign/trips/driver-route/';
   static const String staffTemplates =
@@ -64,17 +67,12 @@ class ApiConfig {
   // ORS key is sourced from build-time env (`VITE_ORS_API_KEY`).
   static const String orsApiKey = kOrsApiKey;
 
-  static const String driverNextHouse = '${kApiBase}/driver/next-house/';
+  static const String driverNextHouse = '$kApiBase/driver/next-house/';
   static const String updateAssignmentStatus =
-      '${kApiBase}/driver/assignment/update-status/';
-
-  
-
-//   static const String driverLogin = '${_legacyBase}login.php';
-//   static const String citizenRegister = '${_legacyBase}citizen_register.php';
+      '$kApiBase/driver/assignment/update-status/';
 
   /// Django backend endpoint for mobile authentication.
-  /// Mobile login is registered at `/api/desktop/login/` via the grouped router.
+  /// Mobile login is exposed at `/api/v1/login/` via the backend mobile alias.
   static const String _defaultMobileLogin = '${desktopBase}login/';
   static const String _defaultCitizenLogin = _defaultMobileLogin;
   static const String citizenLogin = String.fromEnvironment(

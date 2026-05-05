@@ -109,14 +109,14 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         user?.userName.trim().isNotEmpty == true ? user!.userName : "Operator";
     final fallbackCode =
         user?.userId.trim().isNotEmpty == true ? user!.userId : "OP-000";
-    final fallbackemp_id =
+    final fallbackEmpId =
         user?.emp_id?.trim().isNotEmpty == true ? user!.emp_id : "000";
     final fallbackEmployeeCode =
         user?.employeeId?.trim().isNotEmpty == true ? user!.employeeId : "";
     return OperatorSessionDetails(
       displayName: fallbackName,
       operatorCode: fallbackCode,
-      operatoremp_id: fallbackemp_id!,
+      operatoremp_id: fallbackEmpId!,
       employeeCode: fallbackEmployeeCode ?? "",
       wardLabel: "Ward 12",
       zoneLabel: "Zone 3",
@@ -154,7 +154,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
         bloc.state is AuthStateAuthenticated
             ? (bloc.state as AuthStateAuthenticated).userName
             : null);
-    final emp_idFromState = context.select<AuthBloc, String?>((bloc) =>
+    final empIdFromState = context.select<AuthBloc, String?>((bloc) =>
         bloc.state is AuthStateAuthenticated
             ? (bloc.state as AuthStateAuthenticated).emp_id
             : null);
@@ -163,8 +163,8 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
             ? (bloc.state as AuthStateAuthenticated).employeeId
             : null);
     final localizations = AppLocalizations.of(context);
-    final resolvedEmpId = (emp_idFromState?.trim().isNotEmpty == true)
-        ? emp_idFromState!
+    final resolvedEmpId = (empIdFromState?.trim().isNotEmpty == true)
+        ? empIdFromState!
         : (_sessionDetails?.operatoremp_id ?? "000");
     final resolvedEmployeeCode =
         (employeeIdFromState?.trim().isNotEmpty == true)
@@ -178,6 +178,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
               employeeCode: resolvedEmployeeCode,
             ))
         .copyWith(displayName: nameFromState ?? _sessionDetails?.displayName);
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
     return WillPopScope(
       onWillPop: () async {
@@ -200,36 +201,124 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
             ),
           ),
         ),
-        bottomNavigationBar: SafeArea(
-          child: BottomNavigationBar(
-            type: BottomNavigationBarType.fixed,
-            currentIndex: _activeTab.index,
-            onTap: (index) => _setTab(OperatorNavTab.values[index]),
-            selectedItemColor: OperatorTheme.primary,
-            unselectedItemColor: Colors.black54,
-            showUnselectedLabels: true,
-            selectedFontSize: 11,
-            unselectedFontSize: 11,
-            items: [
-              BottomNavigationBarItem(
-                icon: const Icon(Icons.home_rounded),
-                label: localizations.operatorNavHome,
+        bottomNavigationBar: Container(
+          decoration: BoxDecoration(
+            color: OperatorTheme.surface,
+            border: const Border(
+              top: BorderSide(color: OperatorTheme.cardBorder, width: 1),
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.14),
+                blurRadius: 24,
+                spreadRadius: 2,
+                offset: const Offset(0, -8),
               ),
-              BottomNavigationBarItem(
-                icon: const Icon(Icons.assignment_outlined),
-                label: localizations.operatorNavAssignments,
+            ],
+          ),
+          padding: EdgeInsets.fromLTRB(
+            8,
+            4,
+            8,
+            bottomInset > 0 ? (bottomInset - 14).clamp(4, 14).toDouble() : 4,
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: _buildNavItem(
+                  icon: const Icon(Icons.home_rounded),
+                  label: localizations.operatorNavHome,
+                  selected: _activeTab == OperatorNavTab.home,
+                  onTap: () => _setTab(OperatorNavTab.home),
+                ),
               ),
-              BottomNavigationBarItem(
-                icon: const Icon(Icons.dashboard_outlined),
-                label: localizations.operatorNavOverview,
+              Expanded(
+                child: _buildNavItem(
+                  icon: const Icon(Icons.assignment_outlined),
+                  label: localizations.operatorNavAssignments,
+                  selected: _activeTab == OperatorNavTab.assignments,
+                  onTap: () => _setTab(OperatorNavTab.assignments),
+                ),
               ),
-              BottomNavigationBarItem(
-                icon: _buildAttendanceIcon(),
-                label: localizations.operatorNavAttendance,
+              Expanded(
+                child: _buildNavItem(
+                  icon: const Icon(Icons.dashboard_outlined),
+                  label: localizations.operatorNavOverview,
+                  selected: _activeTab == OperatorNavTab.overview,
+                  onTap: () => _setTab(OperatorNavTab.overview),
+                ),
               ),
-              BottomNavigationBarItem(
-                icon: const Icon(Icons.person_outline_rounded),
-                label: localizations.operatorNavProfile,
+              Expanded(
+                child: _buildNavItem(
+                  icon: _buildAttendanceIcon(),
+                  label: localizations.operatorNavAttendance,
+                  selected: _activeTab == OperatorNavTab.attendance,
+                  onTap: () => _setTab(OperatorNavTab.attendance),
+                ),
+              ),
+              Expanded(
+                child: _buildNavItem(
+                  icon: const Icon(Icons.person_outline_rounded),
+                  label: localizations.operatorNavProfile,
+                  selected: _activeTab == OperatorNavTab.profile,
+                  onTap: () => _setTab(OperatorNavTab.profile),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNavItem({
+    required Widget icon,
+    required String label,
+    required bool selected,
+    required VoidCallback onTap,
+  }) {
+    final itemColor = selected ? OperatorTheme.primary : Colors.black54;
+
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(18),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          padding: const EdgeInsets.fromLTRB(4, 6, 4, 2),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(18),
+            color: selected
+                ? OperatorTheme.accentLight.withOpacity(0.92)
+                : Colors.transparent,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              Transform.translate(
+                offset: const Offset(0, 2),
+                child: IconTheme(
+                  data: IconThemeData(
+                    color: itemColor,
+                    size: selected ? 24 : 23,
+                  ),
+                  child: icon,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: itemColor,
+                  fontSize: 10.5,
+                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
+                  height: 1,
+                ),
               ),
             ],
           ),
@@ -261,7 +350,8 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
                       shape: BoxShape.circle,
                       boxShadow: [
                         BoxShadow(
-                          color: OperatorTheme.attendanceAlert.withValues(alpha: 0.6),
+                          color: OperatorTheme.attendanceAlert
+                              .withValues(alpha: 0.6),
                           blurRadius: 4,
                           spreadRadius: 1,
                         ),
@@ -296,7 +386,8 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
           onOpenHistory: () {
             Navigator.of(context).push(
               MaterialPageRoute(
-                builder: (_) => AttendanceHistory(empId: session.operatoremp_id),
+                builder: (_) =>
+                    AttendanceHistory(empId: session.operatoremp_id),
               ),
             );
           },
@@ -342,42 +433,5 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Opening operator profile editor...')),
     );
-  }
-
-  String _labelForTab(OperatorNavTab tab) {
-    switch (tab) {
-      case OperatorNavTab.home:
-        return "Home";
-      case OperatorNavTab.assignments:
-        return "Assignments";
-      case OperatorNavTab.overview:
-        return "Overview";
-      case OperatorNavTab.attendance:
-        return "Attendance";
-      case OperatorNavTab.profile:
-        return "Profile";
-    }
-  }
-
-  OperatorNavTab? _tabFromValue(dynamic value) {
-    if (value is OperatorNavTab) return value;
-    if (value is int) {
-      return OperatorNavTab.values[value];
-    }
-    if (value is String) {
-      switch (value) {
-        case "Home":
-          return OperatorNavTab.home;
-        case "Assignments":
-          return OperatorNavTab.assignments;
-        case "Overview":
-          return OperatorNavTab.overview;
-        case "Attendance":
-          return OperatorNavTab.attendance;
-        case "Profile":
-          return OperatorNavTab.profile;
-      }
-    }
-    return null;
   }
 }

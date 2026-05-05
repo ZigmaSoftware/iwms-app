@@ -361,7 +361,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     try {
       var request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.7.176:8000/api/desktop/recognize/'),  //can use local ip or domain name
+        Uri.parse('http://192.168.1.199:8000/api/desktop/recognize/'),  //can use local ip or domain name
       );
 
       final token = await _getAuthToken();
@@ -428,7 +428,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       var request = http.MultipartRequest(
         'POST',
         Uri.parse(
-            'http://192.168.7.176:8000/api/desktop/vehicles/trip-attendance/'),
+            'http://192.168.1.199:8000/api/desktop/vehicles/trip-attendance/'),
       );
 
       final token = await _getAuthToken();

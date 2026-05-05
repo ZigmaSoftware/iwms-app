@@ -13,14 +13,15 @@ const bool kEnforcePermissions =
 // Override the local/prod bases via dart-define if needed.
 const String _localApiOverride = String.fromEnvironment(
   'VITE_API_LOCAL',
-  defaultValue: 'http://192.168.6.198:8000/api/v1',
+  defaultValue: 'http://192.168.1.199:8000/api/v1',
 );
 const String _prodApiOverride = String.fromEnvironment(
   'VITE_API_PROD',
-  defaultValue: 'http://192.168.6.198:8000/api/v1',
+  defaultValue: 'http://192.168.1.199:8000/api/v1',
 );
 
 const String kApiBase = kProd ? _prodApiOverride : _localApiOverride;
+
 /// Base path for the grouped router endpoints (no `/desktop` segment in v1).
 const String kDesktopBase = '$kApiBase/';
 
@@ -59,5 +60,5 @@ const String kTrackReportApiKey = String.fromEnvironment(
 
 const String kOperatorProfileBaseUrl = String.fromEnvironment(
   'VITE_OPERATOR_PROFILE_BASE_URL',
-  defaultValue: 'http://192.168.7.176:8000',
+  defaultValue: 'http://192.168.1.199:8000',
 );

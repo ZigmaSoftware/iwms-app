@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
@@ -10,9 +9,7 @@ import '../models/daily_assignment_model.dart';
 import '../../core/api_config.dart';
 
 class AssignmentRepository {
-  final Dio _dio;
-
-  AssignmentRepository(this._dio);
+  AssignmentRepository(Dio dio);
 
   /// Fetches today's assignments based on the logged-in user's role
   Future<List<DailyAssignmentModel>> fetchTodayAssignments() async {
@@ -26,7 +23,7 @@ class AssignmentRepository {
     try {
       // Use authorized Dio that includes JWT token
       final dio = await authorizedDio();
-      
+
       final resp = await dio.get(
         ApiConfig.assignments,
         queryParameters: {
@@ -39,9 +36,9 @@ class AssignmentRepository {
 
       // Handle different response formats
       final decoded = resp.data;
-      final List list = decoded is List 
-          ? decoded 
-          : (decoded is Map 
+      final List list = decoded is List
+          ? decoded
+          : (decoded is Map
               ? (decoded['results'] ?? decoded['data'] ?? [])
               : []);
 
@@ -51,10 +48,9 @@ class AssignmentRepository {
 
       debugPrint('📊 Found ${assignments.length} assignment(s)');
       return assignments;
-      
     } on DioException catch (e) {
       debugPrint('❌ DioException fetching assignments: ${e.message}');
-      
+
       if (e.response?.statusCode == 401) {
         throw Exception('Please login again.');
       }
@@ -63,12 +59,12 @@ class AssignmentRepository {
         debugPrint('🚫 Access blocked: ${e.response?.data}');
         throw Exception('Request not allowed.');
       }
-      
+
       if (e.response?.statusCode == 404) {
         debugPrint('⚠️ Assignments endpoint not found');
         return [];
       }
-      
+
       rethrow;
     } catch (e) {
       debugPrint('❌ Error fetching assignments: $e');
@@ -77,37 +73,37 @@ class AssignmentRepository {
   }
 
   /// Fetches assignments for a specific date
-  Future<List<DailyAssignmentModel>> fetchAssignmentsByDate(DateTime date) async {
+  Future<List<DailyAssignmentModel>> fetchAssignmentsByDate(
+      DateTime date) async {
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
 
     debugPrint('📋 ASSIGNMENT QUERY → date=$dateStr');
 
     try {
       final dio = await authorizedDio();
-      
+
       final resp = await dio.get(
         ApiConfig.assignments,
         queryParameters: {'date': dateStr},
       );
 
       final decoded = resp.data;
-      final List list = decoded is List 
-          ? decoded 
-          : (decoded is Map 
+      final List list = decoded is List
+          ? decoded
+          : (decoded is Map
               ? (decoded['results'] ?? decoded['data'] ?? [])
               : []);
 
       return list
           .map((e) => DailyAssignmentModel.fromJson(e as Map<String, dynamic>))
           .toList();
-          
     } on DioException catch (e) {
       debugPrint('❌ Error fetching assignments for $dateStr: ${e.message}');
-      
+
       if (e.response?.statusCode == 403) {
         throw Exception('Request not allowed.');
       }
-      
+
       rethrow;
     }
   }
@@ -149,13 +145,25 @@ class AssignmentRepository {
       final decoded = resp.data;
       final List list = decoded is List
           ? decoded
-          : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
+          : (decoded is Map
+              ? (decoded['results'] ?? decoded['data'] ?? [])
+              : []);
 
       return list
           .map((e) => DailyAssignmentModel.fromJson(e as Map<String, dynamic>))
           .toList();
     } on DioException catch (e) {
       debugPrint('❌ Error fetching assignment history: ${e.message}');
+      if (e.response?.statusCode == 401) {
+        throw Exception('Please login again.');
+      }
+      if (e.response?.statusCode == 403) {
+        throw Exception('Request not allowed.');
+      }
+      if (e.response?.statusCode == 404) {
+        debugPrint('⚠️ Assignment history endpoint not found');
+        return [];
+      }
       rethrow;
     } catch (e) {
       debugPrint('❌ Unexpected error fetching assignment history: $e');
@@ -188,7 +196,9 @@ class AssignmentRepository {
       final decoded = resp.data;
       final List list = decoded is List
           ? decoded
-          : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
+          : (decoded is Map
+              ? (decoded['results'] ?? decoded['data'] ?? [])
+              : []);
 
       return list
           .map((e) => DailyAssignmentModel.fromJson(e as Map<String, dynamic>))
@@ -197,6 +207,10 @@ class AssignmentRepository {
       debugPrint('❌ Error fetching operator assignments: ${e.message}');
       if (e.response?.statusCode == 403) {
         throw Exception('You do not have permission to view assignments.');
+      }
+      if (e.response?.statusCode == 404) {
+        debugPrint('⚠️ Operator assignments endpoint not found');
+        return [];
       }
       rethrow;
     } catch (e) {
@@ -231,35 +245,34 @@ class AssignmentRepository {
 
     try {
       final dio = await authorizedDio();
-      
+
       final resp = await dio.post(
         ApiConfig.assignments,
         data: payload,
       );
 
       debugPrint('✅ Assignment created: ${resp.statusCode}');
-      return resp.statusCode != null && 
-             resp.statusCode! >= 200 && 
-             resp.statusCode! < 300;
-             
+      return resp.statusCode != null &&
+          resp.statusCode! >= 200 &&
+          resp.statusCode! < 300;
     } on DioException catch (e) {
       debugPrint('❌ Error creating assignment: ${e.message}');
       debugPrint('   Response: ${e.response?.data}');
-      
+
       if (e.response?.statusCode == 403) {
         throw Exception('You do not have permission to create assignments.');
       }
-      
+
       if (e.response?.statusCode == 400) {
         final errorData = e.response?.data;
         if (errorData is Map) {
-          final errorMsg = errorData['detail'] ?? 
-                          errorData['error'] ?? 
-                          'Invalid assignment data';
+          final errorMsg = errorData['detail'] ??
+              errorData['error'] ??
+              'Invalid assignment data';
           throw Exception(errorMsg);
         }
       }
-      
+
       return false;
     } catch (e) {
       debugPrint('❌ Unexpected error: $e');
@@ -274,12 +287,12 @@ class AssignmentRepository {
     required String shift,
   }) async {
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
-    
+
     debugPrint('🔍 Checking conflict: date=$dateStr ward=$wardId shift=$shift');
 
     try {
       final dio = await authorizedDio();
-      
+
       final resp = await dio.get(
         ApiConfig.assignments,
         queryParameters: {
@@ -292,12 +305,12 @@ class AssignmentRepository {
       final decoded = resp.data;
       final List items = decoded is List
           ? decoded
-          : (decoded is Map 
+          : (decoded is Map
               ? (decoded['results'] ?? decoded['data'] ?? [])
               : []);
 
       final hasConflict = items.isNotEmpty;
-      
+
       if (hasConflict) {
         debugPrint('⚠️ Conflict found: ${items.length} existing assignment(s)');
       } else {
@@ -305,7 +318,6 @@ class AssignmentRepository {
       }
 
       return hasConflict;
-      
     } on DioException catch (e) {
       debugPrint('⚠️ Conflict check failed: ${e.message}');
       // Fail open - don't block on network error

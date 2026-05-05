@@ -1,298 +1,261 @@
+
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
-import 'package:auto_size_text/auto_size_text.dart';
-import 'package:flutter/material.dart';
-import 'package:intl/intl.dart';
+
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:animated_neumorphic/animated_neumorphic.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
-import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
-import 'package:provider/provider.dart';
-import 'package:geolocator/geolocator.dart'; // Import geolocator package
+import 'package:flutter/material.dart';
+import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
-// import 'package:zigma_payroll/attendance/userimage.dart';
 
-// import '../provider/username.dart';
 import 'camerapage.dart';
 
-const Color _operatorPrimary = AppColors.primary;
-const Color _operatorAccent = AppColors.primaryVariant;
+// ── Design tokens ─────────────────────────────────────────────────────────
+const _kPrimary  = AppColors.primary;
+const _kBg       = Color(0xFFF4F6FA);
+const _kSurface  = Colors.white;
+const _kGreen    = Color(0xFF0F8A58);
+const _kGreenBg  = Color(0xFFE7F6EE);
+const _kAmber    = Color(0xFFD97706);
+const _kAmberBg  = Color(0xFFFFF8EB);
+const _kTextPri  = Color(0xFF0B1F3A);
+const _kTextSec  = Color(0xFF6B7C93);
+const _kBorder   = Color(0xFFE8ECF4);
 
-// Easily tweakable timings
-const Duration kTripBlinkInterval = Duration(minutes: 2);
-const Duration kTripBlinkDuration = Duration(minutes: 2);
+const Duration kTripBlinkInterval      = Duration(minutes: 2);
+const Duration kTripBlinkDuration      = Duration(minutes: 2);
 const Duration kTripAttendanceCooldown = Duration(minutes: 1);
 
+// ── Pulse rings painter ───────────────────────────────────────────────────
+class _RingsPainter extends CustomPainter {
+  const _RingsPainter({required this.progress, required this.color});
+  final double progress;
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final center = Offset(size.width / 2, size.height / 2);
+    for (int i = 0; i < 3; i++) {
+      final t = (progress + i / 3) % 1.0;
+      final radius = size.width * (0.30 + t * 0.22);
+      final opacity = (1 - t) * 0.20;
+      canvas.drawCircle(
+        center, radius,
+        Paint()
+          ..color = color.withOpacity(opacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.2 - t * 1.4,
+      );
+    }
+  }
+
+  @override
+  bool shouldRepaint(_RingsPainter o) =>
+      progress != o.progress || color != o.color;
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// Main Widget
+// ════════════════════════════════════════════════════════════════════════════
 class AttendancePage extends StatefulWidget {
   const AttendancePage({
     super.key,
     this.operatorName = '',
     this.operatorCode = '',
-    this.emp_id='',
+    this.empId = '',
   });
-
   final String operatorName;
   final String operatorCode;
-  final String emp_id;
+  final String empId;
+
   @override
   State<AttendancePage> createState() => _AttendancePageState();
 }
 
-class _AttendancePageState extends State<AttendancePage> {
-  final bool _isElevated = false;
-  bool _punchPressed = false;
+class _AttendancePageState extends State<AttendancePage>
+    with SingleTickerProviderStateMixin {
 
-  String greetingMessage = "";
-  late String buttonText = "Mark for Today";
-  final bool _isActive = false;
-  String _latitude = '--';
-  String _longitude = '--';
-  String _checkInDisplay = "--:--";
-  String _checkOutDisplay = "--:--";
-  bool _isCheckedIn = false;
-  bool _isCheckedOut = false;
-  bool _isStatusLoading = false;
-  int _presentDays = 0;
-  int _leaveDays = 0;
-  int _permissionDays = 0;
-  DateTime? _lastTripAttendanceAt;
+  // state
+  bool   _punchPressed    = false;
+  String _lat             = '--';
+  String _lng             = '--';
+  String _checkIn         = '--:--';
+  String _checkOut        = '--:--';
+  bool   _isCheckedIn     = false;
+  bool   _isCheckedOut    = false;
+  bool   _isStatusLoading = false;
+  int    _presentDays     = 0;
+  int    _leaveDays       = 0;
+  int    _permDays        = 0;
+  DateTime? _lastTripAt;
   late String _time;
   late String _date;
-  Timer? _timer; // Declare a Timer variable
   Timer? _clockTimer;
   Timer? _tripCooldownTimer;
-  StreamSubscription<ConnectivityResult>? _connectivitySub;
-  bool _isOnline = true;
-
-  Duration _totalWorkingHours = Duration.zero;
-  String? imageName;
-  bool isLoading = true;
+  StreamSubscription? _connectivitySub;
+  bool _isOnline          = true;
+  Duration _worked        = Duration.zero;
   List<Map<String, dynamic>> _pendingSync = [];
-  bool _tripWindowActive = false;
-  late VoidCallback _blinkWindowListener;
-
-  // Helper method to format duration
-  String _formatDuration(Duration duration) {
-    int hours = duration.inHours;
-    int minutes = duration.inMinutes % 60;
-    return '${hours.toString().padLeft(2, '0')}:${minutes.toString().padLeft(2, '0')}';
-  }
-
-  bool _isTripOnCooldown() {
-    if (_lastTripAttendanceAt == null) return false;
-    return DateTime.now().difference(_lastTripAttendanceAt!) <
-        kTripAttendanceCooldown;
-  }
-
-  Duration _tripCooldownRemaining() {
-    if (_lastTripAttendanceAt == null) return Duration.zero;
-    final elapsed = DateTime.now().difference(_lastTripAttendanceAt!);
-    if (elapsed >= kTripAttendanceCooldown) return Duration.zero;
-    return kTripAttendanceCooldown - elapsed;
-  }
-
-
+  bool _tripWindow        = false;
+  late VoidCallback _blinkCb;
+  late final AnimationController _pulse;
 
   @override
   void initState() {
     super.initState();
+    _pulse = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
+    _updateClock();
     _fetchLocation();
-
-    _checkInternetInitial();
-
-    _connectivitySub = Connectivity()
-        .onConnectivityChanged
-        .listen((ConnectivityResult result) async {
-      final hasInternet = await _hasInternet();
-      if (!mounted) return;
-      setState(() => _isOnline = hasInternet);
+    _checkNet();
+    _connectivitySub = Connectivity().onConnectivityChanged.listen((_) async {
+      final ok = await _hasInternet();
+      if (mounted) setState(() => _isOnline = ok);
     });
-    _clockTimer =
-        Timer.periodic(const Duration(seconds: 1), (Timer t) => _getTime());
-    _updateTimeAndDate();
-    // fetchAndSetImage();
-    // _fetchAttendanceData();
-    _timer = Timer.periodic(const Duration(minutes: 1), (Timer timer) {
-      // _fetchAttendanceData();
-    });
-
+    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadAttendanceStatus();
-      _loadAttendanceSummary();
+      _loadStatus();
+      _loadSummary();
     });
-
-    _blinkWindowListener = () {
-      final isActive = AttendanceBlinkStore.windowNotifier.value;
-      if (mounted) {
-        if (_isTripOnCooldown()) {
-          if (_tripWindowActive) {
-            setState(() => _tripWindowActive = false);
-          }
-          return;
-        }
-        setState(() {
-          _tripWindowActive = isActive;
-        });
+    _blinkCb = () {
+      final active = AttendanceBlinkStore.windowNotifier.value;
+      if (!mounted) return;
+      if (_isCooldown()) {
+        if (_tripWindow) setState(() => _tripWindow = false);
+        return;
       }
+      setState(() => _tripWindow = active);
     };
-    AttendanceBlinkStore.windowNotifier.addListener(_blinkWindowListener);
-
-    _pendingSync = [];
-  }
-
-  void _checkInternetInitial() async {
-    final hasNet = await _hasInternet();
-    if (!mounted) return;
-    setState(() {
-      _isOnline = hasNet;
-    });
+    AttendanceBlinkStore.windowNotifier.addListener(_blinkCb);
   }
 
   @override
   void dispose() {
     _clockTimer?.cancel();
-    _timer?.cancel();
     _tripCooldownTimer?.cancel();
     _connectivitySub?.cancel();
-    AttendanceBlinkStore.windowNotifier.removeListener(_blinkWindowListener);
+    AttendanceBlinkStore.windowNotifier.removeListener(_blinkCb);
+    _pulse.dispose();
     super.dispose();
+  }
+
+  void _updateClock() {
+    final now = DateTime.now();
+    _time = DateFormat('hh:mm a').format(now);
+    _date = DateFormat('EEE, dd MMM yyyy').format(now);
+    if (mounted) setState(() {});
+  }
+
+  String _fmtDur(Duration d) =>
+      '${d.inHours.toString().padLeft(2, '0')}:${(d.inMinutes % 60).toString().padLeft(2, '0')}';
+
+  bool _isCooldown() {
+    if (_lastTripAt == null) return false;
+    return DateTime.now().difference(_lastTripAt!) < kTripAttendanceCooldown;
+  }
+
+  Duration _cooldownLeft() {
+    if (_lastTripAt == null) return Duration.zero;
+    final e = DateTime.now().difference(_lastTripAt!);
+    return e >= kTripAttendanceCooldown ? Duration.zero : kTripAttendanceCooldown - e;
   }
 
   Future<bool> _hasInternet() async {
     try {
-      final result = await InternetAddress.lookup('one.one.one.one')
-          .timeout(Duration(seconds: 2));
-
-      return result.isNotEmpty && result[0].rawAddress.isNotEmpty;
-    } catch (_) {
-      return false;
-    }
+      final r = await InternetAddress.lookup('one.one.one.one').timeout(const Duration(seconds: 2));
+      return r.isNotEmpty && r[0].rawAddress.isNotEmpty;
+    } catch (_) { return false; }
   }
 
-  void _updateTimeAndDate() {
-    final now = DateTime.now();
-    _time = DateFormat('hh:mm a').format(now); // Format time as 09:00 AM
-    _date = DateFormat('MMMM dd, yyyy - EEEE')
-        .format(now); // Format date as Jan 13, 2025 - Monday
-    if (!mounted) return;
-    setState(() {}); // Update the UI
+  Future<void> _checkNet() async {
+    final ok = await _hasInternet();
+    if (mounted) setState(() => _isOnline = ok);
   }
 
-  void _getTime() {
-    final DateTime now = DateTime.now();
-    final String formattedDateTime = _formatDateTime(now);
-    if (!mounted) return;
-    setState(() {
-      _time = formattedDateTime;
-    });
-  }
-
-  String? _resolveStaffUniqueId() {
-    final authState = context.read<AuthBloc>().state;
-    if (authState is AuthStateAuthenticated) {
-      final id = authState.emp_id?.trim();
+  String? _staffId() {
+    final auth = context.read<AuthBloc>().state;
+    if (auth is AuthStateAuthenticated) {
+      final id = auth.emp_id?.trim();
       if (id != null && id.isNotEmpty) return id;
     }
-    return widget.emp_id.trim().isNotEmpty ? widget.emp_id.trim() : null;
+    final fb = widget.empId.trim();
+    return fb.isNotEmpty ? fb : null;
   }
 
-  Future<void> _loadAttendanceStatus() async {
-    final staffId = _resolveStaffUniqueId();
-    if (staffId == null) return;
-
+  Future<void> _loadStatus() async {
+    final id = _staffId();
+    if (id == null) return;
     setState(() => _isStatusLoading = true);
     try {
       final dio = await authorizedDio();
-      final response = await dio.get(
+      final res = await dio.get(
         '${ApiConfig.desktopBase}attendance-list/today/',
-        queryParameters: {'emp_id': staffId},
+        queryParameters: {'emp_id': id},
       );
-      final data = response.data;
-      if (data is Map && data['status'] == 'success') {
-        final checkIn = (data['check_in_time'] ?? '--:--').toString();
-        final checkOut = (data['check_out_time'] ?? '--:--').toString();
-        final checkedIn = data['checked_in'] == true;
-        final checkedOut = data['checked_out'] == true;
-        if (!mounted) return;
+      final data = res.data;
+      if (data is Map && data['status'] == 'success' && mounted) {
         setState(() {
-          _checkInDisplay = checkIn;
-          _checkOutDisplay = checkOut;
-          _isCheckedIn = checkedIn;
-          _isCheckedOut = checkedOut;
+          _checkIn         = (data['check_in_time']  ?? '--:--').toString();
+          _checkOut        = (data['check_out_time'] ?? '--:--').toString();
+          _isCheckedIn     = data['checked_in']  == true;
+          _isCheckedOut    = data['checked_out'] == true;
           _isStatusLoading = false;
         });
-        _updateBlinkState();
-      } else {
-        if (!mounted) return;
-        setState(() => _isStatusLoading = false);
+        _updateBlink();
+        return;
       }
-    } catch (_) {
-      if (!mounted) return;
-      setState(() => _isStatusLoading = false);
-    }
+    } catch (_) {}
+    if (mounted) setState(() => _isStatusLoading = false);
   }
 
-  Future<void> _loadAttendanceSummary() async {
-    final staffId = _resolveStaffUniqueId();
-    if (staffId == null) return;
-
+  Future<void> _loadSummary() async {
+    final id = _staffId();
+    if (id == null) return;
     try {
       final now = DateTime.now();
       final dio = await authorizedDio();
-      final response = await dio.get(
+      final res = await dio.get(
         '${ApiConfig.desktopBase}attendance-list/summary/',
-        queryParameters: {
-          'emp_id': staffId,
-          'month': now.month,
-          'year': now.year,
-        },
+        queryParameters: {'emp_id': id, 'month': now.month, 'year': now.year},
       );
-      final data = response.data;
-      if (data is Map && data['status'] == 'success') {
-        if (!mounted) return;
+      final data = res.data;
+      if (data is Map && data['status'] == 'success' && mounted) {
         setState(() {
-          _presentDays = (data['present_days'] ?? 0) as int;
-          _leaveDays = (data['leave_days'] ?? 0) as int;
-          _permissionDays = (data['permission_days'] ?? 0) as int;
+          _presentDays = (data['present_days']    ?? 0) as int;
+          _leaveDays   = (data['leave_days']      ?? 0) as int;
+          _permDays    = (data['permission_days'] ?? 0) as int;
         });
       }
     } catch (_) {}
   }
 
-  void _updateBlinkState() {
-    final shouldBlink = _isCheckedIn && !_isCheckedOut;
+  void _updateBlink() {
+    final should = _isCheckedIn && !_isCheckedOut;
     _tripCooldownTimer?.cancel();
-
-    if (!shouldBlink) {
+    if (!should) {
       AttendanceBlinkStore.dispose();
-      if (mounted && _tripWindowActive) {
-        setState(() => _tripWindowActive = false);
+      if (mounted && _tripWindow) setState(() => _tripWindow = false);
+      return;
+    }
+    if (_isCooldown()) {
+      AttendanceBlinkStore.dispose();
+      if (mounted && _tripWindow) setState(() => _tripWindow = false);
+      final rem = _cooldownLeft();
+      if (rem > Duration.zero) {
+        _tripCooldownTimer = Timer(rem, () { if (mounted) _updateBlink(); });
       }
       return;
     }
-
-    if (_isTripOnCooldown()) {
-      AttendanceBlinkStore.dispose();
-      if (mounted && _tripWindowActive) {
-        setState(() => _tripWindowActive = false);
-      }
-      final remaining = _tripCooldownRemaining();
-      if (remaining > Duration.zero) {
-        _tripCooldownTimer = Timer(remaining, () {
-          if (!mounted) return;
-          _updateBlinkState();
-        });
-      }
-      return;
-    }
-
     AttendanceBlinkStore.startPeriodicReminder(
       interval: kTripBlinkInterval,
       blinkDuration: kTripBlinkDuration,
@@ -300,574 +263,854 @@ class _AttendancePageState extends State<AttendancePage> {
     );
   }
 
-  String _formatDateTime(DateTime dateTime) {
-    return DateFormat('hh:mm a').format(dateTime);
-  }
-
   Future<void> _fetchLocation() async {
-    bool serviceEnabled;
-    LocationPermission permission;
+    if (!await Geolocator.isLocationServiceEnabled()) return;
+    var perm = await Geolocator.checkPermission();
+    if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
+    if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
+    final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
+    if (mounted) setState(() { _lat = pos.latitude.toStringAsFixed(5); _lng = pos.longitude.toStringAsFixed(5); });
+  }
 
-    // Check if location services are enabled
-    serviceEnabled = await Geolocator.isLocationServiceEnabled();
-    if (!serviceEnabled) {
-      // Location services are not enabled
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Please enable location services.")),
-      );
-      return;
-    }
-
-    // Check for location permissions
-    permission = await Geolocator.checkPermission();
-    if (permission == LocationPermission.denied) {
-      permission = await Geolocator.requestPermission();
-      if (permission == LocationPermission.denied) {
-        // Permissions are denied
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Location permission is required.")),
+  Future<void> _handlePunch({required String name, required String? id}) async {
+    if (id == null || id.trim().isEmpty) { _snack('Employee ID is missing.'); return; }
+    try {
+      if (_isCheckedIn && !_isCheckedOut && _tripWindow) {
+        final ok = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (_) => CameraScreen(employeeName: name, employeeId: id, isTripAttendance: true)),
+        ) ?? false;
+        if (ok) {
+          _lastTripAt = DateTime.now();
+          AttendanceBlinkStore.dispose();
+          if (mounted) setState(() => _tripWindow = false);
+        }
+      } else {
+        await Navigator.of(context).push<bool>(
+          MaterialPageRoute(builder: (_) => CameraScreen(employeeName: name, employeeId: id, isTripAttendance: false)),
         );
-        return;
       }
-    }
-
-    if (permission == LocationPermission.deniedForever) {
-      // Permissions are permanently denied
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Location permissions are permanently denied.")),
-      );
-      return;
-    }
-
-    // Get the current location
-    Position position = await Geolocator.getCurrentPosition(
-      desiredAccuracy: LocationAccuracy.high,
-    );
-
-    if (!mounted) return;
-    setState(() {
-      _latitude = position.latitude.toString();
-      _longitude = position.longitude.toString();
-    });
-    print(_latitude);
+      await _loadStatus();
+      await _loadSummary();
+    } catch (e) { if (mounted) _snack('Unable to open camera: $e'); }
   }
 
-  Future<bool> _onWillPop() async {
-    return (await showDialog(
-          context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Are you sure?'),
-            content: const Text('Do you want to exit the app?'),
-            actions: <Widget>[
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('No'),
-              ),
-              TextButton(
-                onPressed: () => exit(0),
-                child: const Text('Yes'),
-              ),
-            ],
-          ),
-        )) ??
-        false;
+  Future<void> _syncItem(Map<String, dynamic> item) async {
+    if (!_isOnline) { _snack('No internet.'); return; }
+    try {
+      final res = await http.post(Uri.parse('https://zigma/api/attendance/sync.php'),
+        body: {'timestamp': item['timestamp'], 'lat': item['lat'], 'long': item['long'], 'type': item['type']});
+      final data = jsonDecode(res.body);
+      if (!mounted) return;
+      if (data['status'] == 'success') { _pendingSync.remove(item); setState(() {}); _snack('Synced.'); }
+      else _snack('Sync failed.');
+    } catch (_) { if (mounted) _snack('Error syncing.'); }
   }
 
-  Widget _networkStatusChip() {
-    final bool online = _isOnline;
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-      decoration: BoxDecoration(
-        color: online ? Colors.green.shade500 : Colors.red.shade600,
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Row(
-        children: [
-          Icon(Icons.circle, color: Colors.white, size: 10),
-          const SizedBox(width: 6),
-          Text(
-            online ? "Online" : "Offline",
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 14,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
-      ),
-    );
+  void _openHistory(String? id) {
+    if (id == null || id.trim().isEmpty) { _snack('Employee ID missing.'); return; }
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => AttendanceHistory(empId: id)));
   }
 
-  Widget _pendingSyncTile(Map<String, dynamic> item) {
-    return GestureDetector(
-      onTap: () => _syncItem(item),
-      child: Container(
-        margin: EdgeInsets.only(bottom: 10),
-        padding: EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: Colors.orange.shade50,
-          borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: Colors.orange.shade200),
-        ),
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(item["type"],
-                    style:
-                        TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                Text(item["timestamp"],
-                    style: TextStyle(fontSize: 13, color: Colors.grey)),
-              ],
-            ),
-            Icon(Icons.sync, color: Colors.orange),
-          ],
-        ),
-      ),
-    );
+  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+    content: Text(msg), behavior: SnackBarBehavior.floating,
+    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    margin: const EdgeInsets.all(16),
+  ));
+
+  bool get _hasLoc => _lat != '--';
+
+  Color get _accent { if (_tripWindow) return _kAmber; if (_isCheckedIn) return _kGreen; return _kPrimary; }
+  Color get _accentBg { if (_tripWindow) return _kAmberBg; return _kGreenBg; }
+
+  IconData get _statusIcon {
+    if (_tripWindow)   return Icons.notifications_active_rounded;
+    if (_isCheckedOut) return Icons.verified_rounded;
+    if (_isCheckedIn)  return Icons.timelapse_rounded;
+    return Icons.fingerprint_rounded;
+  }
+
+  String get _statusLabel {
+    if (_isStatusLoading) return 'Syncing\u2026';
+    if (_tripWindow)      return 'Trip reminder';
+    if (_isCheckedOut)    return 'Day complete';
+    if (_isCheckedIn)     return 'Checked in';
+    return 'Not punched';
+  }
+
+  String get _punchLabel {
+    if (_tripWindow)                    return 'Trip Punch';
+    if (_isCheckedIn && !_isCheckedOut) return 'Punch Out';
+    if (_isCheckedOut)                  return 'Camera';
+    return 'Punch In';
+  }
+
+  String get _punchSub {
+    if (_tripWindow)   return 'Reminder active';
+    if (_isCheckedOut) return 'Day complete';
+    if (_isCheckedIn)  return 'Shift running';
+    return 'Tap to begin';
   }
 
   @override
   Widget build(BuildContext context) {
-      final nameFromState = context.select<AuthBloc, String?>((bloc) =>
-        bloc.state is AuthStateAuthenticated
-            ? (bloc.state as AuthStateAuthenticated).userName
-            : null);
-             final emp_idFromState = context.select<AuthBloc, String?>((bloc) =>
-        bloc.state is AuthStateAuthenticated
-            ? (bloc.state as AuthStateAuthenticated).emp_id
-            : null);
+    final nameAuth = context.select<AuthBloc, String?>((b) => b.state is AuthStateAuthenticated ? (b.state as AuthStateAuthenticated).userName : null);
+    final idAuth   = context.select<AuthBloc, String?>((b) => b.state is AuthStateAuthenticated ? (b.state as AuthStateAuthenticated).emp_id   : null);
 
-    return SafeArea(
-      child: Scaffold(
-        backgroundColor: AppColors.background,
-        body: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          child: Column(
+    final displayName = nameAuth?.trim().isNotEmpty == true ? nameAuth!.trim()
+        : widget.operatorName.trim().isNotEmpty ? widget.operatorName.trim() : 'Operator';
+    final employeeId  = idAuth?.trim().isNotEmpty == true ? idAuth!.trim()
+        : widget.empId.trim().isNotEmpty ? widget.empId.trim() : null;
+    final opCode = widget.operatorCode.trim().isNotEmpty ? widget.operatorCode.trim() : (employeeId ?? '\u2014');
+
+    return Scaffold(
+      backgroundColor: _kBg,
+      body: SafeArea(
+        child: RefreshIndicator(
+          color: _kPrimary,
+          onRefresh: () async { await _loadStatus(); await _loadSummary(); },
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
+            child: Column(
+              children: [
+                _CompactHeader(name: displayName, opCode: opCode, date: _date, time: _time, isOnline: _isOnline),
+                const SizedBox(height: 12),
+                _StatusStrip(
+                  icon: _statusIcon, label: _statusLabel, accent: _accent, accentBg: _accentBg,
+                  isLoading: _isStatusLoading, checkIn: _checkIn, checkOut: _checkOut, worked: _fmtDur(_worked),
+                ),
+                const SizedBox(height: 12),
+                _PunchCard(
+                  pulse: _pulse, punchLabel: _punchLabel, punchSub: _punchSub, accent: _accent,
+                  isPressed: _punchPressed, isTripActive: _tripWindow,
+                  onDown:   () => setState(() => _punchPressed = true),
+                  onUp:     () => setState(() => _punchPressed = false),
+                  onCancel: () => setState(() => _punchPressed = false),
+                  onTap: () => _handlePunch(name: displayName, id: employeeId),
+                ),
+                const SizedBox(height: 12),
+                _SummaryCard(
+                  present: _presentDays, leave: _leaveDays, perm: _permDays,
+                  hasLoc: _hasLoc, lat: _lat, lng: _lng,
+                  onHistory: () => _openHistory(employeeId),
+                ),
+                if (_pendingSync.isNotEmpty) ...[
+                  const SizedBox(height: 12),
+                  _PendingSyncCard(items: _pendingSync, onSync: _syncItem),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+
+class _CompactHeader extends StatelessWidget {
+  const _CompactHeader({
+    required this.name,
+    required this.opCode,
+    required this.date,
+    required this.time,
+    required this.isOnline,
+  });
+
+  final String name;
+  final String opCode;
+  final String date;
+  final String time;
+  final bool isOnline;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF0D3B26), Color(0xFF175E3C)],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        borderRadius: BorderRadius.circular(22),
+        boxShadow: [
+          BoxShadow(
+            color: const Color(0xFF0D3B26).withOpacity(0.22),
+            blurRadius: 20,
+            offset: const Offset(0, 10),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Row 1: name + online chip
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              // ===========================
-              //        HEADER CARD
-              // ===========================
+              // Avatar initials
               Container(
-                width: double.infinity,
-                padding: const EdgeInsets.fromLTRB(20, 24, 20, 26),
+                width: 38,
+                height: 38,
                 decoration: BoxDecoration(
-                  gradient: LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: [
-                      _operatorPrimary,
-                      _operatorAccent,
-                    ],
-                  ),
-                  borderRadius: const BorderRadius.vertical(
-                    bottom: Radius.circular(35),
+                  color: Colors.white.withOpacity(0.16),
+                  shape: BoxShape.circle,
+                ),
+                alignment: Alignment.center,
+                child: Text(
+                  name.isNotEmpty ? name[0].toUpperCase() : 'O',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
                   ),
                 ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      "Attendance",
-                      style: AppTextStyles.heading2.copyWith(
+                      name,
+                      style: const TextStyle(
                         color: Colors.white,
-                        fontSize: 22,
+                        fontSize: 15,
                         fontWeight: FontWeight.w800,
                       ),
                     ),
-                    const SizedBox(height: 6),
                     Text(
-                      "Manage today's presence and history",
-                      style: AppTextStyles.bodyMedium.copyWith(
-                        color: Colors.white70,
+                      'ID: $opCode',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.6),
+                        fontSize: 11.5,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
                   ],
                 ),
               ),
-              // Text(emp_idFromState!),
-              SizedBox(height: 15),
-
-
+              // Online chip
               Container(
-                margin: EdgeInsets.symmetric(horizontal: 20),
-                padding: EdgeInsets.symmetric(vertical: 22, horizontal: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(24),
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: 12,
-                      spreadRadius: 2,
-                      color: Colors.black12.withOpacity(0.07),
-                      offset: Offset(0, 4),
-                    )
-                  ],
+                  color: isOnline
+                      ? Colors.white.withOpacity(0.14)
+                      : Colors.red.shade400.withOpacity(0.85),
+                  borderRadius: BorderRadius.circular(999),
+                  border: Border.all(color: Colors.white.withOpacity(0.15)),
                 ),
                 child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      _kpiItem(Icons.calendar_today, "$_presentDays", "Presence"),
-                      _kpiItem(Icons.timer_off_rounded, "$_leaveDays", "Leaves"),
-                      _kpiItem(Icons.access_time_filled, "$_permissionDays", "Permission"),
-                    ]),
-              ),
-
-              SizedBox(height: 20),
-
-              // ===========================
-              //     CHECK-IN OUT CARD
-              // ===========================
-              Container(
-                padding: EdgeInsets.all(22),
-                margin: EdgeInsets.symmetric(horizontal: 20),
-                decoration: BoxDecoration(
-                  color: Colors.white,
-                  borderRadius: BorderRadius.circular(22),
-                  boxShadow: [
-                    BoxShadow(
-                      blurRadius: 8,
-                      color: Colors.black12,
-                      offset: Offset(0, 3),
-                    )
-                  ],
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
                   children: [
-                    Text(
-                      DateFormat('dd MMMM yyyy').format(DateTime.now()),
-                      style: AppTextStyles.heading2.copyWith(fontSize: 16),
+                    Container(
+                      width: 7,
+                      height: 7,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isOnline ? const Color(0xFF7EF59F) : Colors.white,
+                      ),
                     ),
-                    const SizedBox(height: 12),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        _checkBox(
-                          title: "Check In",
-                          time: _checkInDisplay,
-                          color: Colors.green,
-                          isActive: _isCheckedIn,
-                        ),
-                        _checkBox(
-                          title: "Check Out",
-                          time: _checkOutDisplay,
-                          color: Colors.orange,
-                          isActive: _isCheckedOut,
-                        ),
-                      ],
+                    const SizedBox(width: 5),
+                    Text(
+                      isOnline ? 'Online' : 'Offline',
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
               ),
-
-              SizedBox(height: 20),
-
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 12,
-                runSpacing: 12,
-                children: [
-                  _quickAction(Icons.logout, "Leave"),
-                  _quickAction(Icons.place, "Visit"),
-                  _quickAction(Icons.timer, "Overtime"),
-                  _quickAction(Icons.history, "History", onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => AttendanceHistory(empId: emp_idFromState!),
-                      ),
-                    );
-                  }),
-                  _quickAction(Icons.summarize_rounded, "Summary", onTap: () {
-                    Navigator.of(context).push(
-                      MaterialPageRoute(
-                        builder: (_) => AttendanceHistory(empId: emp_idFromState!),
-                      ),
-                    );
-                  }),
-                ],
-              ),
-
-              SizedBox(height: 25),
-
-              GestureDetector(
-                onTapDown: (_) => setState(() => _punchPressed = true),
-                onTapUp: (_) => setState(() => _punchPressed = false),
-                onTapCancel: () => setState(() => _punchPressed = false),
-                onTap: () async {
-                  // Trip reminder window: capture selfie and submit trip attendance
-                  try {
-                    if (_isCheckedIn && !_isCheckedOut && _tripWindowActive) {
-                      final markedTrip = await Navigator.of(context).push<bool>(
-                            MaterialPageRoute(
-                              builder: (_) => CameraScreen(
-                                employeeName: nameFromState!,
-                                employeeId: emp_idFromState!,
-                                isTripAttendance: true,
-                              ),
-                            ),
-                          ) ??
-                          false;
-
-                      if (markedTrip) {
-                        _lastTripAttendanceAt = DateTime.now();
-                        AttendanceBlinkStore.dispose();
-                        if (mounted) {
-                          setState(() => _tripWindowActive = false);
-                        }
-                      }
-
-                      await _loadAttendanceStatus();
-                      await _loadAttendanceSummary();
-                      return;
-                    }
-
-                    await Navigator.of(context).push<bool>(
-                      MaterialPageRoute(
-                        builder: (_) => CameraScreen(
-                          employeeName: nameFromState!,
-                          employeeId: emp_idFromState!,
-                          isTripAttendance: false,
-                        ),
-                      ),
-                    );
-
-                    await _loadAttendanceStatus();
-                    await _loadAttendanceSummary();
-                  } catch (e) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Unable to open camera: $e')),
-                    );
-                  }
-                },
-                child: AnimatedContainer(
-                  duration: Duration(milliseconds: 150),
-                  curve: Curves.easeOut,
-                  padding: EdgeInsets.all(18),
-                  margin: EdgeInsets.symmetric(horizontal: 24),
-                  height: 90,
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(color: Colors.green.shade700, width: 2),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.green.withOpacity(0.2),
-                        blurRadius: 12,
-                      ),
-                    ],
-                  ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(Icons.fingerprint,
-                          size: 40, color: Colors.green.shade800),
-                      SizedBox(width: 12),
-                      Text(
-                        _tripWindowActive ? "Punch Trip Attendance" : "Punch Attendance",
-                        style: AppTextStyles.heading2.copyWith(
-                          color: _operatorPrimary,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-
- 
-
-              SizedBox(height: 25),
-
-              if (_pendingSync.isNotEmpty)
-                Container(
-                  width: double.infinity,
-                  margin: EdgeInsets.symmetric(horizontal: 20),
-                  padding: EdgeInsets.all(18),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black12,
-                        blurRadius: 6,
-                        offset: Offset(0, 3),
-                      )
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Expanded(
-                            child: Text(
-                              "Pending Sync",
-                              overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.w800,
-                                color: Colors.deepOrange,
-                              ),
-                            ),
-                          ),
-                          SizedBox(width: 8),
-                          Icon(Icons.sync_problem, color: Colors.deepOrange),
-                        ],
-                      ),
-                      SizedBox(height: 10),
-                      ..._pendingSync
-                          .map((item) => _pendingSyncTile(item))
-                          .toList(),
-                    ],
-                  ),
-                ),
             ],
           ),
-        ),
+          const SizedBox(height: 12),
+          // Row 2: date pill + live time
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.10),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.calendar_today_rounded, size: 12, color: Colors.white.withOpacity(0.7)),
+                    const SizedBox(width: 6),
+                    Text(
+                      date,
+                      style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 11.5, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+              ),
+              const Spacer(),
+              Text(
+                time,
+                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+              ),
+            ],
+          ),
+        ],
       ),
     );
   }
+}
 
-  Future<void> _syncItem(Map<String, dynamic> item) async {
-    if (!_isOnline) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("No internet. Cannot sync.")),
-      );
-      return;
-    }
+// ── _StatusStrip ──────────────────────────────────────────────────────────
+/// Compact card: status badge + IN/OUT/Worked three cells in one row.
+class _StatusStrip extends StatelessWidget {
+  const _StatusStrip({
+    required this.icon,
+    required this.label,
+    required this.accent,
+    required this.accentBg,
+    required this.isLoading,
+    required this.checkIn,
+    required this.checkOut,
+    required this.worked,
+  });
 
+  final IconData icon;
+  final String label;
+  final Color accent;
+  final Color accentBg;
+  final bool isLoading;
+  final String checkIn;
+  final String checkOut;
+  final String worked;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 12, 14, 14),
+      decoration: BoxDecoration(
+        color: _kSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _kBorder, width: 1),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 14, offset: const Offset(0, 5))],
+      ),
+      child: Column(
+        children: [
+          // Status row
+          Row(
+            children: [
+              Container(
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(color: accentBg, borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, size: 17, color: accent),
+              ),
+              const SizedBox(width: 10),
+              Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: accent)),
+              const Spacer(),
+              if (isLoading) SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: accent)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Timeline row
+          Row(
+            children: [
+              _TimeCell(label: 'Check In',  value: checkIn,  color: _kGreen),
+              _Vline(),
+              _TimeCell(label: 'Check Out', value: checkOut, color: _kAmber),
+              _Vline(),
+              _TimeCell(label: 'Worked',    value: worked,   color: _kTextPri),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _TimeCell extends StatelessWidget {
+  const _TimeCell({required this.label, required this.value, required this.color});
+  final String label;
+  final String value;
+  final Color color;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Column(
+        children: [
+          Text(label, style: const TextStyle(fontSize: 10.5, color: _kTextSec, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 4),
+          Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
+        ],
+      ),
+    );
+  }
+}
+
+class _Vline extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) =>
+      Container(width: 1, height: 32, color: _kBorder, margin: const EdgeInsets.symmetric(horizontal: 4));
+}
+
+
+class DriverAvatar extends StatefulWidget {
+  final String empId;
+  const DriverAvatar({super.key, required this.empId});
+
+  @override
+  State<DriverAvatar> createState() => _DriverAvatarState();
+}
+
+class _DriverAvatarState extends State<DriverAvatar> {
+  bool hasProfile = false;
+  bool imageLoading = true;
+  String? imageName;
+
+  @override
+  void initState() {
+    super.initState();
+    fetchEmployeeImage();
+  }
+
+  Future<void> fetchEmployeeImage() async {
     try {
-      final response = await http.post(
-        Uri.parse("https://zigma/api/attendance/sync.php"),
-        body: {
-          "timestamp": item["timestamp"],
-          "lat": item["lat"],
-          "long": item["long"],
-          "type": item["type"],
-        },
-      );
+      final url =
+          "http://10.164.86.186:8000/api/desktop/staff-profile/?staff_id_id=${widget.empId}";
 
-      final data = jsonDecode(response.body);
+      final request = await HttpClient().getUrl(Uri.parse(url));
+      final response = await request.close();
+      final body = await response.transform(utf8.decoder).join();
+      final json = jsonDecode(body);
 
-      if (data["status"] == "success") {
-        _pendingSync.remove(item);
-        setState(() {});
-
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Synced successfully.")),
-        );
+      if (json["status"] == "success") {
+        setState(() {
+          imageName = json["data"]["photo"] ?? "";
+          hasProfile = imageName != null && imageName!.isNotEmpty;
+          imageLoading = false;
+        });
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Sync failed.")),
-        );
+        setState(() {
+          hasProfile = false;
+          imageLoading = false;
+        });
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text("Error syncing.")),
-      );
+      setState(() {
+        hasProfile = false;
+        imageLoading = false;
+      });
     }
   }
 
-  /// CHECK IN / OUT BOX
-  Widget _checkBox(
-      {required String title,
-      required String time,
-      required Color color,
-      required bool isActive}) {
-    final activeColor = isActive ? color : Colors.grey;
+  String convertToUrl(String path) {
+    final clean = path.replaceAll("\\", "/");
+    final filename = clean.split("/").last;
+    return "http://10.164.86.186:8000/media/emp_image/$filename";
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: () async {
+        await Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => ProfilePage(empId: widget.empId),
+          ),
+        );
+        fetchEmployeeImage();
+      },
+      child: CircleAvatar(
+        radius: 30,
+        backgroundColor: Colors.white,
+        backgroundImage: (hasProfile && imageName != null)
+            ? NetworkImage(convertToUrl(imageName!))
+            : null,
+        child: imageLoading
+            ? const SizedBox(
+                width: 22,
+                height: 22,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: Colors.green,
+                ),
+              )
+            : (!hasProfile)
+                ? Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: const [
+                      Icon(Icons.person_add_alt_1,
+                          size: 26, color: Colors.green),
+                      SizedBox(height: 2),
+                      Text(
+                        "Register",
+                        style: TextStyle(
+                          fontSize: 8,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.green,
+                        ),
+                      ),
+                    ],
+                  )
+                : null,
+      ),
+    );
+  }
+}
+
+
+// ── _PunchCard ────────────────────────────────────────────────────────────
+class _PunchCard extends StatelessWidget {
+  const _PunchCard({
+    required this.pulse,
+    required this.punchLabel,
+    required this.punchSub,
+    required this.accent,
+    required this.isPressed,
+    required this.isTripActive,
+    required this.onDown,
+    required this.onUp,
+    required this.onCancel,
+    required this.onTap,
+  });
+
+  final AnimationController pulse;
+  final String punchLabel;
+  final String punchSub;
+  final Color accent;
+  final bool isPressed;
+  final bool isTripActive;
+  final VoidCallback onDown;
+  final VoidCallback onUp;
+  final VoidCallback onCancel;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
     return Container(
-      width: 130,
-      padding: EdgeInsets.all(16),
+      padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
       decoration: BoxDecoration(
-        color: activeColor.withOpacity(0.15),
-        borderRadius: BorderRadius.circular(18),
+        color: _kSurface,
+        borderRadius: BorderRadius.circular(24),
+        border: Border.all(color: _kBorder),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 6))],
+      ),
+      child: Column(
+        children: [
+          // Punch label above button
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                punchLabel,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: accent),
+              ),
+              if (isTripActive)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(color: _kAmberBg, borderRadius: BorderRadius.circular(8)),
+                  child: const Text('TRIP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: _kAmber, letterSpacing: 1)),
+                ),
+            ],
+          ),
+          const SizedBox(height: 18),
+
+          // Pulse + button
+          SizedBox(
+            height: 210,
+            width: double.infinity,
+            child: AnimatedBuilder(
+              animation: pulse,
+              builder: (_, __) => Stack(
+                alignment: Alignment.center,
+                children: [
+                  CustomPaint(
+                    size: const Size.square(200),
+                    painter: _RingsPainter(progress: pulse.value, color: accent),
+                  ),
+                  GestureDetector(
+                    onTapDown: (_) => onDown(),
+                    onTapUp:   (_) => onUp(),
+                    onTapCancel: onCancel,
+                    onTap: onTap,
+                    child: AnimatedScale(
+                      scale: isPressed ? 0.94 : 1.0,
+                      duration: const Duration(milliseconds: 120),
+                      curve: Curves.easeOut,
+                      child: Container(
+                        width: 148,
+                        height: 148,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [accent, accent.withOpacity(0.75)],
+                          ),
+                          boxShadow: [
+                            BoxShadow(color: accent.withOpacity(0.30), blurRadius: 28, offset: const Offset(0, 12)),
+                          ],
+                        ),
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Container(
+                              width: 44,
+                              height: 44,
+                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), shape: BoxShape.circle),
+                              child: const Icon(Icons.fingerprint_rounded, size: 24, color: Colors.white),
+                            ),
+                            const SizedBox(height: 10),
+                            Text(punchLabel,
+                              style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                            const SizedBox(height: 2),
+                            Text(punchSub,
+                              style: TextStyle(color: Colors.white.withOpacity(0.72), fontSize: 11, fontWeight: FontWeight.w600)),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+
+          // Trip reminder notice (only when trip active)
+          if (isTripActive) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+              decoration: BoxDecoration(color: _kAmberBg, borderRadius: BorderRadius.circular(12)),
+              child: Row(
+                children: [
+                  const Icon(Icons.notifications_active_rounded, color: _kAmber, size: 16),
+                  const SizedBox(width: 8),
+                  const Expanded(
+                    child: Text(
+                      'Trip reminder active — tap to capture.',
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _kAmber),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+// ── _SummaryCard ──────────────────────────────────────────────────────────
+class _SummaryCard extends StatelessWidget {
+  const _SummaryCard({
+    required this.present,
+    required this.leave,
+    required this.perm,
+    required this.hasLoc,
+    required this.lat,
+    required this.lng,
+    required this.onHistory,
+  });
+
+  final int present;
+  final int leave;
+  final int perm;
+  final bool hasLoc;
+  final String lat;
+  final String lng;
+  final VoidCallback onHistory;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
+      decoration: BoxDecoration(
+        color: _kSurface,
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: _kBorder),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 14, offset: const Offset(0, 5))],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(time,
-              style: TextStyle(
-                  fontSize: 26,
-                  fontWeight: FontWeight.bold,
-                  color: activeColor)),
-          SizedBox(height: 6),
-          Text(title,
-              style: TextStyle(
-                  fontSize: 16,
-                  color: Colors.black87,
-                  fontWeight: FontWeight.w600)),
-        ],
-      ),
-    );
-  }
+          // Header row
+          Row(
+            children: [
+              const Text('This month', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _kTextPri)),
+              const Spacer(),
+              GestureDetector(
+                onTap: onHistory,
+                child: Row(
+                  children: [
+                    const Icon(Icons.history_rounded, size: 15, color: _kTextSec),
+                    const SizedBox(width: 4),
+                    Text('History', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kPrimary)),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
 
-  /// QUICK ACTION ICON
-  Widget _quickAction(IconData icon, String title, {VoidCallback? onTap}) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(16),
-      child: Column(
-        children: [
+          // Three metric tiles
+          Row(
+            children: [
+              _MetricTile(label: 'Present',    value: '$present', color: _kGreen, icon: Icons.event_available_rounded),
+              const SizedBox(width: 10),
+              _MetricTile(label: 'Leave',      value: '$leave',   color: _kAmber, icon: Icons.event_busy_rounded),
+              const SizedBox(width: 10),
+              _MetricTile(label: 'Permission', value: '$perm',    color: _kPrimary, icon: Icons.verified_user_outlined),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // Location row
           Container(
-            height: 52,
-            width: 52,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
-              color: Colors.white,
-              shape: BoxShape.circle,
-              boxShadow: [
-                BoxShadow(
-                  blurRadius: 8,
-                  color: Colors.black12,
-                )
+              color: const Color(0xFFF4F6FA),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Row(
+              children: [
+                Icon(
+                  hasLoc ? Icons.my_location_rounded : Icons.location_searching_rounded,
+                  size: 15,
+                  color: hasLoc ? _kGreen : _kTextSec,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    hasLoc ? 'Lat $lat, Lng $lng' : 'Fetching location\u2026',
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: hasLoc ? _kTextPri : _kTextSec,
+                    ),
+                  ),
+                ),
               ],
             ),
-            child: Icon(icon, size: 24, color: Color(0xFF1B5E20)),
-          ),
-          SizedBox(height: 6),
-          Text(
-            title,
-            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
           ),
         ],
       ),
     );
   }
+}
 
-  Widget _kpiItem(IconData icon, String value, String title) {
-    return Column(
-      children: [
-        // Container(
-        //   padding: EdgeInsets.all(10),
-        //   decoration: BoxDecoration(
-        //     color: color.withOpacity(0.12),
-        //     shape: BoxShape.circle,
-        //   ),
-        //   child: Icon(icon, color: color, size: 22),
-        // ),
-        // SizedBox(height: 8),
-        Text(
-          value,
-          style: TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: Colors.black87,
-          ),
+class _MetricTile extends StatelessWidget {
+  const _MetricTile({required this.label, required this.value, required this.color, required this.icon});
+  final String label;
+  final String value;
+  final Color color;
+  final IconData icon;
+
+  @override
+  Widget build(BuildContext context) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        decoration: BoxDecoration(
+          color: color.withOpacity(0.07),
+          borderRadius: BorderRadius.circular(14),
         ),
-        SizedBox(height: 2),
-        Text(
-          title,
-          style: TextStyle(
-            fontSize: 12,
-            color: Colors.black54,
-            fontWeight: FontWeight.w500,
-          ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(icon, size: 16, color: color),
+            const SizedBox(height: 8),
+            Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: color, height: 1)),
+            const SizedBox(height: 4),
+            Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _kTextSec)),
+          ],
         ),
-      ],
+      ),
+    );
+  }
+}
+
+// ── _PendingSyncCard ──────────────────────────────────────────────────────
+class _PendingSyncCard extends StatelessWidget {
+  const _PendingSyncCard({required this.items, required this.onSync});
+  final List<Map<String, dynamic>> items;
+  final void Function(Map<String, dynamic>) onSync;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: _kSurface,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: _kBorder),
+        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 14, offset: const Offset(0, 5))],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 34, height: 34,
+                decoration: BoxDecoration(color: const Color(0xFFFFF4E8), borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.sync_problem_rounded, color: Color(0xFFCE7A13), size: 17),
+              ),
+              const SizedBox(width: 10),
+              const Expanded(
+                child: Text('Pending sync',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _kTextPri)),
+              ),
+              Text('${items.length} items',
+                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kTextSec)),
+            ],
+          ),
+          ...items.map((item) => _SyncTile(item: item, onTap: () => onSync(item))),
+        ],
+      ),
+    );
+  }
+}
+
+class _SyncTile extends StatelessWidget {
+  const _SyncTile({required this.item, required this.onTap});
+  final Map<String, dynamic> item;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(top: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFF4E8),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(color: const Color(0xFFFFD9AE)),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(item['type']?.toString() ?? 'Pending',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _kTextPri)),
+                  const SizedBox(height: 2),
+                  Text(item['timestamp']?.toString() ?? '--',
+                    style: const TextStyle(fontSize: 11, color: _kTextSec, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded, color: Color(0xFFCE7A13), size: 18),
+          ],
+        ),
+      ),
     );
   }
 }

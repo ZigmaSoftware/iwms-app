@@ -286,7 +286,7 @@ class _UserSelectionScreenState extends State<UserSelectionScreen> {
         _UserRoleCard(
           icon: Icons.admin_panel_settings,
           title: "Admin",
-          onTap: () => context.push(AppRoutePaths.adminHome),
+          onTap: () => context.push(AppRoutePaths.operatorLogin),
           iconColor: primaryColor,
         ),
       ],

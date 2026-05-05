@@ -24,6 +24,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final _formKey = GlobalKey<FormState>();
   bool _rememberMe = true;
+  bool _obscurePassword = true;
 
   @override
   void dispose() {
@@ -42,7 +43,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _handleLogin(BuildContext context) {
     final isValid = _formKey.currentState?.validate() ?? false;
     if (!isValid) {
-      _showSnack('Please enter a valid phone number and password.', Colors.red);
+      _showSnack('Please enter a valid username and password.', Colors.red);
       return;
     }
     FocusScope.of(context).unfocus();
@@ -134,9 +135,15 @@ class _LoginScreenState extends State<LoginScreen> {
                               phoneController: _phoneController,
                               passwordController: _passwordController,
                               rememberMe: _rememberMe,
+                              obscurePassword: _obscurePassword,
                               onRememberMeChanged: (value) {
                                 setState(() {
                                   _rememberMe = value ?? false;
+                                });
+                              },
+                              onTogglePasswordVisibility: () {
+                                setState(() {
+                                  _obscurePassword = !_obscurePassword;
                                 });
                               },
                               onForgotPassword: () {
@@ -181,7 +188,9 @@ class _LoginCard extends StatelessWidget {
     required this.phoneController,
     required this.passwordController,
     required this.rememberMe,
+    required this.obscurePassword,
     required this.onRememberMeChanged,
+    required this.onTogglePasswordVisibility,
     required this.onForgotPassword,
     required this.onLogin,
     required this.isSubmitting,
@@ -192,7 +201,9 @@ class _LoginCard extends StatelessWidget {
   final TextEditingController phoneController;
   final TextEditingController passwordController;
   final bool rememberMe;
+  final bool obscurePassword;
   final ValueChanged<bool?> onRememberMeChanged;
+  final VoidCallback onTogglePasswordVisibility;
   final VoidCallback onForgotPassword;
   final VoidCallback onLogin;
   final bool isSubmitting;
@@ -279,13 +290,13 @@ class _LoginCard extends StatelessWidget {
                       controller: phoneController,
                       keyboardType: TextInputType.text,
                       decoration: inputDecorationBuilder(
-                        label: 'Phone / Username',
-                        hint: 'Enter your registered phone or username',
+                        label: 'Username / Phone',
+                        hint: 'Enter your username or registered phone',
                         icon: Icons.phone_outlined,
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
-                          return 'Please enter your registered phone or username';
+                          return 'Please enter your username or phone';
                         }
                         return null;
                       },
@@ -293,11 +304,25 @@ class _LoginCard extends StatelessWidget {
                     const SizedBox(height: 16),
                     TextFormField(
                       controller: passwordController,
-                      obscureText: true,
+                      obscureText: obscurePassword,
                       decoration: inputDecorationBuilder(
                         label: 'Password',
                         hint: 'Enter a secure password',
                         icon: Icons.lock_outline,
+                      ).copyWith(
+                        suffixIcon: IconButton(
+                          onPressed:
+                              isSubmitting ? null : onTogglePasswordVisibility,
+                          icon: Icon(
+                            obscurePassword
+                                ? Icons.visibility_off_outlined
+                                : Icons.visibility_outlined,
+                            color: const Color(0xFF1B5E20),
+                          ),
+                          tooltip: obscurePassword
+                              ? 'Show password'
+                              : 'Hide password',
+                        ),
                       ),
                       validator: (value) {
                         if (value == null || value.trim().isEmpty) {
@@ -322,7 +347,8 @@ class _LoginCard extends StatelessWidget {
                             Checkbox.adaptive(
                               value: rememberMe,
                               activeColor: _primaryGreen,
-                              onChanged: isSubmitting ? null : onRememberMeChanged,
+                              onChanged:
+                                  isSubmitting ? null : onRememberMeChanged,
                             ),
                             const SizedBox(width: 4),
                             Text(

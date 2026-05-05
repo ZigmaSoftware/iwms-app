@@ -91,8 +91,12 @@ class _DashboardShellState extends State<_DashboardShell> {
     final todayKey = DateFormat('yyyy-MM-dd').format(today);
     final fromDate = DateTime(today.year, today.month, 1);
 
-    final summaryFuture = _trackService.fetchMonthlySummaries(today);
-    final vehiclesFuture = _vehicleRepository.fetchAllVehicleLocations();
+    final summaryFuture = _trackService
+        .fetchMonthlySummaries(today)
+        .catchError((_) => <String, WasteSummary>{});
+    final vehiclesFuture = _vehicleRepository
+        .fetchAllVehicleLocations()
+        .catchError((_) => <VehicleModel>[]);
     final dateRangeFuture = _trackService
         .fetchDateWiseSummaries(fromDate, today)
         .catchError((_) => <WasteSummary>[]);
@@ -232,10 +236,6 @@ class _DashboardHomeContent extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final summary = data.summary;
-    final monthSeries = data.monthSeries;
-    final dayTickets = data.dayTickets;
-    final vehicleWeights = data.vehicleWeights;
-    final rangeSummaries = data.dateRangeSummaries;
     final wasteSlices = [
       _WasteSlice('Wet Waste', summary?.wetWeight ?? 0, _primaryGreen),
       _WasteSlice(
@@ -332,8 +332,8 @@ class _TodayAssignmentsCarousel extends StatelessWidget {
           child: Column(
             children: List.generate(assignments.length, (i) {
               return Padding(
-                padding:
-                    EdgeInsets.only(bottom: i == assignments.length - 1 ? 0 : 12),
+                padding: EdgeInsets.only(
+                    bottom: i == assignments.length - 1 ? 0 : 12),
                 child: _AssignmentCarouselCard(
                   assignment: assignments[i],
                   onCancelled: onCancelled,
@@ -440,8 +440,8 @@ class _AssignmentCarouselCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final cardWidth = width ??
-        math.min(320.0, MediaQuery.of(context).size.width - 48);
+    final cardWidth =
+        width ?? math.min(320.0, MediaQuery.of(context).size.width - 48);
     final cardHeight = height ?? 168.0;
     final statusColor = assignment.statusColor;
 
@@ -2648,8 +2648,7 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
     }
     if (_historyFromDate != null) {
       filtered = filtered
-          .where((assignment) =>
-              !assignment.date.isBefore(_historyFromDate!))
+          .where((assignment) => !assignment.date.isBefore(_historyFromDate!))
           .toList();
     }
     if (_historyToDate != null) {
@@ -2808,7 +2807,8 @@ class _AssignmentsScreenState extends State<AssignmentsScreen> {
                               controller.animateTo(0);
                             }
                           },
-                          onTabChanged: (_) => _loadAssignments(showLoader: false),
+                          onTabChanged: (_) =>
+                              _loadAssignments(showLoader: false),
                           isScrollable: false,
                           indicatorColor: _primaryGreen,
                           labelColor: _primaryGreen,
