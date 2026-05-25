@@ -747,6 +747,8 @@ class _NextStopSectionState extends State<_NextStopSection> {
     String? latitude,
     String? longitude,
   }) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return;
+
     try {
       final dio = await authorizedDio();
       await dio.post(
@@ -766,6 +768,8 @@ class _NextStopSectionState extends State<_NextStopSection> {
   }
 
   Future<void> _markAssignmentComplete(String assignmentId) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return;
+
     try {
       final dio = await authorizedDio();
       await dio.post('${ApiConfig.assignments}$assignmentId/complete/');

@@ -10,6 +10,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 class NotificationService {
   final FlutterLocalNotificationsPlugin _plugin =
       FlutterLocalNotificationsPlugin();
+  bool _initialized = false;
 
   static const AndroidNotificationChannel _defaultChannel =
       AndroidNotificationChannel(
@@ -20,6 +21,8 @@ class NotificationService {
   );
 
   Future<void> initialize() async {
+    if (_initialized) return;
+
     const AndroidInitializationSettings androidInit =
         AndroidInitializationSettings('@mipmap/launcher_icon');
     const DarwinInitializationSettings darwinInit =
@@ -53,6 +56,7 @@ class NotificationService {
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_defaultChannel);
 
+    _initialized = true;
     debugPrint('[NotificationService] initialized');
   }
 

@@ -5,6 +5,7 @@ import 'package:intl/intl.dart';
 
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/env.dart';
+import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import '../models/waste_period.dart';
 import '../models/waste_reports.dart';
 import '../models/waste_summary.dart';
@@ -32,7 +33,8 @@ class TrackService {
     );
   }
 
-  Future<Map<String, WasteSummary>> fetchMonthlySummaries(DateTime reference) async {
+  Future<Map<String, WasteSummary>> fetchMonthlySummaries(
+      DateTime reference) async {
     final monthKey = DateFormat('yyyy-MM').format(reference);
     final responseJson =
         await _getJson(_buildUri('month_wise_date', {'date': monthKey}));
@@ -79,9 +81,7 @@ class TrackService {
       _buildUri('vehicle_wise_data', {'from_date': dayKey}),
     );
     final dataList = _mapList(responseJson);
-    return dataList
-        .map(VehicleWeightReport.fromJson)
-        .toList(growable: false);
+    return dataList.map(VehicleWeightReport.fromJson).toList(growable: false);
   }
 
   Future<Map<String, dynamic>> _getJson(Uri uri) async {
@@ -110,7 +110,8 @@ class TrackService {
     required WastePeriod period,
     required DateTime referenceDate,
   }) async {
-    final normalized = DateTime(referenceDate.year, referenceDate.month, referenceDate.day);
+    final normalized =
+        DateTime(referenceDate.year, referenceDate.month, referenceDate.day);
     final uri = Uri.parse(citizenSummaryEndpoint).replace(
       queryParameters: {
         'period': period.name,
@@ -118,12 +119,15 @@ class TrackService {
       },
     );
 
-    final response = await _client.get(uri).timeout(const Duration(seconds: 12));
+    final dio = await authorizedDio();
+    final response = await dio.getUri(uri);
     if (response.statusCode != 200) {
       throw Exception('Failed to fetch waste summary (${response.statusCode})');
     }
 
-    final decoded = jsonDecode(response.body);
+    final responseData = response.data;
+    final decoded =
+        responseData is String ? jsonDecode(responseData) : responseData;
     if (decoded is! Map<String, dynamic>) {
       throw Exception('Unexpected response payload');
     }

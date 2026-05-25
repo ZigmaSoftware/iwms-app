@@ -1,6 +1,3 @@
-
-import 'dart:convert';
-import 'dart:io';
 import 'dart:math';
 
 import 'package:dio/dio.dart';
@@ -24,13 +21,12 @@ import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_citizen_app/core/env.dart';
 import 'package:iwms_citizen_app/core/ors_service.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
 import 'package:iwms_citizen_app/shared/constants/skip_reasons.dart';
-import 'package:iwms_citizen_app/shared/services/notification_service.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 const Color _driverPrimary = AppColors.primary;
 const Color _driverAccent = AppColors.driverAccent;
@@ -121,9 +117,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
   String? _customerError;
   String? _assignmentError;
   String? _tripError;
-  final Set<String> _notifiedAssignmentIds = {};
-  final Set<String> _notifiedCancelledAssignmentIds = {};
-  bool _notificationsLoaded = false;
 
   @override
   void initState() {
@@ -228,75 +221,78 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 ),
               ),
               bottomNavigationBar: SafeArea(
-  minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-  child: Container(
-    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-    decoration: BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(24),
-      border: Border.all(color: const Color(0xFFE8ECF4)),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.07),
-          blurRadius: 14,
-          offset: const Offset(0, 4),
-        ),
-      ],
-    ),
-    child: Row(
-      children: [
-        Expanded(
-          child: _DriverBottomNavItem(
-            icon: Icons.home_rounded,
-            label: AppCopy.driverTabHome,
-            selected: _activeTab == _DriverTab.home,
-            onTap: () {
-              if (_activeTab != _DriverTab.home) {
-                setState(() => _activeTab = _DriverTab.home);
-              }
-            },
-          ),
-        ),
-        Expanded(
-          child: _DriverBottomNavItem(
-            icon: Icons.assignment_rounded,
-            label: AppCopy.driverTabAssignments,
-            selected: _activeTab == _DriverTab.assignments,
-            onTap: () {
-              if (_activeTab != _DriverTab.assignments) {
-                setState(() => _activeTab = _DriverTab.assignments);
-              }
-            },
-          ),
-        ),
-        Expanded(
-          child: _DriverBottomNavItem(
-            icon: Icons.event_available_rounded,
-            label: AppCopy.driverTabAttendance,
-            selected: _activeTab == _DriverTab.attendance,
-            onTap: () {
-              if (_activeTab != _DriverTab.attendance) {
-                setState(() => _activeTab = _DriverTab.attendance);
-              }
-            },
-          ),
-        ),
-        Expanded(
-          child: _DriverBottomNavItem(
-            icon: Icons.person_outline_rounded,
-            label: AppCopy.driverTabProfile,
-            selected: _activeTab == _DriverTab.profile,
-            onTap: () {
-              if (_activeTab != _DriverTab.profile) {
-                setState(() => _activeTab = _DriverTab.profile);
-              }
-            },
-          ),
-        ),
-      ],
-    ),
-  ),
-),
+                minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
+                child: Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(24),
+                    border: Border.all(color: const Color(0xFFE8ECF4)),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.07),
+                        blurRadius: 14,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Expanded(
+                        child: _DriverBottomNavItem(
+                          icon: Icons.home_rounded,
+                          label: AppCopy.driverTabHome,
+                          selected: _activeTab == _DriverTab.home,
+                          onTap: () {
+                            if (_activeTab != _DriverTab.home) {
+                              setState(() => _activeTab = _DriverTab.home);
+                            }
+                          },
+                        ),
+                      ),
+                      Expanded(
+                        child: _DriverBottomNavItem(
+                          icon: Icons.assignment_rounded,
+                          label: AppCopy.driverTabAssignments,
+                          selected: _activeTab == _DriverTab.assignments,
+                          onTap: () {
+                            if (_activeTab != _DriverTab.assignments) {
+                              setState(
+                                  () => _activeTab = _DriverTab.assignments);
+                            }
+                          },
+                        ),
+                      ),
+                      Expanded(
+                        child: _DriverBottomNavItem(
+                          icon: Icons.event_available_rounded,
+                          label: AppCopy.driverTabAttendance,
+                          selected: _activeTab == _DriverTab.attendance,
+                          onTap: () {
+                            if (_activeTab != _DriverTab.attendance) {
+                              setState(
+                                  () => _activeTab = _DriverTab.attendance);
+                            }
+                          },
+                        ),
+                      ),
+                      Expanded(
+                        child: _DriverBottomNavItem(
+                          icon: Icons.person_outline_rounded,
+                          label: AppCopy.driverTabProfile,
+                          selected: _activeTab == _DriverTab.profile,
+                          onTap: () {
+                            if (_activeTab != _DriverTab.profile) {
+                              setState(() => _activeTab = _DriverTab.profile);
+                            }
+                          },
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             );
           },
         ),
@@ -347,31 +343,9 @@ class _DriverHomePageState extends State<DriverHomePage> {
       final dio = await authorizedDio();
       await _loadTripRouteForDriver(driverId, dio: dio);
 
-      final today = DateTime.now();
-      final dateStr =
-          "${today.year}-${today.month.toString().padLeft(2, '0')}-${today.day.toString().padLeft(2, '0')}";
-
-      // 🔹 USE empId HERE
-      final resp = await dio.get(
-        "${ApiConfig.assignments}?date=$dateStr&driver_id=$driverId",
-      );
-
-      final List list =
-          resp.data is List ? resp.data : (resp.data['results'] ?? []);
-      final currentAssignments = list
-          .whereType<Map>()
-          .map(
-            (entry) =>
-                DailyAssignmentModel.fromJson(Map<String, dynamic>.from(entry)),
-          )
-          .toList();
-
-      await _loadNotifiedIds();
-
-      _notifyNewAssignments(list);
-      await _notifyCancelledAssignments(driverId, dateStr);
-
       final stops = <_DriverAssignmentStop>[];
+      final currentAssignments = <DailyAssignmentModel>[];
+      final list = <Map<dynamic, dynamic>>[];
 
       // Helper to decode customer list for a ward
       Future<void> hydrateWardCustomers({
@@ -418,8 +392,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
           }
           if (entryWardId == null || entryWardId != wardId) return false;
           if (isEmergency && emergencyCustomerId.isNotEmpty) {
-            final entryId = (entry['unique_id'] ?? entry['customer_id'] ?? '')
-                .toString();
+            final entryId =
+                (entry['unique_id'] ?? entry['customer_id'] ?? '').toString();
             return entryId == emergencyCustomerId;
           }
           return true;
@@ -552,6 +526,18 @@ class _DriverHomePageState extends State<DriverHomePage> {
     String driverId, {
     Dio? dio,
   }) async {
+    if (!ApiConfig.legacyTripAssignEnabled) {
+      setState(() {
+        _tripStops = [];
+        _tripPolyline = [];
+        _activeTripId = null;
+        _activeRoutePlanId = null;
+        _loadingTrip = false;
+        _tripError = null;
+      });
+      return;
+    }
+
     try {
       final client = dio ?? await authorizedDio();
       final resp = await client.get(
@@ -660,11 +646,12 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   Future<void> _loadAssignmentHistory(String driverId) async {
     try {
-      final history =
-          await _assignmentRepository.fetchAssignmentHistory(driverId: driverId);
-      final completedHistory =
-          history.where((assignment) => !assignment.isActive).toList()
-            ..sort((a, b) => b.date.compareTo(a.date));
+      final history = await _assignmentRepository.fetchAssignmentHistory(
+          driverId: driverId);
+      final completedHistory = history
+          .where((assignment) => !assignment.isActive)
+          .toList()
+        ..sort((a, b) => b.date.compareTo(a.date));
       setState(() {
         _historyAssignments = completedHistory;
         _loadingAssignments = false;
@@ -674,103 +661,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
         _historyAssignments = [];
         _loadingAssignments = false;
       });
-    }
-  }
-
-  Future<void> _loadNotifiedIds() async {
-    if (_notificationsLoaded) return;
-    final prefs = await SharedPreferences.getInstance();
-    _notifiedAssignmentIds.addAll(
-      prefs.getStringList('driver_notified_assignments') ?? <String>[],
-    );
-    _notifiedCancelledAssignmentIds.addAll(
-      prefs.getStringList('driver_notified_cancelled_assignments') ??
-          <String>[],
-    );
-    _notificationsLoaded = true;
-  }
-
-  Future<void> _saveNotifiedIds() async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setStringList(
-      'driver_notified_assignments',
-      _notifiedAssignmentIds.toList(),
-    );
-    await prefs.setStringList(
-      'driver_notified_cancelled_assignments',
-      _notifiedCancelledAssignmentIds.toList(),
-    );
-  }
-
-  void _notifyNewAssignments(List<dynamic> assignments) {
-    final newAssignments = <String>[];
-
-    for (final item in assignments) {
-      if (item is! Map) continue;
-      final id = item['unique_id']?.toString();
-      if (id == null || id.isEmpty) continue;
-      if (_notifiedAssignmentIds.add(id)) {
-        newAssignments.add(id);
-      }
-    }
-
-    if (newAssignments.isEmpty) return;
-    final notificationService = getIt<NotificationService>();
-    final title =
-        newAssignments.length == 1 ? 'New assignment' : 'New assignments';
-    final message =
-        'You have ${newAssignments.length} assignment(s) scheduled today.';
-    notificationService.showAssignmentNotification(
-      title: title,
-      message: message,
-    );
-    _saveNotifiedIds();
-  }
-
-  Future<void> _notifyCancelledAssignments(
-    String staffId,
-    String dateStr,
-  ) async {
-    try {
-      final dio = await authorizedDio();
-      final resp = await dio.get(
-        ApiConfig.staffAssignments,
-        queryParameters: {
-          'staff_id': staffId,
-          'status': 'cancelled',
-          'date_from': dateStr,
-          'date_to': dateStr,
-        },
-      );
-
-      final decoded = resp.data;
-      final List list = decoded is List
-          ? decoded
-          : (decoded is Map ? (decoded['results'] ?? decoded['data'] ?? []) : []);
-
-      bool changed = false;
-      for (final item in list) {
-        if (item is! Map) continue;
-        final id = item['unique_id']?.toString();
-        if (id == null || id.isEmpty) continue;
-        if (!_notifiedCancelledAssignmentIds.add(id)) continue;
-        changed = true;
-
-        final wardName = item['ward_name']?.toString() ?? 'Assignment';
-        final reason =
-            item['cancelled_reason']?.toString() ?? 'No reason provided';
-
-        final notificationService = getIt<NotificationService>();
-        notificationService.showAssignmentNotification(
-          title: 'Assignment cancelled',
-          message: '$wardName • $reason',
-        );
-      }
-      if (changed) {
-        await _saveNotifiedIds();
-      }
-    } catch (_) {
-      // Ignore notification failures.
     }
   }
 
@@ -836,8 +726,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
 
   //   return out;
   // }
-
-  
 
   Widget _buildTab(_DriverTab tab, LatLng driverLocation, String nameFromState,
       String empIdFromState, VehicleModel? vehicle) {
@@ -912,7 +800,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
     });
   }
 }
-
 
 class _DriverBottomNavItem extends StatelessWidget {
   const _DriverBottomNavItem({
@@ -1052,13 +939,12 @@ class _DriverAvatarState extends State<DriverAvatar> {
 
   Future<void> fetchEmployeeImage() async {
     try {
-      final url =
-          "http://10.164.86.186:8000/api/desktop/staff-profile/?staff_id_id=${widget.empId}";
-
-      final request = await HttpClient().getUrl(Uri.parse(url));
-      final response = await request.close();
-      final body = await response.transform(utf8.decoder).join();
-      final json = jsonDecode(body);
+      final dio = await authorizedDio();
+      final response = await dio.get(
+        '${ApiConfig.desktopBase}staff-profile/',
+        queryParameters: {'staff_id_id': widget.empId},
+      );
+      final json = response.data;
 
       if (json["status"] == "success") {
         setState(() {
@@ -1082,8 +968,7 @@ class _DriverAvatarState extends State<DriverAvatar> {
 
   String convertToUrl(String path) {
     final clean = path.replaceAll("\\", "/");
-    final filename = clean.split("/").last;
-    return "http://10.164.86.186:8000/media/emp_image/$filename";
+    return "$kOperatorProfileBaseUrl/media/$clean";
   }
 
   @override
@@ -1511,8 +1396,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       _driverScreenPoint!.x + details.delta.dx,
       _driverScreenPoint!.y + details.delta.dy,
     );
-    final nextLocation =
-        widget.mapController.camera.pointToLatLng(nextPoint);
+    final nextLocation = widget.mapController.camera.pointToLatLng(nextPoint);
     setState(() {
       _manualDriverOverride = true;
       _driverLocation = nextLocation;
@@ -1558,9 +1442,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     String tripId,
     List<_TripPlannedStop> stops,
   ) async {
-    final ordered = stops
-        .where((stop) => stop.plannedStopId.isNotEmpty)
-        .toList();
+    final ordered =
+        stops.where((stop) => stop.plannedStopId.isNotEmpty).toList();
     if (ordered.isEmpty) return;
 
     final dio = await authorizedDio();
@@ -1582,8 +1465,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   Future<void> _computeTripRoadRoute({bool force = false}) async {
     if (_tripStops.isEmpty) return;
 
-    final needsRoad = _tripPolyline.isEmpty ||
-        _tripPolyline.length <= _tripStops.length + 1;
+    final needsRoad =
+        _tripPolyline.isEmpty || _tripPolyline.length <= _tripStops.length + 1;
     if (!force && !needsRoad) return;
 
     final requestId = ++_tripRouteRequestId;
@@ -1676,8 +1559,9 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
 
       stops.sort((a, b) => a.sequence.compareTo(b.sequence));
 
-      final geometry =
-          data is Map && data['route_geometry'] is Map ? data['route_geometry'] as Map : null;
+      final geometry = data is Map && data['route_geometry'] is Map
+          ? data['route_geometry'] as Map
+          : null;
       final encoded = geometry?['encoded_polyline'];
       List<LatLng> polyline = [];
       if (encoded is String && encoded.trim().isNotEmpty) {
@@ -1692,13 +1576,14 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
           .map((stop) => stop.plannedStopId)
           .where((id) => id.isNotEmpty)
           .toList();
-      final sequenceChanged =
-          newSequence.isNotEmpty && !_isSameSequence(newSequence, _lastActualSequence);
+      final sequenceChanged = newSequence.isNotEmpty &&
+          !_isSameSequence(newSequence, _lastActualSequence);
 
       setState(() {
         _tripStops = stops.isEmpty ? _tripStops : stops;
         _tripPolyline = polyline;
-        _routePlanId = plan is Map ? plan['unique_id']?.toString() : _routePlanId;
+        _routePlanId =
+            plan is Map ? plan['unique_id']?.toString() : _routePlanId;
         _rerouting = false;
       });
 
@@ -1738,12 +1623,15 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
         _rerouteError = 'Reroute failed';
       });
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Reroute failed'), backgroundColor: Colors.redAccent),
+        const SnackBar(
+            content: Text('Reroute failed'), backgroundColor: Colors.redAccent),
       );
     }
   }
 
   Future<void> _reportCompletion(_DriverAssignmentStop customer) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return;
+
     final assignmentId = customer.baseAssignmentId;
     String? driverId;
     final authState = context.read<AuthBloc>().state;
@@ -1815,6 +1703,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     Dio dio,
     String assignmentId,
   ) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return false;
+
     try {
       final resp = await dio.get('${ApiConfig.assignments}$assignmentId/');
       final data = resp.data;
@@ -2003,10 +1893,13 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       ),
     );
   }
+
   Future<void> _reportSkip(
     _DriverAssignmentStop customer,
     String reason,
   ) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return;
+
     try {
       final dio = await authorizedDio();
       final assignmentId = customer.baseAssignmentId;
@@ -2214,7 +2107,9 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
             ),
           ),
 
-          if (_tripStops.isNotEmpty || widget.tripLoading || widget.tripError != null)
+          if (_tripStops.isNotEmpty ||
+              widget.tripLoading ||
+              widget.tripError != null)
             Positioned(
               top: 64,
               left: 12,
@@ -2783,7 +2678,7 @@ class _CustomerCard extends StatelessWidget {
                 SizedBox(
                   width: double.infinity,
                   height: 32,
-                child: ElevatedButton.icon(
+                  child: ElevatedButton.icon(
                     onPressed:
                         isDone || customer.status == _CustomerStatus.navigating
                             ? null
@@ -3220,9 +3115,7 @@ class _AssignmentScreen extends StatefulWidget {
 class _AssignmentScreenState extends State<_AssignmentScreen> {
   @override
   Widget build(BuildContext context) {
-    final title = widget.wardName.isNotEmpty
-        ? widget.wardName
-        : 'Assignment';
+    final title = widget.wardName.isNotEmpty ? widget.wardName : 'Assignment';
 
     return Scaffold(
       appBar: AppBar(
@@ -3234,10 +3127,9 @@ class _AssignmentScreenState extends State<_AssignmentScreen> {
         separatorBuilder: (_, __) => const SizedBox(height: 12),
         itemBuilder: (context, index) {
           final customer = widget.customers[index];
-          final displayName =
-              customer.customerName?.trim().isNotEmpty == true
-                  ? customer.customerName!
-                  : customer.wardName;
+          final displayName = customer.customerName?.trim().isNotEmpty == true
+              ? customer.customerName!
+              : customer.wardName;
           final isDone = customer.status == _CustomerStatus.collected ||
               customer.status == _CustomerStatus.skipped;
 
@@ -3288,13 +3180,12 @@ class _AssignmentScreenState extends State<_AssignmentScreen> {
                   children: [
                     Expanded(
                       child: ElevatedButton(
-                        onPressed:
-                            isDone
-                                ? null
-                                : () async {
-                                    await widget.onCollect(customer);
-                                    if (mounted) setState(() {});
-                                  },
+                        onPressed: isDone
+                            ? null
+                            : () async {
+                                await widget.onCollect(customer);
+                                if (mounted) setState(() {});
+                              },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.green.shade700,
                           foregroundColor: Colors.white,

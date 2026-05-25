@@ -10,6 +10,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/env.dart';
+import 'package:iwms_citizen_app/data/models/permission_bundle.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
 
 class AuthRepositoryException implements Exception {
@@ -33,6 +34,7 @@ class AuthRepository {
   static const String _emp_idKey = 'emp_id';
   static const String _displayEmpIdKey = 'display_emp_id';
   static const String _permissionsKey = 'user_permissions';
+  static const String _permissionBundleKey = 'user_permission_bundle';
 
   AuthRepository(this._dio, this._prefs);
 
@@ -122,43 +124,59 @@ class AuthRepository {
   //     throw AuthRepositoryException('Unexpected error occurred. Please try again.');
   //   }
   // }
-Future<UserModel> loginCitizen({
-  required String username,
-  required String password,
-}) async {
-  final sanitizedUsername = username.trim();
-  final sanitizedPassword = password.trim();
+  Future<UserModel> loginCitizen({
+    required String username,
+    required String password,
+  }) async {
+    final sanitizedUsername = username.trim();
+    final sanitizedPassword = password.trim();
 
-  if (sanitizedUsername.isEmpty) {
-    throw AuthRepositoryException("Username is required.");
-  }
-  if (sanitizedPassword.isEmpty) {
-    throw AuthRepositoryException("Password is required.");
-  }
+    if (sanitizedUsername.isEmpty) {
+      throw AuthRepositoryException("Username is required.");
+    }
+    if (sanitizedPassword.isEmpty) {
+      throw AuthRepositoryException("Password is required.");
+    }
 
-  try {
-    final user = await _loginOnline(
-      sanitizedUsername,
-      sanitizedPassword,
-    );
-    await _persistOfflineUser(user, sanitizedPassword);
-    await saveUser(user);
-    return user;
-  } on SocketException catch (_) {
-    final offlineUser = await _loginOffline(sanitizedUsername, sanitizedPassword);
-    await saveUser(offlineUser);
-    return offlineUser;
-  } on DioException catch (dioError, stackTrace) {
-    final message = _handleDioError(dioError);
-    _logError('Login failed', dioError, stackTrace);
-    throw AuthRepositoryException(message);
-  } on AuthRepositoryException {
-    rethrow;
-  } catch (error, stackTrace) {
-    _logError('Unexpected login failure', error, stackTrace);
-    throw AuthRepositoryException("Login failed. Please try again.");
+    try {
+      final user = await _loginOnline(
+        sanitizedUsername,
+        sanitizedPassword,
+      );
+      final refreshedUser = await _refreshPermissionsForUser(user) ?? user;
+      await _persistOfflineUser(
+        refreshedUser,
+        sanitizedPassword,
+        username: sanitizedUsername,
+      );
+      await saveUser(refreshedUser);
+      return refreshedUser;
+    } on SocketException catch (_) {
+      final offlineUser =
+          await _loginOffline(sanitizedUsername, sanitizedPassword);
+      await saveUser(offlineUser);
+      return offlineUser;
+    } on DioException catch (dioError, stackTrace) {
+      if (_shouldTryOfflineLogin(dioError)) {
+        try {
+          final offlineUser =
+              await _loginOffline(sanitizedUsername, sanitizedPassword);
+          await saveUser(offlineUser);
+          return offlineUser;
+        } on AuthRepositoryException {
+          rethrow;
+        }
+      }
+      final message = _handleDioError(dioError);
+      _logError('Login failed', dioError, stackTrace);
+      throw AuthRepositoryException(message);
+    } on AuthRepositoryException {
+      rethrow;
+    } catch (error, stackTrace) {
+      _logError('Unexpected login failure', error, stackTrace);
+      throw AuthRepositoryException("Login failed. Please try again.");
+    }
   }
-}
 
   Future<UserModel> _loginOnline(String username, String password) async {
     if (kEnforcePermissions) {
@@ -189,18 +207,14 @@ Future<UserModel> loginCitizen({
         throw AuthRepositoryException("Incomplete staff login payload.");
       }
 
-      final permissions =
-          data["permissions"] is Map<String, dynamic> ? data["permissions"] : null;
-
-      return UserModel(
-        userId: data["unique_id"].toString(),
-        userName: data["name"].toString(),
-        role: data["role"].toString().toLowerCase(),
-        authToken: data["access_token"].toString(),
-        emp_id: data["emp_id"]?.toString(),
-        employeeId: data["employee_id"]?.toString(),
-        permissions: permissions,
-      );
+      final permissions = data["permissions"] is Map<String, dynamic>
+          ? data["permissions"]
+          : null;
+      final user = UserModel.fromApi({
+        ...data,
+        "permissions": permissions,
+      });
+      return user;
     } on DioException catch (dioError, stackTrace) {
       final message = _handleDioError(dioError);
       _logError('Staff login failed', dioError, stackTrace);
@@ -208,7 +222,8 @@ Future<UserModel> loginCitizen({
     }
   }
 
-  Future<UserModel> _loginMobileCitizen(String username, String password) async {
+  Future<UserModel> _loginMobileCitizen(
+      String username, String password) async {
     final response = await _dio.post(
       ApiConfig.citizenLogin,
       data: {
@@ -246,13 +261,43 @@ Future<UserModel> loginCitizen({
       throw AuthRepositoryException("Incorrect password (offline mode).");
     }
 
-    return UserModel.fromJson(local);
+    if (!supportsOfflineAccess(local["role"]?.toString())) {
+      throw AuthRepositoryException(
+        "Offline login is available only for operator and driver users.",
+      );
+    }
+
+    final offlineUser = UserModel.fromJson(local);
+    final cachedBundle = _readCachedPermissionBundle();
+    if (offlineUser.permissionBundle != null || cachedBundle == null) {
+      return offlineUser;
+    }
+    return offlineUser.copyWith(
+      permissions: cachedBundle.permissions,
+      permissionBundle: cachedBundle,
+    );
   }
 
-  Future<void> _persistOfflineUser(UserModel user, String password) async {
+  bool supportsOfflineAccess(String? role) {
+    final normalizedRole = UserModel.normalizeRole(role);
+    return normalizedRole == 'operator' || normalizedRole == 'driver';
+  }
+
+  bool requiresLiveBackend(String? role) => !supportsOfflineAccess(role);
+
+  Future<void> _persistOfflineUser(
+    UserModel user,
+    String password, {
+    String? username,
+  }) async {
+    if (!supportsOfflineAccess(user.role)) {
+      return;
+    }
+
     await saveOperatorToDB(
       {
         "unique_id": user.userId,
+        "username": username,
         "name": user.userName,
         "role": user.role,
         "access_token": user.authToken,
@@ -260,6 +305,7 @@ Future<UserModel> loginCitizen({
         "employee_id": user.employeeId,
       },
       password,
+      username: username,
     );
   }
 
@@ -277,7 +323,9 @@ Future<UserModel> loginCitizen({
     final displayEmpId = _prefs.getString(_displayEmpIdKey);
     final token = _prefs.getString(_tokenKey);
     final permissionsRaw = _prefs.getString(_permissionsKey);
+    final permissionBundleRaw = _prefs.getString(_permissionBundleKey);
     Map<String, dynamic>? permissions;
+    Map<String, dynamic>? permissionBundle;
     if (permissionsRaw != null && permissionsRaw.trim().isNotEmpty) {
       try {
         final decoded = jsonDecode(permissionsRaw);
@@ -286,9 +334,19 @@ Future<UserModel> loginCitizen({
         }
       } catch (_) {}
     }
+    if (permissionBundleRaw != null && permissionBundleRaw.trim().isNotEmpty) {
+      try {
+        final decoded = jsonDecode(permissionBundleRaw);
+        if (decoded is Map<String, dynamic>) {
+          permissionBundle = decoded;
+        } else if (decoded is Map) {
+          permissionBundle = Map<String, dynamic>.from(decoded);
+        }
+      } catch (_) {}
+    }
 
     if (userId != null && role != null && userName != null) {
-      final normalizedRole = role.toLowerCase();
+      final normalizedRole = UserModel.normalizeRole(role);
       if (normalizedRole != 'citizen' &&
           normalizedRole != 'customer' &&
           (token == null || token.isEmpty)) {
@@ -297,14 +355,35 @@ Future<UserModel> loginCitizen({
       return UserModel(
         userId: userId,
         userName: userName,
-        role: role,
+        role: normalizedRole,
         authToken: token,
         emp_id: emp_id,
         employeeId: displayEmpId,
         permissions: permissions,
+        permissionBundle: permissionBundle != null
+            ? PermissionBundle.fromApi(permissionBundle)
+            : null,
       );
     }
     return null;
+  }
+
+  Future<UserModel?> refreshCurrentUserPermissions({
+    bool requireOnline = false,
+  }) async {
+    final currentUser = await getAuthenticatedUser();
+    if (currentUser == null) {
+      return null;
+    }
+    final updatedUser = await _refreshPermissionsForUser(
+      currentUser,
+      requireOnline: requireOnline,
+    );
+    if (updatedUser == null) {
+      return null;
+    }
+    await saveUser(updatedUser);
+    return updatedUser;
   }
 
   Future<void> logout() async {
@@ -314,6 +393,7 @@ Future<UserModel> loginCitizen({
     await _prefs.remove(_nameKey);
     await _prefs.remove(_tokenKey);
     await _prefs.remove(_permissionsKey);
+    await _prefs.remove(_permissionBundleKey);
   }
 
   Future<void> saveUser(UserModel user) async {
@@ -347,6 +427,95 @@ Future<UserModel> loginCitizen({
     } else {
       await _prefs.remove(_permissionsKey);
     }
+
+    final bundle = user.permissionBundle;
+    if (bundle != null && !bundle.isEmpty) {
+      await _prefs.setString(_permissionBundleKey, jsonEncode(bundle.toJson()));
+    } else {
+      await _prefs.remove(_permissionBundleKey);
+    }
+  }
+
+  Future<UserModel?> _refreshPermissionsForUser(
+    UserModel user, {
+    bool requireOnline = false,
+  }) async {
+    final token = user.authToken;
+    if (token == null || token.isEmpty) {
+      return requireOnline ? null : user;
+    }
+
+    try {
+      final dio = _authorizedDioForToken(token);
+      final response = await dio.get(ApiConfig.myPermissions);
+      final data = response.data;
+      if (data is! Map<String, dynamic>) {
+        return requireOnline ? null : user;
+      }
+
+      final bundle = PermissionBundle.fromApi(data);
+      if (bundle.isEmpty) {
+        return requireOnline ? null : user;
+      }
+
+      return user.copyWith(
+        permissions: bundle.permissions,
+        permissionBundle: bundle,
+      );
+    } on DioException catch (error, stackTrace) {
+      _logError('Permission refresh failed', error, stackTrace);
+      return requireOnline ? null : user;
+    } catch (error, stackTrace) {
+      _logError('Unexpected permission refresh failure', error, stackTrace);
+      return requireOnline ? null : user;
+    }
+  }
+
+  bool _shouldTryOfflineLogin(DioException error) {
+    return error.type == DioExceptionType.connectionError ||
+        error.type == DioExceptionType.connectionTimeout ||
+        error.error is SocketException;
+  }
+
+  PermissionBundle? _readCachedPermissionBundle() {
+    final raw = _prefs.getString(_permissionBundleKey);
+    if (raw == null || raw.trim().isEmpty) {
+      return null;
+    }
+    try {
+      final decoded = jsonDecode(raw);
+      if (decoded is Map<String, dynamic>) {
+        return PermissionBundle.fromApi(decoded);
+      }
+      if (decoded is Map) {
+        return PermissionBundle.fromApi(Map<String, dynamic>.from(decoded));
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  Dio _authorizedDioForToken(String token) {
+    final headers = Map<String, dynamic>.from(_dio.options.headers);
+    headers['Content-Type'] = 'application/json';
+    headers['Authorization'] = 'Bearer $token';
+
+    final options = BaseOptions(
+      baseUrl: _dio.options.baseUrl,
+      connectTimeout: _dio.options.connectTimeout,
+      receiveTimeout: _dio.options.receiveTimeout,
+      sendTimeout: _dio.options.sendTimeout,
+      headers: headers,
+      contentType: _dio.options.contentType,
+      responseType: _dio.options.responseType,
+      followRedirects: _dio.options.followRedirects,
+      validateStatus: _dio.options.validateStatus,
+      receiveDataWhenStatusError: _dio.options.receiveDataWhenStatusError,
+    );
+
+    final dio = Dio(options);
+    dio.interceptors.addAll(_dio.interceptors);
+    dio.httpClientAdapter = _dio.httpClientAdapter;
+    return dio;
   }
 
   String? _extractServerMessage(dynamic data) {
@@ -378,30 +547,10 @@ Future<UserModel> loginCitizen({
 
   String _handleDioError(DioException error) {
     final responseData = error.response?.data;
-    final serverMessage =
-        _extractServerMessage(responseData) ?? error.message ?? 'Unable to reach the server.';
+    final serverMessage = _extractServerMessage(responseData) ??
+        error.message ??
+        'Unable to reach the server.';
     return serverMessage;
-  }
-
-  String _buildDisplayName({
-    String? firstName,
-    String? lastName,
-    required String fallback,
-  }) {
-    final cleanedFirst = firstName?.trim() ?? '';
-    final cleanedLast = lastName?.trim() ?? '';
-    final fullName = '$cleanedFirst $cleanedLast'.trim();
-    return fullName.isNotEmpty ? fullName : fallback;
-  }
-
-  String? _stringOrNull(dynamic value) {
-    if (value is String) {
-      final trimmed = value.trim();
-      return trimmed.isNotEmpty ? trimmed : null;
-    }
-    if (value == null) return null;
-    final text = value.toString().trim();
-    return text.isNotEmpty ? text : null;
   }
 
   void _logError(String prefix, Object error, StackTrace stackTrace) {

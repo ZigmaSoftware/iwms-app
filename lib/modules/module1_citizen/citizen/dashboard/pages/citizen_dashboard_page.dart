@@ -92,6 +92,8 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
   }
 
   Future<void> _fetchCitizenAssignments(String customerId) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return;
+
     try {
       final dio = await authorizedDio();
       final today = DateTime.now();

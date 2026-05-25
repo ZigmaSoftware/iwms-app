@@ -39,7 +39,7 @@
 //         password_hash TEXT
 //       );
 //     """);
-    
+
 //   }
 // }
 // Future<void> saveOperatorToDB(Map<String, dynamic> apiData, String password) async {
@@ -160,7 +160,11 @@ class DB {
 // -------------------------------------------------------
 // SAVE USER
 // -------------------------------------------------------
-Future<void> saveOperatorToDB(Map<String, dynamic> apiData, String password) async {
+Future<void> saveOperatorToDB(
+  Map<String, dynamic> apiData,
+  String password, {
+  String? username,
+}) async {
   final db = await DB.instance.database;
   final passHash = sha256.convert(utf8.encode(password)).toString();
 
@@ -168,7 +172,9 @@ Future<void> saveOperatorToDB(Map<String, dynamic> apiData, String password) asy
     "operator_user",
     {
       "unique_id": apiData["unique_id"]?.toString(),
-      "username": apiData["name"]?.toString(),
+      "username": username?.trim().isNotEmpty == true
+          ? username!.trim()
+          : apiData["username"]?.toString() ?? apiData["name"]?.toString(),
       "name": apiData["name"]?.toString(),
       "role": apiData["role"]?.toString(),
       "access_token": apiData["access_token"]?.toString(),

@@ -579,6 +579,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     final totalWeight = _calculateTotalWeight();
     final summary = _buildSummarySnapshot();
     Future<void> _syncLog(String status) async {
+      if (!ApiConfig.legacyRoleAssignEnabled) return;
       if (widget.assignmentId == null || widget.assignmentId!.trim().isEmpty) {
         return;
       }
@@ -707,6 +708,8 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   }
 
   Future<List<String>> _fetchAssignmentCustomerIds(String assignmentId) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return [];
+
     try {
       final dio = await authorizedDio();
       final assignmentResp =
@@ -755,6 +758,8 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   }
 
   Future<void> _markAssignmentComplete(String assignmentId) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return;
+
     try {
       final dio = await authorizedDio();
       await dio.post('${ApiConfig.assignments}$assignmentId/complete/');

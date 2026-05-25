@@ -1,4 +1,3 @@
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
@@ -10,9 +9,9 @@ import 'package:geolocator/geolocator.dart';
 import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
+import 'package:iwms_citizen_app/core/env.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
-import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
@@ -22,19 +21,19 @@ import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink
 import 'camerapage.dart';
 
 // ── Design tokens ─────────────────────────────────────────────────────────
-const _kPrimary  = AppColors.primary;
-const _kBg       = Color(0xFFF4F6FA);
-const _kSurface  = Colors.white;
-const _kGreen    = Color(0xFF0F8A58);
-const _kGreenBg  = Color(0xFFE7F6EE);
-const _kAmber    = Color(0xFFD97706);
-const _kAmberBg  = Color(0xFFFFF8EB);
-const _kTextPri  = Color(0xFF0B1F3A);
-const _kTextSec  = Color(0xFF6B7C93);
-const _kBorder   = Color(0xFFE8ECF4);
+const _kPrimary = AppColors.primary;
+const _kBg = Color(0xFFF4F6FA);
+const _kSurface = Colors.white;
+const _kGreen = Color(0xFF0F8A58);
+const _kGreenBg = Color(0xFFE7F6EE);
+const _kAmber = Color(0xFFD97706);
+const _kAmberBg = Color(0xFFFFF8EB);
+const _kTextPri = Color(0xFF0B1F3A);
+const _kTextSec = Color(0xFF6B7C93);
+const _kBorder = Color(0xFFE8ECF4);
 
-const Duration kTripBlinkInterval      = Duration(minutes: 2);
-const Duration kTripBlinkDuration      = Duration(minutes: 2);
+const Duration kTripBlinkInterval = Duration(minutes: 2);
+const Duration kTripBlinkDuration = Duration(minutes: 2);
 const Duration kTripAttendanceCooldown = Duration(minutes: 1);
 
 // ── Pulse rings painter ───────────────────────────────────────────────────
@@ -51,7 +50,8 @@ class _RingsPainter extends CustomPainter {
       final radius = size.width * (0.30 + t * 0.22);
       final opacity = (1 - t) * 0.20;
       canvas.drawCircle(
-        center, radius,
+        center,
+        radius,
         Paint()
           ..color = color.withOpacity(opacity)
           ..style = PaintingStyle.stroke
@@ -85,36 +85,37 @@ class AttendancePage extends StatefulWidget {
 
 class _AttendancePageState extends State<AttendancePage>
     with SingleTickerProviderStateMixin {
-
   // state
-  bool   _punchPressed    = false;
-  String _lat             = '--';
-  String _lng             = '--';
-  String _checkIn         = '--:--';
-  String _checkOut        = '--:--';
-  bool   _isCheckedIn     = false;
-  bool   _isCheckedOut    = false;
-  bool   _isStatusLoading = false;
-  int    _presentDays     = 0;
-  int    _leaveDays       = 0;
-  int    _permDays        = 0;
+  bool _punchPressed = false;
+  String _lat = '--';
+  String _lng = '--';
+  String _checkIn = '--:--';
+  String _checkOut = '--:--';
+  bool _isCheckedIn = false;
+  bool _isCheckedOut = false;
+  bool _isStatusLoading = false;
+  int _presentDays = 0;
+  int _leaveDays = 0;
+  int _permDays = 0;
   DateTime? _lastTripAt;
   late String _time;
   late String _date;
   Timer? _clockTimer;
   Timer? _tripCooldownTimer;
   StreamSubscription? _connectivitySub;
-  bool _isOnline          = true;
-  Duration _worked        = Duration.zero;
+  bool _isOnline = true;
+  Duration _worked = Duration.zero;
   List<Map<String, dynamic>> _pendingSync = [];
-  bool _tripWindow        = false;
+  bool _tripWindow = false;
   late VoidCallback _blinkCb;
   late final AnimationController _pulse;
 
   @override
   void initState() {
     super.initState();
-    _pulse = AnimationController(vsync: this, duration: const Duration(seconds: 3))..repeat();
+    _pulse =
+        AnimationController(vsync: this, duration: const Duration(seconds: 3))
+          ..repeat();
     _updateClock();
     _fetchLocation();
     _checkNet();
@@ -122,7 +123,8 @@ class _AttendancePageState extends State<AttendancePage>
       final ok = await _hasInternet();
       if (mounted) setState(() => _isOnline = ok);
     });
-    _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
+    _clockTimer =
+        Timer.periodic(const Duration(seconds: 1), (_) => _updateClock());
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadStatus();
       _loadSummary();
@@ -167,14 +169,19 @@ class _AttendancePageState extends State<AttendancePage>
   Duration _cooldownLeft() {
     if (_lastTripAt == null) return Duration.zero;
     final e = DateTime.now().difference(_lastTripAt!);
-    return e >= kTripAttendanceCooldown ? Duration.zero : kTripAttendanceCooldown - e;
+    return e >= kTripAttendanceCooldown
+        ? Duration.zero
+        : kTripAttendanceCooldown - e;
   }
 
   Future<bool> _hasInternet() async {
     try {
-      final r = await InternetAddress.lookup('one.one.one.one').timeout(const Duration(seconds: 2));
+      final r = await InternetAddress.lookup('one.one.one.one')
+          .timeout(const Duration(seconds: 2));
       return r.isNotEmpty && r[0].rawAddress.isNotEmpty;
-    } catch (_) { return false; }
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> _checkNet() async {
@@ -205,10 +212,10 @@ class _AttendancePageState extends State<AttendancePage>
       final data = res.data;
       if (data is Map && data['status'] == 'success' && mounted) {
         setState(() {
-          _checkIn         = (data['check_in_time']  ?? '--:--').toString();
-          _checkOut        = (data['check_out_time'] ?? '--:--').toString();
-          _isCheckedIn     = data['checked_in']  == true;
-          _isCheckedOut    = data['checked_out'] == true;
+          _checkIn = (data['check_in_time'] ?? '--:--').toString();
+          _checkOut = (data['check_out_time'] ?? '--:--').toString();
+          _isCheckedIn = data['checked_in'] == true;
+          _isCheckedOut = data['checked_out'] == true;
           _isStatusLoading = false;
         });
         _updateBlink();
@@ -231,9 +238,9 @@ class _AttendancePageState extends State<AttendancePage>
       final data = res.data;
       if (data is Map && data['status'] == 'success' && mounted) {
         setState(() {
-          _presentDays = (data['present_days']    ?? 0) as int;
-          _leaveDays   = (data['leave_days']      ?? 0) as int;
-          _permDays    = (data['permission_days'] ?? 0) as int;
+          _presentDays = (data['present_days'] ?? 0) as int;
+          _leaveDays = (data['leave_days'] ?? 0) as int;
+          _permDays = (data['permission_days'] ?? 0) as int;
         });
       }
     } catch (_) {}
@@ -252,7 +259,9 @@ class _AttendancePageState extends State<AttendancePage>
       if (mounted && _tripWindow) setState(() => _tripWindow = false);
       final rem = _cooldownLeft();
       if (rem > Duration.zero) {
-        _tripCooldownTimer = Timer(rem, () { if (mounted) _updateBlink(); });
+        _tripCooldownTimer = Timer(rem, () {
+          if (mounted) _updateBlink();
+        });
       }
       return;
     }
@@ -266,19 +275,34 @@ class _AttendancePageState extends State<AttendancePage>
   Future<void> _fetchLocation() async {
     if (!await Geolocator.isLocationServiceEnabled()) return;
     var perm = await Geolocator.checkPermission();
-    if (perm == LocationPermission.denied) perm = await Geolocator.requestPermission();
-    if (perm == LocationPermission.denied || perm == LocationPermission.deniedForever) return;
-    final pos = await Geolocator.getCurrentPosition(desiredAccuracy: LocationAccuracy.high);
-    if (mounted) setState(() { _lat = pos.latitude.toStringAsFixed(5); _lng = pos.longitude.toStringAsFixed(5); });
+    if (perm == LocationPermission.denied)
+      perm = await Geolocator.requestPermission();
+    if (perm == LocationPermission.denied ||
+        perm == LocationPermission.deniedForever) return;
+    final pos = await Geolocator.getCurrentPosition(
+        desiredAccuracy: LocationAccuracy.high);
+    if (mounted)
+      setState(() {
+        _lat = pos.latitude.toStringAsFixed(5);
+        _lng = pos.longitude.toStringAsFixed(5);
+      });
   }
 
   Future<void> _handlePunch({required String name, required String? id}) async {
-    if (id == null || id.trim().isEmpty) { _snack('Employee ID is missing.'); return; }
+    if (id == null || id.trim().isEmpty) {
+      _snack('Employee ID is missing.');
+      return;
+    }
     try {
       if (_isCheckedIn && !_isCheckedOut && _tripWindow) {
         final ok = await Navigator.of(context).push<bool>(
-          MaterialPageRoute(builder: (_) => CameraScreen(employeeName: name, employeeId: id, isTripAttendance: true)),
-        ) ?? false;
+              MaterialPageRoute(
+                  builder: (_) => CameraScreen(
+                      employeeName: name,
+                      employeeId: id,
+                      isTripAttendance: true)),
+            ) ??
+            false;
         if (ok) {
           _lastTripAt = DateTime.now();
           AttendanceBlinkStore.dispose();
@@ -286,112 +310,181 @@ class _AttendancePageState extends State<AttendancePage>
         }
       } else {
         await Navigator.of(context).push<bool>(
-          MaterialPageRoute(builder: (_) => CameraScreen(employeeName: name, employeeId: id, isTripAttendance: false)),
+          MaterialPageRoute(
+              builder: (_) => CameraScreen(
+                  employeeName: name, employeeId: id, isTripAttendance: false)),
         );
       }
       await _loadStatus();
       await _loadSummary();
-    } catch (e) { if (mounted) _snack('Unable to open camera: $e'); }
+    } catch (e) {
+      if (mounted) _snack('Unable to open camera: $e');
+    }
   }
 
   Future<void> _syncItem(Map<String, dynamic> item) async {
-    if (!_isOnline) { _snack('No internet.'); return; }
+    if (!_isOnline) {
+      _snack('No internet.');
+      return;
+    }
     try {
-      final res = await http.post(Uri.parse('https://zigma/api/attendance/sync.php'),
-        body: {'timestamp': item['timestamp'], 'lat': item['lat'], 'long': item['long'], 'type': item['type']});
+      final res = await http
+          .post(Uri.parse('https://zigma/api/attendance/sync.php'), body: {
+        'timestamp': item['timestamp'],
+        'lat': item['lat'],
+        'long': item['long'],
+        'type': item['type']
+      });
       final data = jsonDecode(res.body);
       if (!mounted) return;
-      if (data['status'] == 'success') { _pendingSync.remove(item); setState(() {}); _snack('Synced.'); }
-      else _snack('Sync failed.');
-    } catch (_) { if (mounted) _snack('Error syncing.'); }
+      if (data['status'] == 'success') {
+        _pendingSync.remove(item);
+        setState(() {});
+        _snack('Synced.');
+      } else
+        _snack('Sync failed.');
+    } catch (_) {
+      if (mounted) _snack('Error syncing.');
+    }
   }
 
   void _openHistory(String? id) {
-    if (id == null || id.trim().isEmpty) { _snack('Employee ID missing.'); return; }
-    Navigator.of(context).push(MaterialPageRoute(builder: (_) => AttendanceHistory(empId: id)));
+    if (id == null || id.trim().isEmpty) {
+      _snack('Employee ID missing.');
+      return;
+    }
+    Navigator.of(context)
+        .push(MaterialPageRoute(builder: (_) => AttendanceHistory(empId: id)));
   }
 
-  void _snack(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-    content: Text(msg), behavior: SnackBarBehavior.floating,
-    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-    margin: const EdgeInsets.all(16),
-  ));
+  void _snack(String msg) =>
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        margin: const EdgeInsets.all(16),
+      ));
 
   bool get _hasLoc => _lat != '--';
 
-  Color get _accent { if (_tripWindow) return _kAmber; if (_isCheckedIn) return _kGreen; return _kPrimary; }
-  Color get _accentBg { if (_tripWindow) return _kAmberBg; return _kGreenBg; }
+  Color get _accent {
+    if (_tripWindow) return _kAmber;
+    if (_isCheckedIn) return _kGreen;
+    return _kPrimary;
+  }
+
+  Color get _accentBg {
+    if (_tripWindow) return _kAmberBg;
+    return _kGreenBg;
+  }
 
   IconData get _statusIcon {
-    if (_tripWindow)   return Icons.notifications_active_rounded;
+    if (_tripWindow) return Icons.notifications_active_rounded;
     if (_isCheckedOut) return Icons.verified_rounded;
-    if (_isCheckedIn)  return Icons.timelapse_rounded;
+    if (_isCheckedIn) return Icons.timelapse_rounded;
     return Icons.fingerprint_rounded;
   }
 
   String get _statusLabel {
     if (_isStatusLoading) return 'Syncing\u2026';
-    if (_tripWindow)      return 'Trip reminder';
-    if (_isCheckedOut)    return 'Day complete';
-    if (_isCheckedIn)     return 'Checked in';
+    if (_tripWindow) return 'Trip reminder';
+    if (_isCheckedOut) return 'Day complete';
+    if (_isCheckedIn) return 'Checked in';
     return 'Not punched';
   }
 
   String get _punchLabel {
-    if (_tripWindow)                    return 'Trip Punch';
+    if (_tripWindow) return 'Trip Punch';
     if (_isCheckedIn && !_isCheckedOut) return 'Punch Out';
-    if (_isCheckedOut)                  return 'Camera';
+    if (_isCheckedOut) return 'Camera';
     return 'Punch In';
   }
 
   String get _punchSub {
-    if (_tripWindow)   return 'Reminder active';
+    if (_tripWindow) return 'Reminder active';
     if (_isCheckedOut) return 'Day complete';
-    if (_isCheckedIn)  return 'Shift running';
+    if (_isCheckedIn) return 'Shift running';
     return 'Tap to begin';
   }
 
   @override
   Widget build(BuildContext context) {
-    final nameAuth = context.select<AuthBloc, String?>((b) => b.state is AuthStateAuthenticated ? (b.state as AuthStateAuthenticated).userName : null);
-    final idAuth   = context.select<AuthBloc, String?>((b) => b.state is AuthStateAuthenticated ? (b.state as AuthStateAuthenticated).emp_id   : null);
+    final nameAuth = context.select<AuthBloc, String?>((b) =>
+        b.state is AuthStateAuthenticated
+            ? (b.state as AuthStateAuthenticated).userName
+            : null);
+    final idAuth = context.select<AuthBloc, String?>((b) =>
+        b.state is AuthStateAuthenticated
+            ? (b.state as AuthStateAuthenticated).emp_id
+            : null);
 
-    final displayName = nameAuth?.trim().isNotEmpty == true ? nameAuth!.trim()
-        : widget.operatorName.trim().isNotEmpty ? widget.operatorName.trim() : 'Operator';
-    final employeeId  = idAuth?.trim().isNotEmpty == true ? idAuth!.trim()
-        : widget.empId.trim().isNotEmpty ? widget.empId.trim() : null;
-    final opCode = widget.operatorCode.trim().isNotEmpty ? widget.operatorCode.trim() : (employeeId ?? '\u2014');
+    final displayName = nameAuth?.trim().isNotEmpty == true
+        ? nameAuth!.trim()
+        : widget.operatorName.trim().isNotEmpty
+            ? widget.operatorName.trim()
+            : 'Operator';
+    final employeeId = idAuth?.trim().isNotEmpty == true
+        ? idAuth!.trim()
+        : widget.empId.trim().isNotEmpty
+            ? widget.empId.trim()
+            : null;
+    final opCode = widget.operatorCode.trim().isNotEmpty
+        ? widget.operatorCode.trim()
+        : (employeeId ?? '\u2014');
 
     return Scaffold(
       backgroundColor: _kBg,
       body: SafeArea(
         child: RefreshIndicator(
           color: _kPrimary,
-          onRefresh: () async { await _loadStatus(); await _loadSummary(); },
+          onRefresh: () async {
+            await _loadStatus();
+            await _loadSummary();
+          },
           child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            physics: const AlwaysScrollableScrollPhysics(
+                parent: BouncingScrollPhysics()),
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 28),
             child: Column(
               children: [
-                _CompactHeader(name: displayName, opCode: opCode, date: _date, time: _time, isOnline: _isOnline),
+                _CompactHeader(
+                    name: displayName,
+                    opCode: opCode,
+                    date: _date,
+                    time: _time,
+                    isOnline: _isOnline),
                 const SizedBox(height: 12),
                 _StatusStrip(
-                  icon: _statusIcon, label: _statusLabel, accent: _accent, accentBg: _accentBg,
-                  isLoading: _isStatusLoading, checkIn: _checkIn, checkOut: _checkOut, worked: _fmtDur(_worked),
+                  icon: _statusIcon,
+                  label: _statusLabel,
+                  accent: _accent,
+                  accentBg: _accentBg,
+                  isLoading: _isStatusLoading,
+                  checkIn: _checkIn,
+                  checkOut: _checkOut,
+                  worked: _fmtDur(_worked),
                 ),
                 const SizedBox(height: 12),
                 _PunchCard(
-                  pulse: _pulse, punchLabel: _punchLabel, punchSub: _punchSub, accent: _accent,
-                  isPressed: _punchPressed, isTripActive: _tripWindow,
-                  onDown:   () => setState(() => _punchPressed = true),
-                  onUp:     () => setState(() => _punchPressed = false),
+                  pulse: _pulse,
+                  punchLabel: _punchLabel,
+                  punchSub: _punchSub,
+                  accent: _accent,
+                  isPressed: _punchPressed,
+                  isTripActive: _tripWindow,
+                  onDown: () => setState(() => _punchPressed = true),
+                  onUp: () => setState(() => _punchPressed = false),
                   onCancel: () => setState(() => _punchPressed = false),
                   onTap: () => _handlePunch(name: displayName, id: employeeId),
                 ),
                 const SizedBox(height: 12),
                 _SummaryCard(
-                  present: _presentDays, leave: _leaveDays, perm: _permDays,
-                  hasLoc: _hasLoc, lat: _lat, lng: _lng,
+                  present: _presentDays,
+                  leave: _leaveDays,
+                  perm: _permDays,
+                  hasLoc: _hasLoc,
+                  lat: _lat,
+                  lng: _lng,
                   onHistory: () => _openHistory(employeeId),
                 ),
                 if (_pendingSync.isNotEmpty) ...[
@@ -406,7 +499,6 @@ class _AttendancePageState extends State<AttendancePage>
     );
   }
 }
-
 
 class _CompactHeader extends StatelessWidget {
   const _CompactHeader({
@@ -493,7 +585,8 @@ class _CompactHeader extends StatelessWidget {
               ),
               // Online chip
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: isOnline
                       ? Colors.white.withOpacity(0.14)
@@ -509,7 +602,8 @@ class _CompactHeader extends StatelessWidget {
                       height: 7,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isOnline ? const Color(0xFF7EF59F) : Colors.white,
+                        color:
+                            isOnline ? const Color(0xFF7EF59F) : Colors.white,
                       ),
                     ),
                     const SizedBox(width: 5),
@@ -531,7 +625,8 @@ class _CompactHeader extends StatelessWidget {
           Row(
             children: [
               Container(
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                 decoration: BoxDecoration(
                   color: Colors.white.withOpacity(0.10),
                   borderRadius: BorderRadius.circular(8),
@@ -539,11 +634,15 @@ class _CompactHeader extends StatelessWidget {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    Icon(Icons.calendar_today_rounded, size: 12, color: Colors.white.withOpacity(0.7)),
+                    Icon(Icons.calendar_today_rounded,
+                        size: 12, color: Colors.white.withOpacity(0.7)),
                     const SizedBox(width: 6),
                     Text(
                       date,
-                      style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 11.5, fontWeight: FontWeight.w600),
+                      style: TextStyle(
+                          color: Colors.white.withOpacity(0.85),
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w600),
                     ),
                   ],
                 ),
@@ -551,7 +650,11 @@ class _CompactHeader extends StatelessWidget {
               const Spacer(),
               Text(
                 time,
-                style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w800, letterSpacing: 0.5),
+                style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.5),
               ),
             ],
           ),
@@ -592,7 +695,12 @@ class _StatusStrip extends StatelessWidget {
         color: _kSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _kBorder, width: 1),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 14, offset: const Offset(0, 5))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 14,
+              offset: const Offset(0, 5))
+        ],
       ),
       child: Column(
         children: [
@@ -602,24 +710,34 @@ class _StatusStrip extends StatelessWidget {
               Container(
                 width: 34,
                 height: 34,
-                decoration: BoxDecoration(color: accentBg, borderRadius: BorderRadius.circular(10)),
+                decoration: BoxDecoration(
+                    color: accentBg, borderRadius: BorderRadius.circular(10)),
                 child: Icon(icon, size: 17, color: accent),
               ),
               const SizedBox(width: 10),
-              Text(label, style: TextStyle(fontSize: 13.5, fontWeight: FontWeight.w700, color: accent)),
+              Text(label,
+                  style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w700,
+                      color: accent)),
               const Spacer(),
-              if (isLoading) SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: accent)),
+              if (isLoading)
+                SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(
+                        strokeWidth: 2, color: accent)),
             ],
           ),
           const SizedBox(height: 12),
           // Timeline row
           Row(
             children: [
-              _TimeCell(label: 'Check In',  value: checkIn,  color: _kGreen),
+              _TimeCell(label: 'Check In', value: checkIn, color: _kGreen),
               _Vline(),
               _TimeCell(label: 'Check Out', value: checkOut, color: _kAmber),
               _Vline(),
-              _TimeCell(label: 'Worked',    value: worked,   color: _kTextPri),
+              _TimeCell(label: 'Worked', value: worked, color: _kTextPri),
             ],
           ),
         ],
@@ -629,7 +747,8 @@ class _StatusStrip extends StatelessWidget {
 }
 
 class _TimeCell extends StatelessWidget {
-  const _TimeCell({required this.label, required this.value, required this.color});
+  const _TimeCell(
+      {required this.label, required this.value, required this.color});
   final String label;
   final String value;
   final Color color;
@@ -639,9 +758,15 @@ class _TimeCell extends StatelessWidget {
     return Expanded(
       child: Column(
         children: [
-          Text(label, style: const TextStyle(fontSize: 10.5, color: _kTextSec, fontWeight: FontWeight.w600)),
+          Text(label,
+              style: const TextStyle(
+                  fontSize: 10.5,
+                  color: _kTextSec,
+                  fontWeight: FontWeight.w600)),
           const SizedBox(height: 4),
-          Text(value, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800, color: color)),
+          Text(value,
+              style: TextStyle(
+                  fontSize: 15, fontWeight: FontWeight.w800, color: color)),
         ],
       ),
     );
@@ -650,10 +775,12 @@ class _TimeCell extends StatelessWidget {
 
 class _Vline extends StatelessWidget {
   @override
-  Widget build(BuildContext context) =>
-      Container(width: 1, height: 32, color: _kBorder, margin: const EdgeInsets.symmetric(horizontal: 4));
+  Widget build(BuildContext context) => Container(
+      width: 1,
+      height: 32,
+      color: _kBorder,
+      margin: const EdgeInsets.symmetric(horizontal: 4));
 }
-
 
 class DriverAvatar extends StatefulWidget {
   final String empId;
@@ -676,13 +803,12 @@ class _DriverAvatarState extends State<DriverAvatar> {
 
   Future<void> fetchEmployeeImage() async {
     try {
-      final url =
-          "http://10.164.86.186:8000/api/desktop/staff-profile/?staff_id_id=${widget.empId}";
-
-      final request = await HttpClient().getUrl(Uri.parse(url));
-      final response = await request.close();
-      final body = await response.transform(utf8.decoder).join();
-      final json = jsonDecode(body);
+      final dio = await authorizedDio();
+      final response = await dio.get(
+        '${ApiConfig.desktopBase}staff-profile/',
+        queryParameters: {'staff_id_id': widget.empId},
+      );
+      final json = response.data;
 
       if (json["status"] == "success") {
         setState(() {
@@ -706,8 +832,7 @@ class _DriverAvatarState extends State<DriverAvatar> {
 
   String convertToUrl(String path) {
     final clean = path.replaceAll("\\", "/");
-    final filename = clean.split("/").last;
-    return "http://10.164.86.186:8000/media/emp_image/$filename";
+    return "$kOperatorProfileBaseUrl/media/$clean";
   }
 
   @override
@@ -760,7 +885,6 @@ class _DriverAvatarState extends State<DriverAvatar> {
   }
 }
 
-
 // ── _PunchCard ────────────────────────────────────────────────────────────
 class _PunchCard extends StatelessWidget {
   const _PunchCard({
@@ -795,7 +919,12 @@ class _PunchCard extends StatelessWidget {
         color: _kSurface,
         borderRadius: BorderRadius.circular(24),
         border: Border.all(color: _kBorder),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 16, offset: const Offset(0, 6))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 16,
+              offset: const Offset(0, 6))
+        ],
       ),
       child: Column(
         children: [
@@ -805,13 +934,21 @@ class _PunchCard extends StatelessWidget {
             children: [
               Text(
                 punchLabel,
-                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: accent),
+                style: TextStyle(
+                    fontSize: 14, fontWeight: FontWeight.w800, color: accent),
               ),
               if (isTripActive)
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: _kAmberBg, borderRadius: BorderRadius.circular(8)),
-                  child: const Text('TRIP', style: TextStyle(fontSize: 10, fontWeight: FontWeight.w800, color: _kAmber, letterSpacing: 1)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                      color: _kAmberBg, borderRadius: BorderRadius.circular(8)),
+                  child: const Text('TRIP',
+                      style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.w800,
+                          color: _kAmber,
+                          letterSpacing: 1)),
                 ),
             ],
           ),
@@ -828,11 +965,12 @@ class _PunchCard extends StatelessWidget {
                 children: [
                   CustomPaint(
                     size: const Size.square(200),
-                    painter: _RingsPainter(progress: pulse.value, color: accent),
+                    painter:
+                        _RingsPainter(progress: pulse.value, color: accent),
                   ),
                   GestureDetector(
                     onTapDown: (_) => onDown(),
-                    onTapUp:   (_) => onUp(),
+                    onTapUp: (_) => onUp(),
                     onTapCancel: onCancel,
                     onTap: onTap,
                     child: AnimatedScale(
@@ -850,7 +988,10 @@ class _PunchCard extends StatelessWidget {
                             colors: [accent, accent.withOpacity(0.75)],
                           ),
                           boxShadow: [
-                            BoxShadow(color: accent.withOpacity(0.30), blurRadius: 28, offset: const Offset(0, 12)),
+                            BoxShadow(
+                                color: accent.withOpacity(0.30),
+                                blurRadius: 28,
+                                offset: const Offset(0, 12)),
                           ],
                         ),
                         child: Column(
@@ -859,15 +1000,24 @@ class _PunchCard extends StatelessWidget {
                             Container(
                               width: 44,
                               height: 44,
-                              decoration: BoxDecoration(color: Colors.white.withOpacity(0.18), shape: BoxShape.circle),
-                              child: const Icon(Icons.fingerprint_rounded, size: 24, color: Colors.white),
+                              decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.18),
+                                  shape: BoxShape.circle),
+                              child: const Icon(Icons.fingerprint_rounded,
+                                  size: 24, color: Colors.white),
                             ),
                             const SizedBox(height: 10),
                             Text(punchLabel,
-                              style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                                style: const TextStyle(
+                                    color: Colors.white,
+                                    fontSize: 17,
+                                    fontWeight: FontWeight.w800)),
                             const SizedBox(height: 2),
                             Text(punchSub,
-                              style: TextStyle(color: Colors.white.withOpacity(0.72), fontSize: 11, fontWeight: FontWeight.w600)),
+                                style: TextStyle(
+                                    color: Colors.white.withOpacity(0.72),
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600)),
                           ],
                         ),
                       ),
@@ -884,15 +1034,20 @@ class _PunchCard extends StatelessWidget {
             Container(
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              decoration: BoxDecoration(color: _kAmberBg, borderRadius: BorderRadius.circular(12)),
+              decoration: BoxDecoration(
+                  color: _kAmberBg, borderRadius: BorderRadius.circular(12)),
               child: Row(
                 children: [
-                  const Icon(Icons.notifications_active_rounded, color: _kAmber, size: 16),
+                  const Icon(Icons.notifications_active_rounded,
+                      color: _kAmber, size: 16),
                   const SizedBox(width: 8),
                   const Expanded(
                     child: Text(
                       'Trip reminder active — tap to capture.',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: _kAmber),
+                      style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w600,
+                          color: _kAmber),
                     ),
                   ),
                 ],
@@ -933,7 +1088,12 @@ class _SummaryCard extends StatelessWidget {
         color: _kSurface,
         borderRadius: BorderRadius.circular(22),
         border: Border.all(color: _kBorder),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 14, offset: const Offset(0, 5))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 14,
+              offset: const Offset(0, 5))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -941,15 +1101,24 @@ class _SummaryCard extends StatelessWidget {
           // Header row
           Row(
             children: [
-              const Text('This month', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _kTextPri)),
+              const Text('This month',
+                  style: TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w800,
+                      color: _kTextPri)),
               const Spacer(),
               GestureDetector(
                 onTap: onHistory,
                 child: Row(
                   children: [
-                    const Icon(Icons.history_rounded, size: 15, color: _kTextSec),
+                    const Icon(Icons.history_rounded,
+                        size: 15, color: _kTextSec),
                     const SizedBox(width: 4),
-                    Text('History', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _kPrimary)),
+                    Text('History',
+                        style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: _kPrimary)),
                   ],
                 ),
               ),
@@ -960,11 +1129,23 @@ class _SummaryCard extends StatelessWidget {
           // Three metric tiles
           Row(
             children: [
-              _MetricTile(label: 'Present',    value: '$present', color: _kGreen, icon: Icons.event_available_rounded),
+              _MetricTile(
+                  label: 'Present',
+                  value: '$present',
+                  color: _kGreen,
+                  icon: Icons.event_available_rounded),
               const SizedBox(width: 10),
-              _MetricTile(label: 'Leave',      value: '$leave',   color: _kAmber, icon: Icons.event_busy_rounded),
+              _MetricTile(
+                  label: 'Leave',
+                  value: '$leave',
+                  color: _kAmber,
+                  icon: Icons.event_busy_rounded),
               const SizedBox(width: 10),
-              _MetricTile(label: 'Permission', value: '$perm',    color: _kPrimary, icon: Icons.verified_user_outlined),
+              _MetricTile(
+                  label: 'Permission',
+                  value: '$perm',
+                  color: _kPrimary,
+                  icon: Icons.verified_user_outlined),
             ],
           ),
           const SizedBox(height: 12),
@@ -979,7 +1160,9 @@ class _SummaryCard extends StatelessWidget {
             child: Row(
               children: [
                 Icon(
-                  hasLoc ? Icons.my_location_rounded : Icons.location_searching_rounded,
+                  hasLoc
+                      ? Icons.my_location_rounded
+                      : Icons.location_searching_rounded,
                   size: 15,
                   color: hasLoc ? _kGreen : _kTextSec,
                 ),
@@ -1004,7 +1187,11 @@ class _SummaryCard extends StatelessWidget {
 }
 
 class _MetricTile extends StatelessWidget {
-  const _MetricTile({required this.label, required this.value, required this.color, required this.icon});
+  const _MetricTile(
+      {required this.label,
+      required this.value,
+      required this.color,
+      required this.icon});
   final String label;
   final String value;
   final Color color;
@@ -1024,9 +1211,18 @@ class _MetricTile extends StatelessWidget {
           children: [
             Icon(icon, size: 16, color: color),
             const SizedBox(height: 8),
-            Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: color, height: 1)),
+            Text(value,
+                style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.w900,
+                    color: color,
+                    height: 1)),
             const SizedBox(height: 4),
-            Text(label, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: _kTextSec)),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: _kTextSec)),
           ],
         ),
       ),
@@ -1048,7 +1244,12 @@ class _PendingSyncCard extends StatelessWidget {
         color: _kSurface,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: _kBorder),
-        boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 14, offset: const Offset(0, 5))],
+        boxShadow: [
+          BoxShadow(
+              color: Colors.black.withOpacity(0.04),
+              blurRadius: 14,
+              offset: const Offset(0, 5))
+        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1056,20 +1257,31 @@ class _PendingSyncCard extends StatelessWidget {
           Row(
             children: [
               Container(
-                width: 34, height: 34,
-                decoration: BoxDecoration(color: const Color(0xFFFFF4E8), borderRadius: BorderRadius.circular(10)),
-                child: const Icon(Icons.sync_problem_rounded, color: Color(0xFFCE7A13), size: 17),
+                width: 34,
+                height: 34,
+                decoration: BoxDecoration(
+                    color: const Color(0xFFFFF4E8),
+                    borderRadius: BorderRadius.circular(10)),
+                child: const Icon(Icons.sync_problem_rounded,
+                    color: Color(0xFFCE7A13), size: 17),
               ),
               const SizedBox(width: 10),
               const Expanded(
                 child: Text('Pending sync',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800, color: _kTextPri)),
+                    style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w800,
+                        color: _kTextPri)),
               ),
               Text('${items.length} items',
-                style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: _kTextSec)),
+                  style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: _kTextSec)),
             ],
           ),
-          ...items.map((item) => _SyncTile(item: item, onTap: () => onSync(item))),
+          ...items
+              .map((item) => _SyncTile(item: item, onTap: () => onSync(item))),
         ],
       ),
     );
@@ -1100,14 +1312,21 @@ class _SyncTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(item['type']?.toString() ?? 'Pending',
-                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: _kTextPri)),
+                      style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: _kTextPri)),
                   const SizedBox(height: 2),
                   Text(item['timestamp']?.toString() ?? '--',
-                    style: const TextStyle(fontSize: 11, color: _kTextSec, fontWeight: FontWeight.w600)),
+                      style: const TextStyle(
+                          fontSize: 11,
+                          color: _kTextSec,
+                          fontWeight: FontWeight.w600)),
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: Color(0xFFCE7A13), size: 18),
+            const Icon(Icons.chevron_right_rounded,
+                color: Color(0xFFCE7A13), size: 18),
           ],
         ),
       ),

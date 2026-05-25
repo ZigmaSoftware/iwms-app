@@ -13,6 +13,8 @@ class AssignmentRepository {
 
   /// Fetches today's assignments based on the logged-in user's role
   Future<List<DailyAssignmentModel>> fetchTodayAssignments() async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return [];
+
     final today = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
     final authRepo = getIt<AuthRepository>();
@@ -75,6 +77,8 @@ class AssignmentRepository {
   /// Fetches assignments for a specific date
   Future<List<DailyAssignmentModel>> fetchAssignmentsByDate(
       DateTime date) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return [];
+
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
 
     debugPrint('📋 ASSIGNMENT QUERY → date=$dateStr');
@@ -115,6 +119,8 @@ class AssignmentRepository {
     String? driverId,
     String? operatorId,
   }) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return [];
+
     final params = <String, String>{};
     if (fromDate != null || toDate != null || date != null) {
       final resolvedFrom = fromDate ?? date!;
@@ -175,6 +181,8 @@ class AssignmentRepository {
     required String operatorId,
     DateTime? date,
   }) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return [];
+
     final resolvedDate = date ?? DateTime.now();
     final dateStr = DateFormat('yyyy-MM-dd').format(resolvedDate);
 
@@ -229,6 +237,8 @@ class AssignmentRepository {
     required String assignmentType,
     String? customerId,
   }) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return false;
+
     debugPrint('📤 Creating assignment...');
 
     final payload = {
@@ -286,6 +296,8 @@ class AssignmentRepository {
     required String wardId,
     required String shift,
   }) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return false;
+
     final dateStr = DateFormat('yyyy-MM-dd').format(date);
 
     debugPrint('🔍 Checking conflict: date=$dateStr ward=$wardId shift=$shift');

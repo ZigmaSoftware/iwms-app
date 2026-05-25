@@ -1,12 +1,10 @@
 import 'dart:async';
-import 'dart:convert';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_login.dart';
 import '../../data/repositories/auth_repository.dart';
 import 'auth_event.dart';
 import 'auth_state.dart';
-import 'package:crypto/crypto.dart';
+
 class AuthBloc extends Bloc<AuthEvent, AuthState> {
   final AuthRepository _authRepository;
   final Future<void> initialization;
@@ -30,20 +28,22 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   ) async {
     emit(const AuthStateInitial());
 
-    final user = await _authRepository.getAuthenticatedUser();
+    var user = await _authRepository.getAuthenticatedUser();
     if (user == null) {
       emit(const AuthStateUnauthenticated());
       return;
     }
 
-    emit(AuthStateAuthenticated(
-      userName: user.userName,
-      role: user.role.toLowerCase(),
-      userId: user.userId,
-      emp_id: user.emp_id,
-      employeeId: user.employeeId,
-      permissions: user.permissions,
-    ));
+    final refreshedUser = await _authRepository.refreshCurrentUserPermissions(
+      requireOnline: _authRepository.requiresLiveBackend(user.role),
+    );
+    if (refreshedUser == null) {
+      await _authRepository.logout();
+      emit(const AuthStateUnauthenticated());
+      return;
+    }
+
+    emit(_authenticatedStateFromUser(refreshedUser));
   }
 
   // Future<void> _onCitizenLoginRequested(
@@ -70,73 +70,24 @@ class AuthBloc extends Bloc<AuthEvent, AuthState> {
   //     emit(const AuthStateUnauthenticated());
   //   }
   // }
-Future<void> _onCitizenLoginRequested(
-  AuthCitizenLoginRequested event,
-  Emitter<AuthState> emit,
-) async {
-  emit(const AuthStateLoading());
+  Future<void> _onCitizenLoginRequested(
+    AuthCitizenLoginRequested event,
+    Emitter<AuthState> emit,
+  ) async {
+    emit(const AuthStateLoading());
 
-  try {
-    // Try ONLINE login first
-    final user = await _authRepository.loginCitizen(
-      username: event.username,
-      password: event.password,
-    );
+    try {
+      final user = await _authRepository.loginCitizen(
+        username: event.username,
+        password: event.password,
+      );
 
-    emit(AuthStateAuthenticated(
-      userName: user.userName,
-      role: user.role.toLowerCase(),
-      userId: user.userId,
-      emp_id: user.emp_id,
-      employeeId: user.employeeId,
-      permissions: user.permissions,
-    ));
-  } catch (e) {
-    // ----------------------------------------------------
-    // FALLBACK TO OFFLINE DB LOGIN
-    // ----------------------------------------------------
-    final localUser = await getOperatorFromDB(event.username);
-
-    if (localUser == null) {
-      emit(AuthStateFailure(message: "Invalid credentials (Offline mode)."));
+      emit(_authenticatedStateFromUser(user));
+    } catch (e) {
+      emit(AuthStateFailure(message: e.toString()));
       emit(const AuthStateUnauthenticated());
-      return;
     }
-
-    // Validate password hash offline
-    final hash = sha256.convert(utf8.encode(event.password)).toString();
-
-    if (localUser["password_hash"] != hash) {
-      emit(AuthStateFailure(message: "Incorrect password (Offline mode)."));
-      emit(const AuthStateUnauthenticated());
-      return;
-    }
-
-    final offlineUser = UserModel.fromJson(
-      Map<String, dynamic>.from(localUser),
-    );
-
-    if (offlineUser.authToken == null || offlineUser.authToken!.isEmpty) {
-      emit(AuthStateFailure(
-          message:
-              "Offline login has no saved token. Please login once with the server online."));
-      emit(const AuthStateUnauthenticated());
-      return;
-    }
-
-    await _authRepository.saveUser(offlineUser);
-
-    // OFFLINE LOGIN SUCCESS
-    emit(AuthStateAuthenticated(
-      userName: offlineUser.userName,
-      role: offlineUser.role,
-      userId: offlineUser.userId,
-      emp_id: offlineUser.emp_id,
-      employeeId: offlineUser.employeeId,
-      permissions: offlineUser.permissions,
-    ));
   }
-}
 
   Future<void> _onCitizenRegisterRequested(
     AuthCitizenRegisterRequested event,
@@ -144,9 +95,8 @@ Future<void> _onCitizenLoginRequested(
   ) async {
     emit(const AuthStateLoading());
 
-    final userName = event.fullName.trim().isEmpty
-        ? "Citizen Demo"
-        : event.fullName.trim();
+    final userName =
+        event.fullName.trim().isEmpty ? "Citizen Demo" : event.fullName.trim();
 
     final user = UserModel(
       userId: "CUS-REG-${userName.replaceAll(" ", "")}",
@@ -162,6 +112,7 @@ Future<void> _onCitizenLoginRequested(
       role: "citizen",
       userId: user.userId,
       permissions: user.permissions,
+      permissionBundle: user.permissionBundle,
     ));
   }
 
@@ -185,6 +136,7 @@ Future<void> _onCitizenLoginRequested(
       role: "operator",
       userId: user.userId,
       permissions: user.permissions,
+      permissionBundle: user.permissionBundle,
     ));
   }
 
@@ -194,5 +146,17 @@ Future<void> _onCitizenLoginRequested(
   ) async {
     await _authRepository.logout();
     emit(const AuthStateUnauthenticated());
+  }
+
+  AuthStateAuthenticated _authenticatedStateFromUser(UserModel user) {
+    return AuthStateAuthenticated(
+      userName: user.userName,
+      role: UserModel.normalizeRole(user.role),
+      userId: user.userId,
+      emp_id: user.emp_id,
+      employeeId: user.employeeId,
+      permissions: user.permissions,
+      permissionBundle: user.permissionBundle,
+    );
   }
 }

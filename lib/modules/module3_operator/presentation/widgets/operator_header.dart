@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/core/env.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
@@ -56,15 +57,16 @@ class _OperatorHeaderState extends State<OperatorHeader> {
   Future<void> fetchEmployeeImage() async {
     final client = HttpClient();
     try {
-      final url =
-          "$_baseUrl/api/desktop/staff-profile/?staff_id_id=${widget.empId}";
-
-      final request =
-          await client.getUrl(Uri.parse(url)).timeout(const Duration(seconds: 5));
+      final request = await client
+          .getUrl(
+            Uri.parse('${ApiConfig.desktopBase}staff-profile/').replace(
+              queryParameters: {'staff_id_id': widget.empId},
+            ),
+          )
+          .timeout(const Duration(seconds: 5));
       final token = await _getAuthToken();
       if (token != null && token.isNotEmpty) {
-        request.headers
-            .set(HttpHeaders.authorizationHeader, 'Bearer $token');
+        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
       }
       final response =
           await request.close().timeout(const Duration(seconds: 5));
@@ -99,8 +101,7 @@ class _OperatorHeaderState extends State<OperatorHeader> {
 
   String convertToUrl(String path) {
     final clean = path.replaceAll("\\", "/");
-    final filename = clean.split("/").last;
-    return "$_baseUrl/media/emp_image/$filename";
+    return "$_baseUrl/media/$clean";
   }
 
   String toTitleCase(String s) {
@@ -190,7 +191,7 @@ class _OperatorHeaderState extends State<OperatorHeader> {
             ),
             const SizedBox(width: 4),
             Text(
-              "(${displayId})",
+              "($displayId)",
               style: const TextStyle(
                 fontSize: 18,
                 color: Colors.white70,

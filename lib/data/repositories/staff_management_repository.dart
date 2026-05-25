@@ -1,7 +1,5 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/data/models/staff_assignment_models.dart';
 import 'package:iwms_citizen_app/core/env.dart';
@@ -43,7 +41,9 @@ class StaffManagementRepository {
     DateTime? dateFrom,
     DateTime? dateTo,
   }) async {
-    if (!kEnforcePermissions) return const <EnhancedAssignmentModel>[];
+    if (!kEnforcePermissions || !ApiConfig.legacyRoleAssignEnabled) {
+      return const <EnhancedAssignmentModel>[];
+    }
     try {
       final dio = await authorizedDio();
 
@@ -79,7 +79,7 @@ class StaffManagementRepository {
   }
 
   Future<StaffAssignmentSummary?> fetchStaffSummary(String staffId) async {
-    if (!kEnforcePermissions) return null;
+    if (!kEnforcePermissions || !ApiConfig.legacyRoleAssignEnabled) return null;
     try {
       final dio = await authorizedDio();
 
@@ -100,7 +100,7 @@ class StaffManagementRepository {
   Future<EnhancedAssignmentModel?> fetchAssignmentDetails(
     String uniqueId,
   ) async {
-    if (!kEnforcePermissions) return null;
+    if (!kEnforcePermissions || !ApiConfig.legacyRoleAssignEnabled) return null;
     try {
       final dio = await authorizedDio();
       final response = await dio.get(

@@ -4,10 +4,13 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 
 import 'package:iwms_citizen_app/core/di.dart';
+import 'package:iwms_citizen_app/data/models/permission_bundle.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
+import 'package:iwms_citizen_app/data/models/user_model.dart';
 import 'package:iwms_citizen_app/logic/vehicle_tracking/vehicle_bloc.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/chatbot.dart';
+import 'package:iwms_citizen_app/presentation/staff_module_picker_screen.dart';
 
 // Citizen Modules
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/splashscreen.dart';
@@ -67,6 +70,7 @@ class AppRoutePaths {
   static const String driverHome = '/driver/home';
 
   static const String adminHome = '/admin/home';
+  static const String staffModuleSelection = '/staff/modules';
 }
 
 class AppRouter {
@@ -251,6 +255,19 @@ class AppRouter {
           path: AppRoutePaths.adminHome,
           builder: (context, state) => const DashboardScreen(),
         ),
+        GoRoute(
+          path: AppRoutePaths.staffModuleSelection,
+          builder: (context, state) {
+            final authState = authBloc.state;
+            if (authState is! AuthStateAuthenticated) {
+              return const SizedBox.shrink();
+            }
+            return StaffModulePickerScreen(
+              userName: authState.userName,
+              surfaces: _resolveAccessibleSurfaces(authState),
+            );
+          },
+        ),
       ],
     );
   }
@@ -266,6 +283,7 @@ class AppRouter {
 
     // PUBLIC ROUTES
     final publicRoutes = {
+      AppRoutePaths.splash,
       AppRoutePaths.citizenLogin,
       AppRoutePaths.citizenAuthIntro,
       AppRoutePaths.citizenIntroSlides,
@@ -277,25 +295,28 @@ class AppRouter {
 
     // AUTHENTICATED USERS
     if (auth is AuthStateAuthenticated) {
-      final role = auth.role;
+      final role = UserModel.normalizeRole(auth.role);
+      final accessibleSurfaces = _resolveAccessibleSurfaces(auth);
+      final defaultRoute = _defaultRouteFor(auth, accessibleSurfaces);
 
-      switch (role) {
-        case "citizen":
-        case "customer":
-          return isPublic ? AppRoutePaths.citizenHome : null;
-
-        case "operator":
-          return isPublic ? AppRoutePaths.operatorHome : null;
-
-        case "driver":
-          return isPublic ? AppRoutePaths.driverHome : null;
-
-        case "admin":
-          return isPublic ? AppRoutePaths.adminHome : null;
-
-        default:
-          return AppRoutePaths.citizenLogin;
+      if (role == "citizen" || role == "customer") {
+        if (isPublic) return AppRoutePaths.citizenHome;
+        return location.startsWith('/citizen/')
+            ? null
+            : AppRoutePaths.citizenHome;
       }
+
+      if (isPublic) return defaultRoute;
+
+      if (location == AppRoutePaths.staffModuleSelection) {
+        return accessibleSurfaces.length > 1 ? null : defaultRoute;
+      }
+
+      if (!_isLocationAllowed(location, accessibleSurfaces)) {
+        return defaultRoute;
+      }
+
+      return null;
     }
 
     // UNAUTHENTICATED USERS
@@ -304,6 +325,99 @@ class AppRouter {
       return AppRoutePaths.citizenLogin;
     }
 
+    return null;
+  }
+
+  List<AppSurfaceAccess> _resolveAccessibleSurfaces(
+      AuthStateAuthenticated auth) {
+    final bundle = auth.permissionBundle;
+    if (bundle != null && bundle.appSurfaces.isNotEmpty) {
+      return bundle.appSurfaces
+          .where((surface) => surface.route.isNotEmpty)
+          .toList();
+    }
+
+    final normalizedRole = UserModel.normalizeRole(auth.role);
+    switch (normalizedRole) {
+      case 'citizen':
+      case 'customer':
+        return const [
+          AppSurfaceAccess(
+            key: 'citizen',
+            label: 'Citizen',
+            route: AppRoutePaths.citizenHome,
+            isDefault: true,
+          ),
+        ];
+      case 'operator':
+        return const [
+          AppSurfaceAccess(
+            key: 'operator',
+            label: 'Operator',
+            route: AppRoutePaths.operatorHome,
+            isDefault: true,
+          ),
+        ];
+      case 'driver':
+        return const [
+          AppSurfaceAccess(
+            key: 'driver',
+            label: 'Driver',
+            route: AppRoutePaths.driverHome,
+            isDefault: true,
+          ),
+        ];
+      case 'admin':
+      default:
+        return const [
+          AppSurfaceAccess(
+            key: 'admin',
+            label: 'Admin',
+            route: AppRoutePaths.adminHome,
+            isDefault: true,
+          ),
+        ];
+    }
+  }
+
+  String _defaultRouteFor(
+    AuthStateAuthenticated auth,
+    List<AppSurfaceAccess> surfaces,
+  ) {
+    if (surfaces.isEmpty) {
+      return AppRoutePaths.citizenLogin;
+    }
+
+    if (surfaces.length > 1) {
+      return AppRoutePaths.staffModuleSelection;
+    }
+
+    final landingRoute = auth.permissionBundle?.landing?.route;
+    if (landingRoute != null && landingRoute.isNotEmpty) {
+      return landingRoute;
+    }
+
+    return surfaces.first.route;
+  }
+
+  bool _isLocationAllowed(
+    String location,
+    List<AppSurfaceAccess> accessibleSurfaces,
+  ) {
+    final targetSurface = _surfaceForLocation(location);
+    if (targetSurface == null) {
+      return true;
+    }
+    return accessibleSurfaces.any(
+      (surface) => surface.key.toLowerCase() == targetSurface,
+    );
+  }
+
+  String? _surfaceForLocation(String location) {
+    if (location.startsWith('/citizen/')) return 'citizen';
+    if (location.startsWith('/operator/')) return 'operator';
+    if (location.startsWith('/driver/')) return 'driver';
+    if (location.startsWith('/admin/')) return 'admin';
     return null;
   }
 }

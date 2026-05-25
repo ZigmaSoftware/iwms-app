@@ -1,4 +1,5 @@
 import 'package:equatable/equatable.dart';
+import 'package:iwms_citizen_app/data/models/permission_bundle.dart';
 
 abstract class AuthState extends Equatable {
   const AuthState();
@@ -22,20 +23,30 @@ class AuthStateAuthenticated extends AuthState {
   final String userName;
   final String role; // citizen, operator, driver, admin
   final String userId;
-  final String? emp_id; 
+  final String? emp_id;
   final String? employeeId;
   final Map<String, dynamic>? permissions;
+  final PermissionBundle? permissionBundle;
   const AuthStateAuthenticated({
     required this.userName,
     required this.role,
     required this.userId,
-       this.emp_id,
-       this.employeeId,
-       this.permissions,
+    this.emp_id,
+    this.employeeId,
+    this.permissions,
+    this.permissionBundle,
   });
 
   @override
-  List<Object?> get props => [userName, role, userId, emp_id, employeeId, permissions];
+  List<Object?> get props => [
+        userName,
+        role,
+        userId,
+        emp_id,
+        employeeId,
+        permissions,
+        permissionBundle,
+      ];
 }
 
 /// Logged out

@@ -2,11 +2,12 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:image_picker/image_picker.dart';
-import 'package:intl/intl.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/core/env.dart';
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 
@@ -25,7 +26,7 @@ class _ProfilePageState extends State<ProfilePage> {
   XFile? _image;
   String? imageName;
 
-  final String baseUrl = "http://192.168.1.199:8000";
+  final String mediaBaseUrl = kOperatorProfileBaseUrl;
 
   // Read-only fields
   String employeeName = "";
@@ -53,32 +54,33 @@ class _ProfilePageState extends State<ProfilePage> {
       }
 
       final res = await http.get(
-        Uri.parse("$baseUrl/api/desktop/staff-profile/?staff_id_id=${widget.empId}"),
+        Uri.parse('${ApiConfig.desktopBase}staff-profile/').replace(
+          queryParameters: {'staff_id_id': widget.empId},
+        ),
         headers: headers.isEmpty ? null : headers,
       );
 
       final jsonRes = jsonDecode(res.body);
 
-     if (jsonRes["status"] == "success") {
-  final data = jsonRes["data"];
+      if (jsonRes["status"] == "success") {
+        final data = jsonRes["data"];
 
-  String? photo = data["photo"];
+        String? photo = data["photo"];
 
-  setState(() {
-    employeeName = data["employee_name"] ?? "";
-    department = data["department"] ?? "";
-    designation = data["designation"] ?? "";
-    dob = data["personal"]?["dob"] ?? "";
-    bloodGroup = data["personal"]?["blood_group"] ?? "";
-    doj = data["doj"] ?? "";
+        setState(() {
+          employeeName = data["employee_name"] ?? "";
+          department = data["department"] ?? "";
+          designation = data["designation"] ?? "";
+          dob = data["personal"]?["dob"] ?? "";
+          bloodGroup = data["personal"]?["blood_group"] ?? "";
+          doj = data["doj"] ?? "";
 
-    imageName = photo;
+          imageName = photo;
 
-    // Registered ONLY if photo exists
-    isRegistered = photo != null && photo.isNotEmpty;
-  });
-}
-
+          // Registered ONLY if photo exists
+          isRegistered = photo != null && photo.isNotEmpty;
+        });
+      }
     } catch (_) {}
 
     setState(() => isLoading = false);
@@ -95,7 +97,7 @@ class _ProfilePageState extends State<ProfilePage> {
 
     try {
       final token = await _getAuthToken();
-      final url = Uri.parse("$baseUrl/api/desktop/register/");
+      final url = Uri.parse('${ApiConfig.desktopBase}register/');
       final req = http.MultipartRequest("POST", url);
 
       if (token != null && token.isNotEmpty) {
@@ -123,11 +125,12 @@ class _ProfilePageState extends State<ProfilePage> {
       }
       final json = parsed;
 
-      if (json["message"] == "Employee registered successfully") {
-        _toast("Employee registered");
+      final message = (json["message"] ?? "Registration failed").toString();
+      if (res.statusCode >= 200 && res.statusCode < 300) {
+        _toast(message);
         _fetchProfile();
       } else {
-        _toast("Failed: ${json["message"]}");
+        _toast("Failed: $message");
       }
     } catch (e) {
       _toast("Error: $e");
@@ -197,7 +200,7 @@ class _ProfilePageState extends State<ProfilePage> {
     if (_image != null) {
       profileImage = FileImage(File(_image!.path));
     } else if (imageName != null && imageName!.isNotEmpty) {
-      profileImage = NetworkImage("$baseUrl/media/$imageName");
+      profileImage = NetworkImage("$mediaBaseUrl/media/$imageName");
     }
 
     return Scaffold(
@@ -209,7 +212,6 @@ class _ProfilePageState extends State<ProfilePage> {
           style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
         ),
       ),
-
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
@@ -217,59 +219,55 @@ class _ProfilePageState extends State<ProfilePage> {
             // ==========================================================
             // PROFILE IMAGE
             // ==========================================================
-           // ==========================================================
+            // ==========================================================
 // PROFILE IMAGE
 // ==========================================================
-Container(
-  padding: const EdgeInsets.all(18),
-  decoration: _cardDecoration(),
-  child: Column(
-    children: [
-      Stack(
-        alignment: Alignment.bottomRight,
-        children: [
-          CircleAvatar(
-            radius: 55,
-            backgroundColor: Colors.grey.shade200,
-            backgroundImage: profileImage,
-            child: profileImage == null
-                ? const Icon(Icons.person, size: 50, color: Colors.grey)
-                : null,
-          ),
+            Container(
+              padding: const EdgeInsets.all(18),
+              decoration: _cardDecoration(),
+              child: Column(
+                children: [
+                  Stack(
+                    alignment: Alignment.bottomRight,
+                    children: [
+                      CircleAvatar(
+                        radius: 55,
+                        backgroundColor: Colors.grey.shade200,
+                        backgroundImage: profileImage,
+                        child: profileImage == null
+                            ? const Icon(Icons.person,
+                                size: 50, color: Colors.grey)
+                            : null,
+                      ),
 
-          // ----------------------------------------------------------
-          // SHOW CAMERA ICON ONLY IF NO IMAGE EXISTS
-          // ----------------------------------------------------------
-          if (imageName == null || imageName!.isEmpty)
-            GestureDetector(
-              onTap: _captureImage,
-              child: CircleAvatar(
-                radius: 18,
-                backgroundColor: AppColors.primary,
-                child: const Icon(Icons.camera_alt,
-                    size: 18, color: Colors.white),
+                      // ----------------------------------------------------------
+                      // SHOW CAMERA ICON ONLY IF NO IMAGE EXISTS
+                      // ----------------------------------------------------------
+                      if (imageName == null || imageName!.isEmpty)
+                        GestureDetector(
+                          onTap: _captureImage,
+                          child: CircleAvatar(
+                            radius: 18,
+                            backgroundColor: AppColors.primary,
+                            child: const Icon(Icons.camera_alt,
+                                size: 18, color: Colors.white),
+                          ),
+                        ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  if (!isRegistered)
+                    Column(
+                      children: [
+                        const Text(
+                          "Capture a selfie to register attendance.",
+                          style: TextStyle(color: Colors.black54, fontSize: 13),
+                        ),
+                      ],
+                    ),
+                ],
               ),
             ),
-        ],
-      ),
-
-      const SizedBox(height: 12),
-
-      if (!isRegistered)
-      
-        Column(
-          children: [
-            const Text(
-              "Capture a selfie to register attendance.",
-              style: TextStyle(color: Colors.black54, fontSize: 13),
-            ),
-            
-  
-          ],
-        ),
-    ],
-  ),
-),
 
             const SizedBox(height: 18),
 
@@ -353,14 +351,15 @@ Container(
           Text(
             "$label:",
             style: const TextStyle(
-                fontWeight: FontWeight.w600, fontSize: 14, color: Colors.black87),
+                fontWeight: FontWeight.w600,
+                fontSize: 14,
+                color: Colors.black87),
           ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
               value.isEmpty ? "-" : value,
-              style:
-                  const TextStyle(fontSize: 14, color: Colors.black54),
+              style: const TextStyle(fontSize: 14, color: Colors.black54),
             ),
           ),
         ],

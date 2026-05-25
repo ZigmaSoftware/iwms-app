@@ -464,6 +464,8 @@ class _OperatorAssignmentScreenState extends State<OperatorAssignmentScreen> {
   }
 
   Future<void> _markAssignmentComplete(DailyAssignmentModel assignment) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return;
+
     try {
       final dio = await authorizedDio();
       await dio.post('${ApiConfig.assignments}${assignment.uniqueId}/complete/');
@@ -556,6 +558,8 @@ class _OperatorAssignmentScreenState extends State<OperatorAssignmentScreen> {
     String? latitude,
     String? longitude,
   }) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return;
+
     try {
       final dio = await authorizedDio();
       await dio.post(

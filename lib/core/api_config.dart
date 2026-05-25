@@ -26,6 +26,8 @@ Dio createDioClient() {
 class ApiConfig {
   /// Desktop endpoints (open lists) used for driver-side data pulls.
   static const String desktopBase = kDesktopBase;
+  static const bool legacyRoleAssignEnabled = false;
+  static const bool legacyTripAssignEnabled = false;
   static const String wasteSummaryEndpoint =
       '${desktopBase}waste/citizen-summary/';
   static const String customerList =
@@ -82,6 +84,7 @@ class ApiConfig {
   // Mobile apps should use the unified mobile login endpoint.
   static const String staffLogin = _defaultMobileLogin;
   static const String mobileLogin = _defaultMobileLogin;
+  static const String myPermissions = '${desktopBase}login/my-permissions/';
 
   /// Default user type identifier expected by the Django login API.
   static const String citizenUserType = 'citizen';

@@ -1,9 +1,9 @@
-
 import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_attendance.dart';
@@ -13,7 +13,6 @@ import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
-import 'package:path/path.dart' as path;
 
 class CameraScreen extends StatefulWidget {
   final String employeeId;
@@ -22,7 +21,8 @@ class CameraScreen extends StatefulWidget {
   // String latitude;
   // String longitude;
   // final VoidCallback onAttendanceMarked;
-  const CameraScreen({super.key, 
+  const CameraScreen({
+    super.key,
     required this.employeeId,
     required this.employeeName,
     this.isTripAttendance = false,
@@ -35,14 +35,15 @@ class CameraScreen extends StatefulWidget {
   _CameraScreenState createState() => _CameraScreenState();
 }
 
-class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver {
+class _CameraScreenState extends State<CameraScreen>
+    with WidgetsBindingObserver {
   CameraController? _cameraController;
   XFile? _image;
   bool _isLoading = false;
   bool _isProcessingCapture = false;
   bool _autoCaptureScheduled = false;
   final FlutterTts _flutterTts = FlutterTts();
-   late String latitude;
+  late String latitude;
   late String longitude;
 
   @override
@@ -74,7 +75,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       if (permission == LocationPermission.denied) {
         print("⚠️ Location permission denied");
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Please allow location access in settings!'), backgroundColor: Colors.red),
+          SnackBar(
+              content: Text('Please allow location access in settings!'),
+              backgroundColor: Colors.red),
         );
         return;
       }
@@ -110,7 +113,10 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       print("❌ Failed to fetch location");
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('GPS not detected. Move outside for better signal.'), backgroundColor: Colors.orange),
+          SnackBar(
+              content:
+                  Text('GPS not detected. Move outside for better signal.'),
+              backgroundColor: Colors.orange),
         );
       }
     }
@@ -127,7 +133,6 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       return null;
     }
   }
-
 
   /// **Show Popup to Enable GPS**
   void _showEnableGpsPopup() {
@@ -185,7 +190,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
       try {
         final cameras = await availableCameras();
         final frontCamera = cameras.firstWhere(
-              (camera) => camera.lensDirection == CameraLensDirection.front,
+          (camera) => camera.lensDirection == CameraLensDirection.front,
         );
 
         _cameraController = CameraController(
@@ -202,7 +207,6 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
           });
           _scheduleAutoCapture();
         }
-    
       } catch (e) {
         print('Error initializing camera: $e');
       }
@@ -359,9 +363,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     }
 
     try {
-      var request = http.MultipartRequest(
+      final request = http.MultipartRequest(
         'POST',
-        Uri.parse('http://192.168.1.199:8000/api/desktop/recognize/'),  //can use local ip or domain name
+        Uri.parse('${ApiConfig.desktopBase}recognize/'),
       );
 
       final token = await _getAuthToken();
@@ -379,17 +383,23 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         _image!.path,
       ));
 
-      var response = await request.send();
+      final response = await request.send();
       final responseBody = await response.stream.bytesToString();
 
       if (response.statusCode == 200) {
         _speak("Attendance marked successfully");
         if (mounted) Navigator.pop(context, true);
-      } else {
-        throw Exception("Face mismatch");
+        return;
       }
 
-    } catch (e) {
+      final message = _extractErrorMessage(
+        responseBody,
+        fallback: "Attendance marking failed.",
+      );
+      _showError(message);
+      await _speak(message);
+      if (mounted) Navigator.pop(context, false);
+    } on TimeoutException catch (_) {
       // ---------------------------------------------------------
       // OFFLINE SAVE
       // ---------------------------------------------------------
@@ -410,6 +420,29 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
 
       _speak("Attendance saved offline");
       if (mounted) Navigator.pop(context, true);
+    } on http.ClientException catch (_) {
+      await saveOfflineAttendance(
+        empId: widget.employeeId,
+        name: widget.employeeName,
+        imagePath: _image!.path,
+        latitude: latitude,
+        longitude: longitude,
+      );
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text("No internet. Attendance saved offline."),
+          backgroundColor: Colors.orange,
+        ));
+      }
+
+      _speak("Attendance saved offline");
+      if (mounted) Navigator.pop(context, true);
+    } catch (_) {
+      const message = "Attendance marking failed.";
+      _showError(message);
+      await _speak(message);
+      if (mounted) Navigator.pop(context, false);
     }
 
     if (mounted) {
@@ -425,10 +458,9 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     }
 
     try {
-      var request = http.MultipartRequest(
+      final request = http.MultipartRequest(
         'POST',
-        Uri.parse(
-            'http://192.168.1.199:8000/api/desktop/vehicles/trip-attendance/'),
+        Uri.parse('${ApiConfig.desktopBase}transport-masters/trip-attendance/'),
       );
 
       final token = await _getAuthToken();
@@ -445,7 +477,7 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
         _image!.path,
       ));
 
-      var response = await request.send();
+      final response = await request.send();
       final responseBody = await response.stream.bytesToString();
 
       if (response.statusCode == 200 || response.statusCode == 201) {
@@ -496,10 +528,46 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
     if (token == null || token.isEmpty) return null;
     return token;
   }
+
   Future<XFile> _compressImage(XFile image) async {
     final imageBytes = await image.readAsBytes();
-    final compressedBytes = await FlutterImageCompress.compressWithList(imageBytes, minWidth: 640, minHeight: 480, quality: 50);
-    return XFile.fromData(Uint8List.fromList(compressedBytes), path: image.path);
+    final compressedBytes = await FlutterImageCompress.compressWithList(
+        imageBytes,
+        minWidth: 640,
+        minHeight: 480,
+        quality: 50);
+    return XFile.fromData(Uint8List.fromList(compressedBytes),
+        path: image.path);
+  }
+
+  String _extractErrorMessage(String body, {required String fallback}) {
+    try {
+      final data = json.decode(body);
+      if (data is Map) {
+        final detail = data["detail"]?.toString().trim();
+        if (detail != null && detail.isNotEmpty) return detail;
+
+        final error = data["error"]?.toString().trim();
+        if (error != null && error.isNotEmpty) return error;
+
+        final message = data["message"]?.toString().trim();
+        if (message != null && message.isNotEmpty) return message;
+
+        final missing = data["missing_fields"];
+        if (missing is List && missing.isNotEmpty) {
+          return "Missing fields: ${missing.join(', ')}";
+        }
+      }
+    } catch (_) {}
+
+    return fallback;
+  }
+
+  void _showError(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.red),
+    );
   }
 
   Widget _cameraPreview() {
@@ -537,7 +605,8 @@ class _CameraScreenState extends State<CameraScreen> with WidgetsBindingObserver
             left: 16,
             child: IconButton(
               icon: const Icon(Icons.close, color: Colors.white),
-              onPressed: _isLoading ? null : () => Navigator.of(context).pop(false),
+              onPressed:
+                  _isLoading ? null : () => Navigator.of(context).pop(false),
             ),
           ),
           Positioned(

@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
@@ -35,6 +34,10 @@ class CitizenCollectionRepository {
     DateTime? dateFrom,
     DateTime? dateTo,
   }) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) {
+      return const <EnhancedAssignmentModel>[];
+    }
+
     try {
       final dio = await authorizedDio();
       final params = <String, dynamic>{};
@@ -69,6 +72,8 @@ class CitizenCollectionRepository {
   }
 
   Future<StaffAssignmentSummary?> fetchSummary({String? wardId}) async {
+    if (!ApiConfig.legacyRoleAssignEnabled) return null;
+
     try {
       final dio = await authorizedDio();
       final response = await dio.get(
