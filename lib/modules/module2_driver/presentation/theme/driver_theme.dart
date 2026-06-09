@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
 
-/// Operator-scoped design tokens. Decoupled from the global green AppColors
-/// because the operator field-ops UI uses a charcoal-on-light scheme with
-/// attendance-style green CTAs (industrial / utilitarian feel suited for outdoor readability).
-class OperatorTheme {
-  // Core palette
-  static const Color primary = Color(0xFF1F2937); // slate-800
+/// Driver-scoped design tokens. Uses the EXACT same color palette and structure
+/// as OperatorTheme (charcoal slate grey + attendance green) so the driver and
+/// operator shells feel like one unified product. The operator's proven palette:
+/// grey for primary surfaces and text, green for CTAs and accents.
+class DriverTheme {
+  // Core palette — EXACT OPERATOR COLORS
+  static const Color primary = Color(0xFF1F2937); // slate-800 (charcoal)
   static const Color primaryAccent = Color(0xFF111827); // slate-900
   static const Color primarySoft = Color(0xFF374151); // slate-700
 
@@ -26,11 +27,7 @@ class OperatorTheme {
   static const Color danger = Color(0xFFDC2626); // red-600
   static const Color info = Color(0xFF2563EB); // blue-600
 
-  static const Color attendanceAlert = danger;
-  static const Color accentLight = accentSoft; // legacy alias
-  static const Color cardBorder = hairline; // legacy alias
-
-  // Gradients
+  // Gradients — EXACT OPERATOR STYLE
   static const LinearGradient headerGradient = LinearGradient(
     colors: [primary, primaryAccent],
     begin: Alignment.topLeft,
@@ -43,9 +40,7 @@ class OperatorTheme {
     end: Alignment.bottomRight,
   );
 
-  static const LinearGradient quickActionGradient = accentGradient;
-
-  // Shadows
+  // Shadows — match operator
   static const List<BoxShadow> softShadow = [
     BoxShadow(
       color: Color(0x14000000),
@@ -62,7 +57,7 @@ class OperatorTheme {
     ),
   ];
 
-  // Radii
+  // Radii — match operator
   static const BorderRadius cardRadius = BorderRadius.all(Radius.circular(20));
   static const BorderRadius chipRadius = BorderRadius.all(Radius.circular(12));
 

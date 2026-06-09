@@ -30,8 +30,8 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/alloted_vehicle
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/main_operator_tabbar.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_page.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_data_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_qr_scanner.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_history_screen.dart';
 
 // Driver
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_home_page.dart';
@@ -59,12 +59,13 @@ class AppRoutePaths {
   static const String operatorLogin = '/operator/login';
   static const String operatorHome = '/operator/home';
   static const String operatorQR = '/operator/qr';
-  static const String operatorData = '/operator/data';
   static const String attendanceHomepageOperator =
       '/operator/attendance/homepage';
   static const String operatorOverview = '/operator/overview';
   static const String operatorProfile = '/operator/profile';
   static const String operatorAttendance = '/operator/attendance';
+  static const String operatorTrip = '/operator/trip';
+  static const String operatorTripHistory = '/operator/trip/history';
 
   static const String driverLogin = '/driver/login';
   static const String driverHome = '/driver/home';
@@ -190,36 +191,14 @@ class AppRouter {
 
         GoRoute(
           path: '/operator/qr',
-          builder: (context, state) {
-            final extra = state.extra as Map<String, dynamic>? ?? {};
-            return OperatorQRScanner(
-              expectedCustomerId: extra['expectedCustomerId']?.toString(),
-              expectedCustomerName: extra['expectedCustomerName']?.toString(),
-              returnToAssignments: extra['returnToAssignments'] == true,
-            );
-          },
+          builder: (context, state) => const OperatorTripScanScreen(),
         ),
 
         GoRoute(
-          path: AppRoutePaths.operatorData,
-          builder: (context, state) {
-            final extra = state.extra as Map<String, dynamic>? ?? {};
-            return OperatorDataScreen(
-              customerId: extra['customerId'],
-              customerName: extra['customerName'],
-              contactNo: extra['contactNo'],
-              latitude: extra['latitude'],
-              longitude: extra['longitude'],
-              skipBluetoothInit: extra['skipBluetoothInit'] == true,
-              assignmentId: extra['assignmentId']?.toString(),
-            );
-          },
-        ),
-
-        GoRoute(
+          // Legacy path: Overview tab was removed; redirect to Attendance.
           path: AppRoutePaths.operatorOverview,
           builder: (context, state) =>
-              const MainOperatorTabBar(initialTab: OperatorNavTab.overview),
+              const MainOperatorTabBar(initialTab: OperatorNavTab.attendance),
         ),
 
         GoRoute(
@@ -232,6 +211,16 @@ class AppRouter {
           path: AppRoutePaths.operatorAttendance,
           builder: (context, state) =>
               const MainOperatorTabBar(initialTab: OperatorNavTab.attendance),
+        ),
+
+        // Operator daily-trip flow (panchayat → CP list → QR scan → submit)
+        GoRoute(
+          path: AppRoutePaths.operatorTrip,
+          builder: (context, state) => const OperatorTripHomeScreen(),
+        ),
+        GoRoute(
+          path: AppRoutePaths.operatorTripHistory,
+          builder: (context, state) => const OperatorTripHistoryScreen(),
         ),
 
         GoRoute(

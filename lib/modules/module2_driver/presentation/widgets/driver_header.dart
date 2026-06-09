@@ -1,51 +1,41 @@
-import 'dart:convert';
-import 'dart:io';
-
 import 'package:flutter/material.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/core/env.dart';
-import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
+import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/driver_theme.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
 
-/// Operator header — charcoal slate top section with the avatar/Register
-/// button anchored on the LEFT and identity (name, ID, designation, ward)
-/// stacked to its right. Designed to be compact and information-dense:
-/// no wasted gradient real estate, no floating subtitle.
-class OperatorHeader extends StatefulWidget {
-  const OperatorHeader({
+/// Driver header — same silhouette and information architecture as the
+/// operator header (avatar/Register button anchored LEFT, identity stack
+/// beside it, greeting pill + logout on the RIGHT, and a context strip
+/// underneath), recolored to the driver's green brand gradient.
+///
+/// The bottom strip surfaces driver-relevant context — assigned vehicle and
+/// shift — in place of the operator's ward/zone strip, with a live "On Duty"
+/// indicator that doubles as a quick visual confirmation the shift is active.
+class DriverHeader extends StatefulWidget {
+  const DriverHeader({
     super.key,
     required this.name,
     required this.empId,
-    this.displayId,
-    required this.badge,
-    required this.ward,
-    required this.zone,
     required this.onLogout,
-    this.onMenuTap,
-    this.subtitle,
+    this.displayId,
     this.designation,
-    this.showAvatar = false,
+    this.onProfileTap,
   });
 
   final String name;
-  final String badge;
-  final String ward;
-  final String zone;
   final String empId;
   final String? displayId;
-  final String? subtitle;
   final String? designation;
   final VoidCallback onLogout;
-  final VoidCallback? onMenuTap;
-  final bool showAvatar;
+  final VoidCallback? onProfileTap;
 
   @override
-  State<OperatorHeader> createState() => _OperatorHeaderState();
+  State<DriverHeader> createState() => _DriverHeaderState();
 }
 
-class _OperatorHeaderState extends State<OperatorHeader> {
+class _DriverHeaderState extends State<DriverHeader> {
   static const String _baseUrl = kOperatorProfileBaseUrl;
   bool hasProfile = false;
   bool imageLoading = true;
@@ -54,32 +44,29 @@ class _OperatorHeaderState extends State<OperatorHeader> {
   @override
   void initState() {
     super.initState();
-    fetchEmployeeImage();
+    _fetchEmployeeImage();
   }
 
-  Future<void> fetchEmployeeImage() async {
-    final client = HttpClient();
+  Future<void> _fetchEmployeeImage() async {
+    if (widget.empId.trim().isEmpty) {
+      if (!mounted) return;
+      setState(() {
+        hasProfile = false;
+        imageLoading = false;
+      });
+      return;
+    }
     try {
-      final request = await client
-          .getUrl(
-            Uri.parse('${ApiConfig.desktopBase}staff-profile/').replace(
-              queryParameters: {'staff_id_id': widget.empId},
-            ),
-          )
-          .timeout(const Duration(seconds: 5));
-      final token = await _getAuthToken();
-      if (token != null && token.isNotEmpty) {
-        request.headers.set(HttpHeaders.authorizationHeader, 'Bearer $token');
-      }
-      final response =
-          await request.close().timeout(const Duration(seconds: 5));
-      final body = await response.transform(utf8.decoder).join();
-      final json = jsonDecode(body);
-
-      if (json["status"] == "success") {
+      final dio = await authorizedDio();
+      final response = await dio.get(
+        '${ApiConfig.desktopBase}staff-profile/',
+        queryParameters: {'staff_id_id': widget.empId},
+      );
+      final json = response.data;
+      if (json is Map && json['status'] == 'success') {
         if (!mounted) return;
         setState(() {
-          imageName = json["data"]["photo"] ?? "";
+          imageName = json['data']?['photo'] ?? '';
           hasProfile = imageName != null && imageName!.isNotEmpty;
           imageLoading = false;
         });
@@ -96,23 +83,21 @@ class _OperatorHeaderState extends State<OperatorHeader> {
         hasProfile = false;
         imageLoading = false;
       });
-    } finally {
-      client.close(force: true);
     }
   }
 
   String _convertToUrl(String path) {
-    final clean = path.replaceAll("\\", "/");
-    return "$_baseUrl/media/$clean";
+    final clean = path.replaceAll('\\', '/');
+    return '$_baseUrl/media/$clean';
   }
 
   String _toTitleCase(String s) {
     return s
-        .split(" ")
+        .split(' ')
         .map((w) => w.isEmpty
-            ? ""
-            : "${w[0].toUpperCase()}${w.substring(1).toLowerCase()}")
-        .join(" ");
+            ? ''
+            : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+        .join(' ');
   }
 
   String _greeting() {
@@ -122,28 +107,22 @@ class _OperatorHeaderState extends State<OperatorHeader> {
     return 'Good evening';
   }
 
-  Future<String?> _getAuthToken() async {
-    final authRepo = getIt<AuthRepository>();
-    final user = await authRepo.getAuthenticatedUser();
-    final token = user?.authToken?.trim();
-    if (token == null || token.isEmpty) return null;
-    return token;
-  }
-
   @override
   Widget build(BuildContext context) {
-    final displayId =
-        (widget.displayId != null && widget.displayId!.trim().isNotEmpty)
-            ? widget.displayId!
-            : widget.empId;
     final designation = (widget.designation?.trim().isNotEmpty == true)
         ? widget.designation!
-        : 'Field Operator';
+        : 'Driver';
+    // The ID badge shows the human-readable employee id (e.g. "13753223"),
+    // not the internal staff unique id ("STC-...") that backs the photo API.
+    final badgeId =
+        (widget.displayId != null && widget.displayId!.trim().isNotEmpty)
+            ? widget.displayId!.trim()
+            : widget.empId;
 
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
-        gradient: OperatorTheme.headerGradient,
+        gradient: DriverTheme.headerGradient,
         borderRadius: BorderRadius.only(
           bottomLeft: Radius.circular(22),
           bottomRight: Radius.circular(22),
@@ -159,7 +138,7 @@ class _OperatorHeaderState extends State<OperatorHeader> {
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 30, 16, 14),
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -169,15 +148,11 @@ class _OperatorHeaderState extends State<OperatorHeader> {
                   _buildAvatarButton(),
                   const SizedBox(width: 11),
                   Expanded(
-                      child: _buildIdentitySection(displayId, designation)),
+                      child: _buildIdentitySection(badgeId, designation)),
                   const SizedBox(width: 8),
                   _greetingPill(),
                 ],
               ),
-              if (widget.ward.trim().isNotEmpty) ...[
-                const SizedBox(height: 10),
-                _wardStrip(),
-              ],
             ],
           ),
         ),
@@ -200,7 +175,7 @@ class _OperatorHeaderState extends State<OperatorHeader> {
             mainAxisSize: MainAxisSize.min,
             children: [
               const Icon(Icons.wb_sunny_rounded,
-                  color: OperatorTheme.accent, size: 12),
+                  color: DriverTheme.accent, size: 12),
               const SizedBox(width: 4),
               Text(
                 _greeting(),
@@ -208,7 +183,6 @@ class _OperatorHeaderState extends State<OperatorHeader> {
                   color: Colors.white,
                   fontSize: 10,
                   fontWeight: FontWeight.w700,
-                  letterSpacing: 0,
                 ),
               ),
             ],
@@ -226,8 +200,7 @@ class _OperatorHeaderState extends State<OperatorHeader> {
       height: 36,
       child: IconButton(
         padding: EdgeInsets.zero,
-        icon: const Icon(Icons.logout_rounded,
-            color: Colors.white, size: 18),
+        icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 18),
         onPressed: widget.onLogout,
         tooltip: 'Logout',
       ),
@@ -248,14 +221,13 @@ class _OperatorHeaderState extends State<OperatorHeader> {
             color: Colors.white,
             fontWeight: FontWeight.w800,
             height: 1.12,
-            letterSpacing: 0,
           ),
         ),
         const SizedBox(height: 3),
         Row(
           children: [
-            const Icon(Icons.work_outline_rounded,
-                color: Color.fromARGB(255, 242, 158, 31), size: 11),
+            const Icon(Icons.local_shipping_rounded,
+                color: Color(0xFFFFD27D), size: 11),
             const SizedBox(width: 4),
             Flexible(
               child: Text(
@@ -266,7 +238,6 @@ class _OperatorHeaderState extends State<OperatorHeader> {
                   color: Colors.white.withValues(alpha: 0.85),
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  letterSpacing: 0,
                 ),
               ),
             ),
@@ -276,21 +247,19 @@ class _OperatorHeaderState extends State<OperatorHeader> {
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
           decoration: BoxDecoration(
-            color: OperatorTheme.accent.withValues(alpha: 0.18),
+            color: Colors.white.withValues(alpha: 0.16),
             borderRadius: BorderRadius.circular(7),
-            border:
-                Border.all(color: OperatorTheme.accent.withValues(alpha: 0.4)),
+            border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
           ),
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.badge_outlined,
-                  color: OperatorTheme.accent, size: 10),
+              const Icon(Icons.badge_outlined, color: Colors.white, size: 10),
               const SizedBox(width: 4),
               Text(
                 displayId,
                 style: const TextStyle(
-                  color: OperatorTheme.accent,
+                  color: Colors.white,
                   fontSize: 10,
                   fontWeight: FontWeight.w800,
                   letterSpacing: 0.2,
@@ -303,81 +272,32 @@ class _OperatorHeaderState extends State<OperatorHeader> {
     );
   }
 
-  Widget _wardStrip() {
-    final parts = <String>[
-      if (widget.ward.trim().isNotEmpty) widget.ward,
-      if (widget.zone.trim().isNotEmpty) widget.zone,
-    ];
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.location_on_rounded,
-              color: OperatorTheme.accent, size: 14),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              parts.join('  •  '),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-                letterSpacing: 0,
-              ),
-            ),
-          ),
-          Container(
-            width: 6,
-            height: 6,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: OperatorTheme.success,
-            ),
-          ),
-          const SizedBox(width: 6),
-          const Text(
-            'On Duty',
-            style: TextStyle(
-              color: OperatorTheme.success,
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.1,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
   Widget _buildAvatarButton() {
     return GestureDetector(
       onTap: () async {
+        if (widget.onProfileTap != null) {
+          widget.onProfileTap!();
+          return;
+        }
         await Navigator.push(
           context,
           MaterialPageRoute(
             builder: (_) => ProfilePage(empId: widget.empId),
           ),
         );
-        fetchEmployeeImage();
+        _fetchEmployeeImage();
       },
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: const LinearGradient(
-            colors: [OperatorTheme.accent, OperatorTheme.accentDeep],
+            colors: [DriverTheme.accent, DriverTheme.accentDeep],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           boxShadow: [
             BoxShadow(
-              color: OperatorTheme.accent.withValues(alpha: 0.28),
+              color: DriverTheme.accent.withValues(alpha: 0.28),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),
@@ -396,22 +316,21 @@ class _OperatorHeaderState extends State<OperatorHeader> {
                   height: 18,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: OperatorTheme.primary,
+                    color: DriverTheme.primary,
                   ),
                 )
               : (!hasProfile)
-                  ? Column(
+                  ? const Column(
                       mainAxisAlignment: MainAxisAlignment.center,
-                      children: const [
+                      children: [
                         Icon(Icons.person_add_alt_1_rounded,
-                            size: 18, color: OperatorTheme.primary),
+                            size: 18, color: DriverTheme.primary),
                         Text(
                           'Register',
                           style: TextStyle(
                             fontSize: 7.5,
                             fontWeight: FontWeight.w800,
-                            color: OperatorTheme.primary,
-                            letterSpacing: 0,
+                            color: DriverTheme.primary,
                           ),
                         ),
                       ],
