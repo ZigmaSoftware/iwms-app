@@ -1,7 +1,6 @@
 import 'dart:math';
 
 import 'package:dio/dio.dart';
-import 'package:dynamic_tabbar/dynamic_tabbar.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
@@ -12,20 +11,25 @@ import 'package:latlong2/latlong.dart';
 
 import '../../../../core/di.dart';
 import '../../../../core/geofence_config.dart';
-import 'package:iwms_citizen_app/data/models/daily_assignment_model.dart';
+import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
 import 'package:iwms_citizen_app/data/models/vehicle_model.dart';
-import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
+import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
 import '../../../../logic/vehicle_tracking/vehicle_bloc.dart';
 import '../../../../logic/vehicle_tracking/vehicle_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
-import 'package:iwms_citizen_app/core/env.dart';
 import 'package:iwms_citizen_app/core/ors_service.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/driver_theme.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/driver_animated_nav_bar.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/driver_header.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_cp_card.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_trip_header_card.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_trip_summary_card.dart';
 import 'package:iwms_citizen_app/shared/constants/skip_reasons.dart';
 
 const Color _driverPrimary = AppColors.primary;
@@ -57,6 +61,7 @@ class _DriverAssignmentStop {
     required this.assignmentType,
     required this.shift,
     this.customerName,
+    this.status = _CustomerStatus.pending,
   });
 
   // =====================
@@ -80,6 +85,7 @@ class _TripPlannedStop {
   final LatLng location;
   final String collectionPointId;
   final String propertyType;
+  final bool isCollected;
 
   const _TripPlannedStop({
     required this.plannedStopId,
@@ -87,6 +93,7 @@ class _TripPlannedStop {
     required this.location,
     required this.collectionPointId,
     required this.propertyType,
+    this.isCollected = false,
   });
 }
 
@@ -101,7 +108,7 @@ class DriverHomePage extends StatefulWidget {
 
 class _DriverHomePageState extends State<DriverHomePage> {
   _DriverTab _activeTab = _DriverTab.home;
-  late final AssignmentRepository _assignmentRepository;
+  late final OperatorTripRepository _tripRepository;
   final MapController _mapController = MapController();
   List<_DriverAssignmentStop> _customers = [];
   List<_TripPlannedStop> _tripStops = [];
@@ -109,8 +116,10 @@ class _DriverHomePageState extends State<DriverHomePage> {
   String? _activeTripId;
   String? _activeRoutePlanId;
   String? _activeVehicleType;
-  List<DailyAssignmentModel> _currentAssignments = [];
-  List<DailyAssignmentModel> _historyAssignments = [];
+  List<OperatorTripHistorySummary> _currentAssignments = [];
+  List<OperatorTripHistorySummary> _historyAssignments = [];
+  OperatorTripHistoryDetail? _activeTripDetail;
+  LatLng? _staticDriverLocation;
   bool _loadingCustomers = true;
   bool _loadingAssignments = true;
   bool _loadingTrip = false;
@@ -121,7 +130,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   @override
   void initState() {
     super.initState();
-    _assignmentRepository = getIt<AssignmentRepository>();
+    _tripRepository = getIt<OperatorTripRepository>();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _centerOnDriver(GammaGeofenceConfig.center),
     );
@@ -133,6 +142,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   }
 
   LatLng _resolveDriverLocation(VehicleModel? vehicle) {
+    if (_staticDriverLocation != null) return _staticDriverLocation!;
     if (vehicle == null) return GammaGeofenceConfig.center;
     return LatLng(vehicle.latitude, vehicle.longitude);
   }
@@ -160,6 +170,14 @@ class _DriverHomePageState extends State<DriverHomePage> {
             ? (bloc.state as AuthStateAuthenticated).emp_id
             : null);
 
+    // Human-readable employee id (e.g. "13753223") for display in the header
+    // badge. The API ships this as `employee_id`; `emp_id` is the internal
+    // staff unique id ("STC-...") used only for the profile-photo lookup.
+    final employeeIdFromState = context.select<AuthBloc, String?>((bloc) =>
+        bloc.state is AuthStateAuthenticated
+            ? (bloc.state as AuthStateAuthenticated).employeeId
+            : null);
+
     return BlocProvider(
       create: (_) => getIt<VehicleBloc>(),
       child: BlocListener<VehicleBloc, VehicleState>(
@@ -179,18 +197,22 @@ class _DriverHomePageState extends State<DriverHomePage> {
             final driverLocation = _resolveDriverLocation(selectedVehicle);
 
             return Scaffold(
-              backgroundColor: AppColors.driverBackground,
+              backgroundColor: DriverTheme.background,
+              extendBody: true,
               body: SafeArea(
+                bottom: false,
                 child: Column(
                   children: [
                     AnimatedSwitcher(
                       duration: const Duration(milliseconds: 250),
-                      child: _DriverHeader(
+                      child: DriverHeader(
                         key: ValueKey(_activeTab),
-                        activeTab: _activeTab,
-                        onLogoutTapped: () => _logout(context),
+                        name: nameFromState ?? 'Driver',
                         empId: empIdFromState ?? '',
-                        driverName: nameFromState ?? 'Driver',
+                        displayId: employeeIdFromState,
+                        onLogout: () => _logout(context),
+                        onProfileTap: () =>
+                            setState(() => _activeTab = _DriverTab.profile),
                       ),
                     ),
                     Expanded(
@@ -220,78 +242,30 @@ class _DriverHomePageState extends State<DriverHomePage> {
                   ],
                 ),
               ),
-              bottomNavigationBar: SafeArea(
-                minimum: const EdgeInsets.fromLTRB(14, 0, 14, 12),
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(24),
-                    border: Border.all(color: const Color(0xFFE8ECF4)),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.07),
-                        blurRadius: 14,
-                        offset: const Offset(0, 4),
-                      ),
-                    ],
+              bottomNavigationBar: DriverAnimatedNavBar(
+                activeIndex: _activeTab.index,
+                onTabSelected: (index) {
+                  final tab = _tabFromIndex(index);
+                  if (_activeTab != tab) setState(() => _activeTab = tab);
+                },
+                items: const [
+                  DriverNavItem(
+                    icon: Icons.home_rounded,
+                    label: AppCopy.driverTabHome,
                   ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: _DriverBottomNavItem(
-                          icon: Icons.home_rounded,
-                          label: AppCopy.driverTabHome,
-                          selected: _activeTab == _DriverTab.home,
-                          onTap: () {
-                            if (_activeTab != _DriverTab.home) {
-                              setState(() => _activeTab = _DriverTab.home);
-                            }
-                          },
-                        ),
-                      ),
-                      Expanded(
-                        child: _DriverBottomNavItem(
-                          icon: Icons.assignment_rounded,
-                          label: AppCopy.driverTabAssignments,
-                          selected: _activeTab == _DriverTab.assignments,
-                          onTap: () {
-                            if (_activeTab != _DriverTab.assignments) {
-                              setState(
-                                  () => _activeTab = _DriverTab.assignments);
-                            }
-                          },
-                        ),
-                      ),
-                      Expanded(
-                        child: _DriverBottomNavItem(
-                          icon: Icons.event_available_rounded,
-                          label: AppCopy.driverTabAttendance,
-                          selected: _activeTab == _DriverTab.attendance,
-                          onTap: () {
-                            if (_activeTab != _DriverTab.attendance) {
-                              setState(
-                                  () => _activeTab = _DriverTab.attendance);
-                            }
-                          },
-                        ),
-                      ),
-                      Expanded(
-                        child: _DriverBottomNavItem(
-                          icon: Icons.person_outline_rounded,
-                          label: AppCopy.driverTabProfile,
-                          selected: _activeTab == _DriverTab.profile,
-                          onTap: () {
-                            if (_activeTab != _DriverTab.profile) {
-                              setState(() => _activeTab = _DriverTab.profile);
-                            }
-                          },
-                        ),
-                      ),
-                    ],
+                  DriverNavItem(
+                    icon: Icons.assignment_rounded,
+                    label: AppCopy.driverTabAssignments,
                   ),
-                ),
+                  DriverNavItem(
+                    icon: Icons.event_available_rounded,
+                    label: AppCopy.driverTabAttendance,
+                  ),
+                  DriverNavItem(
+                    icon: Icons.person_outline_rounded,
+                    label: AppCopy.driverTabProfile,
+                  ),
+                ],
               ),
             );
           },
@@ -311,9 +285,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
     });
 
     try {
-      // 🔹 GET AUTH STATE SAFELY
       final authState = context.read<AuthBloc>().state;
-
       if (authState is! AuthStateAuthenticated) {
         setState(() {
           _loadingCustomers = false;
@@ -326,190 +298,97 @@ class _DriverHomePageState extends State<DriverHomePage> {
         return;
       }
 
-      final driverId = authState.userId.trim();
+      final today = DateTime.now();
 
-      if (driverId.isEmpty) {
-        setState(() {
-          _loadingCustomers = false;
-          _loadingAssignments = false;
-          _loadingTrip = false;
-          _customerError = 'Missing driver id';
-          _assignmentError = 'Missing driver id';
-          _tripError = 'Missing driver id';
-        });
-        return;
+      // Active trip comes from the CENTRALIZED single-trip endpoint
+      // (/operator-mobile/my-trip-today/), exactly like the operator app. The
+      // backend resolves it against the staff template, so the operator and the
+      // driver on the same template get the same DailyTripAssignment — and the
+      // same collection-point rows, so collection progress is shared instantly.
+      OperatorTripToday? todayTrip;
+      try {
+        todayTrip = await _tripRepository.fetchMyTripToday();
+      } on OperatorTripException catch (e) {
+        // "No trip assigned today" is a normal empty state, not a failure.
+        if (e.code != 'NO_ACTIVE_TRIP') rethrow;
+        todayTrip = null;
       }
 
-      final dio = await authorizedDio();
-      await _loadTripRouteForDriver(driverId, dio: dio);
+      // History list (completed / cancelled past trips) is still backed by
+      // trip-history, but it no longer decides the active trip or feeds the
+      // header carousel.
+      final history = await _tripRepository.fetchHistory(
+        from: today.subtract(const Duration(days: 45)),
+        to: today.add(const Duration(days: 1)),
+      );
+      final activeAssignmentId = todayTrip?.assignmentUniqueId;
+      final historyAssignments = history
+          .where((trip) => trip.assignmentUniqueId != activeAssignmentId)
+          .toList();
+
+      // The header carousel surfaces only the driver's single active trip.
+      final detail = todayTrip?.toHistoryDetail();
+      final activeTrip = todayTrip?.toHistorySummary();
+      final currentAssignments = <OperatorTripHistorySummary>[
+        if (activeTrip != null) activeTrip,
+      ];
 
       final stops = <_DriverAssignmentStop>[];
-      final currentAssignments = <DailyAssignmentModel>[];
-      final list = <Map<dynamic, dynamic>>[];
-
-      // Helper to decode customer list for a ward
-      Future<void> hydrateWardCustomers({
-        required String wardId,
-        required Map m,
-        required String assignmentId,
-        required String assignmentType,
-        required String shift,
-        required bool isEmergency,
-        required String emergencyCustomerId,
-      }) async {
-        List wardList = [];
-
-        Future<void> fetchWithParam(String paramKey) async {
-          final wardResp = await dio.get(
-            ApiConfig.customerList,
-            queryParameters: {paramKey: wardId},
-          );
-          final decoded = wardResp.data;
-          wardList = decoded is List
-              ? decoded
-              : (decoded is Map ? (decoded['results'] ?? []) : []);
-        }
-
-        try {
-          await fetchWithParam('ward');
-          if (wardList.isEmpty) {
-            await fetchWithParam('ward_id');
-          }
-        } catch (_) {
-          // ignore, fall back below
-        }
-
-        wardList = wardList.where((entry) {
-          if (entry is! Map) return false;
-          final rawWard = entry['ward_id'] ?? entry['ward'];
-          String? entryWardId;
-          if (rawWard is Map) {
-            entryWardId =
-                (rawWard['unique_id'] ?? rawWard['id'] ?? rawWard['pk'])
-                    ?.toString();
-          } else if (rawWard != null) {
-            entryWardId = rawWard.toString();
-          }
-          if (entryWardId == null || entryWardId != wardId) return false;
-          if (isEmergency && emergencyCustomerId.isNotEmpty) {
-            final entryId =
-                (entry['unique_id'] ?? entry['customer_id'] ?? '').toString();
-            return entryId == emergencyCustomerId;
-          }
-          return true;
-        }).toList();
-
-        if (wardList.isEmpty) {
+      final tripStops = <_TripPlannedStop>[];
+      if (detail != null) {
+        for (final cp in detail.collectionPoints) {
+          final lat = cp.collectionPoint.latitude;
+          final lng = cp.collectionPoint.longitude;
+          if (lat == null || lng == null) continue;
+          final status = cp.isCollected
+              ? _CustomerStatus.collected
+              : _CustomerStatus.pending;
+          final areaName = detail.summary.areaName;
           stops.add(
             _DriverAssignmentStop(
-              assignmentId: assignmentId,
-              wardId: wardId,
-              wardName: m['ward_name']?.toString() ?? 'Ward',
-              customerName: m['customer_name'],
-              assignmentType: assignmentType,
-              shift: shift,
-              location: GammaGeofenceConfig.center,
+              assignmentId: cp.uniqueId,
+              wardId: detail.summary.ward?.uniqueId ??
+                  detail.summary.panchayat?.uniqueId,
+              wardName: areaName,
+              customerName: cp.collectionPoint.name,
+              assignmentType: detail.summary.wasteType.name,
+              shift: detail.summary.scheduledTime ?? 'scheduled',
+              location: LatLng(lat, lng),
+              status: status,
             ),
           );
-          return;
-        }
-
-        for (final entry in wardList) {
-          if (entry is! Map) continue;
-          final pos = _safeLatLng(
-                entry['latitude'] ?? entry['customer_latitude'],
-                entry['longitude'] ?? entry['customer_longitude'],
-              ) ??
-              GammaGeofenceConfig.center;
-
-          final customerId =
-              (entry['unique_id'] ?? entry['customer_id'] ?? '').toString();
-          final customerName =
-              (entry['customer_name'] ?? entry['name'] ?? '').toString();
-
-          final combinedId = customerId.isNotEmpty
-              ? '$assignmentId-$customerId'
-              : assignmentId;
-          stops.add(
-            _DriverAssignmentStop(
-              assignmentId: combinedId,
-              wardId: wardId,
-              wardName: m['ward_name']?.toString() ?? 'Ward',
-              customerName: customerName.isNotEmpty ? customerName : null,
-              assignmentType: assignmentType,
-              shift: shift,
-              location: pos,
+          tripStops.add(
+            _TripPlannedStop(
+              plannedStopId: cp.uniqueId,
+              sequence: cp.sequence > 0 ? cp.sequence : tripStops.length + 1,
+              location: LatLng(lat, lng),
+              collectionPointId: cp.collectionPoint.uniqueId,
+              propertyType: cp.status,
+              isCollected: cp.isCollected,
             ),
           );
         }
-      }
-
-      for (final m in list) {
-        final assignmentId = (m['unique_id'] ?? '').toString();
-        final wardId = (m['ward'] ?? '').toString();
-        final assignmentType = m['assignment_type']?.toString() ?? 'primary';
-        final shift = m['shift']?.toString() ?? 'full_day';
-        final customerId = (m['customer'] ?? m['customer_id'] ?? '').toString();
-        final isEmergency = assignmentType.toLowerCase() == 'emergency';
-
-        final directPos =
-            _safeLatLng(m['customer_latitude'], m['customer_longitude']);
-
-        if (directPos != null) {
-          final combinedId = customerId.isNotEmpty
-              ? '$assignmentId-$customerId'
-              : assignmentId;
-          stops.add(
-            _DriverAssignmentStop(
-              assignmentId: combinedId,
-              wardId: wardId.isNotEmpty ? wardId : null,
-              wardName: m['ward_name']?.toString() ?? 'Ward',
-              customerName: m['customer_name'],
-              assignmentType: assignmentType,
-              shift: shift,
-              location: directPos,
-            ),
-          );
-          continue;
-        }
-
-        // If assignment has no specific customer point, hydrate ward customers
-        if (wardId.isNotEmpty) {
-          await hydrateWardCustomers(
-            wardId: wardId,
-            m: m,
-            assignmentId: assignmentId,
-            assignmentType: assignmentType,
-            shift: shift,
-            isEmergency: isEmergency,
-            emergencyCustomerId: customerId,
-          );
-        } else {
-          // Fallback single stop at center
-          final combinedId = customerId.isNotEmpty
-              ? '$assignmentId-$customerId'
-              : assignmentId;
-          stops.add(
-            _DriverAssignmentStop(
-              assignmentId: combinedId,
-              wardId: null,
-              wardName: m['ward_name']?.toString() ?? 'Ward',
-              customerName: m['customer_name'],
-              assignmentType: assignmentType,
-              shift: shift,
-              location: GammaGeofenceConfig.center,
-            ),
-          );
-        }
+        tripStops.sort((a, b) => a.sequence.compareTo(b.sequence));
       }
 
       setState(() {
         _customers = stops;
+        _tripStops = tripStops;
+        _tripPolyline = tripStops.map((stop) => stop.location).toList();
+        _activeTripId = activeTrip?.assignmentUniqueId;
+        _activeRoutePlanId = detail?.summary.tripPlan?.uniqueId;
+        _activeVehicleType = null;
+        _activeTripDetail = detail;
+        _staticDriverLocation = _staticLocationNearStops(tripStops);
         _currentAssignments = currentAssignments;
+        _historyAssignments = historyAssignments;
         _loadingCustomers = false;
+        _loadingAssignments = false;
+        _loadingTrip = false;
+        _customerError = null;
+        _assignmentError = null;
+        _tripError = null;
       });
-
-      await _loadAssignmentHistory(driverId);
     } catch (e) {
       setState(() {
         _loadingCustomers = false;
@@ -522,154 +401,26 @@ class _DriverHomePageState extends State<DriverHomePage> {
     }
   }
 
-  Future<void> _loadTripRouteForDriver(
-    String driverId, {
-    Dio? dio,
-  }) async {
-    if (!ApiConfig.legacyTripAssignEnabled) {
-      setState(() {
-        _tripStops = [];
-        _tripPolyline = [];
-        _activeTripId = null;
-        _activeRoutePlanId = null;
-        _loadingTrip = false;
-        _tripError = null;
-      });
-      return;
+  LatLng _staticLocationNearStops(List<_TripPlannedStop> stops) {
+    if (stops.isEmpty) return GammaGeofenceConfig.center;
+
+    var minLat = stops.first.location.latitude;
+    var maxLat = minLat;
+    var minLng = stops.first.location.longitude;
+    var maxLng = minLng;
+    for (final stop in stops) {
+      final point = stop.location;
+      minLat = min(minLat, point.latitude);
+      maxLat = max(maxLat, point.latitude);
+      minLng = min(minLng, point.longitude);
+      maxLng = max(maxLng, point.longitude);
     }
 
-    try {
-      final client = dio ?? await authorizedDio();
-      final resp = await client.get(
-        ApiConfig.tripDriverRoute,
-        queryParameters: {'driver_id': driverId},
-      );
-
-      final data = resp.data;
-      if (data is! Map) {
-        setState(() {
-          _tripStops = [];
-          _tripPolyline = [];
-          _activeTripId = null;
-          _activeRoutePlanId = null;
-          _loadingTrip = false;
-        });
-        return;
-      }
-
-      final trip = data['trip'] as Map?;
-      final routePlan = data['route_plan'] as Map?;
-      final geometry = data['route_geometry'] as Map?;
-      final plannedStops = data['planned_stops'] is List
-          ? data['planned_stops'] as List
-          : const [];
-
-      final stops = <_TripPlannedStop>[];
-      for (final item in plannedStops) {
-        if (item is! Map) continue;
-        final lat = double.tryParse(item['latitude']?.toString() ?? '');
-        final lng = double.tryParse(item['longitude']?.toString() ?? '');
-        if (lat == null || lng == null) continue;
-        final sequenceRaw = item['planned_sequence_number'] ?? item['sequence'];
-        final sequence = int.tryParse(sequenceRaw?.toString() ?? '') ?? 0;
-        final plannedStopId = (item['planned_stop_id'] ??
-                item['planned_route_stop_id'] ??
-                item['unique_id'] ??
-                '')
-            .toString();
-        final pointId = (item['collection_point_id'] ?? '').toString();
-        final propertyType = (item['property_type'] ?? '').toString();
-
-        stops.add(
-          _TripPlannedStop(
-            plannedStopId: plannedStopId,
-            sequence: sequence > 0 ? sequence : stops.length + 1,
-            location: LatLng(lat, lng),
-            collectionPointId: pointId,
-            propertyType: propertyType,
-          ),
-        );
-      }
-
-      stops.sort((a, b) => a.sequence.compareTo(b.sequence));
-
-      final encoded = geometry?['encoded_polyline'];
-      List<LatLng> polyline = [];
-      if (encoded is String && encoded.trim().isNotEmpty) {
-        polyline = ORSService.decodePolyline(encoded.trim());
-      }
-      if (polyline.isEmpty && stops.isNotEmpty) {
-        polyline = stops.map((s) => s.location).toList();
-      }
-
-      setState(() {
-        _tripStops = stops;
-        _tripPolyline = polyline;
-        _activeTripId = trip?['unique_id']?.toString();
-        _activeRoutePlanId = routePlan?['unique_id']?.toString();
-        _activeVehicleType = routePlan?['vehicle_type']?.toString();
-        _loadingTrip = false;
-        _tripError = null;
-      });
-    } on DioException catch (e) {
-      final status = e.response?.statusCode;
-      if (status == 404) {
-        setState(() {
-          _tripStops = [];
-          _tripPolyline = [];
-          _activeTripId = null;
-          _activeRoutePlanId = null;
-          _loadingTrip = false;
-          _tripError = null;
-        });
-        return;
-      }
-      setState(() {
-        _tripStops = [];
-        _tripPolyline = [];
-        _activeTripId = null;
-        _activeRoutePlanId = null;
-        _loadingTrip = false;
-        _tripError = 'Failed to load trip route';
-      });
-    } catch (_) {
-      setState(() {
-        _tripStops = [];
-        _tripPolyline = [];
-        _activeTripId = null;
-        _activeRoutePlanId = null;
-        _loadingTrip = false;
-        _tripError = 'Failed to load trip route';
-      });
-    }
-  }
-
-  Future<void> _loadAssignmentHistory(String driverId) async {
-    try {
-      final history = await _assignmentRepository.fetchAssignmentHistory(
-          driverId: driverId);
-      final completedHistory = history
-          .where((assignment) => !assignment.isActive)
-          .toList()
-        ..sort((a, b) => b.date.compareTo(a.date));
-      setState(() {
-        _historyAssignments = completedHistory;
-        _loadingAssignments = false;
-      });
-    } catch (_) {
-      setState(() {
-        _historyAssignments = [];
-        _loadingAssignments = false;
-      });
-    }
-  }
-
-  LatLng? _safeLatLng(dynamic latRaw, dynamic lonRaw) {
-    if (latRaw == null || lonRaw == null) return null;
-    final lat = double.tryParse(latRaw.toString());
-    final lon = double.tryParse(lonRaw.toString());
-    if (lat == null || lon == null) return null;
-    return LatLng(lat, lon);
+    final centerLat = (minLat + maxLat) / 2;
+    final centerLng = (minLng + maxLng) / 2;
+    final latOffset = max(0.003, (maxLat - minLat) * 0.18);
+    final lngOffset = max(0.003, (maxLng - minLng) * 0.18);
+    return LatLng(centerLat - latOffset, centerLng - lngOffset);
   }
 
   // List<_DriverAssignmentStop> _decodeCustomerList(String body,
@@ -736,6 +487,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
           driverLocation: driverLocation,
           onCenter: () => _centerOnDriver(driverLocation),
           customers: _customers,
+          currentAssignments: _currentAssignments,
+          activeTripDetail: _activeTripDetail,
           tripStops: _tripStops,
           tripPolyline: _tripPolyline,
           activeTripId: _activeTripId,
@@ -752,6 +505,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
         return _AssignmentsTab(
           currentAssignments: _currentAssignments,
           historyAssignments: _historyAssignments,
+          activeTripDetail: _activeTripDetail,
           loading: _loadingAssignments,
           error: _assignmentError,
           onRefresh: _loadAssignmentsForDriver,
@@ -801,226 +555,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
   }
 }
 
-class _DriverBottomNavItem extends StatelessWidget {
-  const _DriverBottomNavItem({
-    required this.icon,
-    required this.label,
-    required this.selected,
-    required this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool selected;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    const primary = AppColors.primary;
-    const inactive = Color(0xFF7B8794);
-
-    return InkWell(
-      borderRadius: BorderRadius.circular(18),
-      onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
-        decoration: BoxDecoration(
-          color: selected ? primary.withOpacity(0.10) : Colors.transparent,
-          borderRadius: BorderRadius.circular(18),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(
-              icon,
-              size: 23,
-              color: selected ? primary : inactive,
-            ),
-            const SizedBox(height: 4),
-            Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 11.5,
-                fontWeight: selected ? FontWeight.w800 : FontWeight.w600,
-                color: selected ? primary : inactive,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _DriverHeader extends StatelessWidget {
-  const _DriverHeader({
-    super.key,
-    required this.activeTab,
-    required this.onLogoutTapped,
-    required this.empId,
-    required this.driverName,
-  });
-
-  final _DriverTab activeTab;
-  final VoidCallback onLogoutTapped;
-  final String empId;
-  final String driverName;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 10),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          colors: [_driverPrimary, _driverAccent],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(18),
-          bottomRight: Radius.circular(18),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black26,
-            blurRadius: 14,
-            offset: Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Text(
-            driverName,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 18,
-              fontWeight: FontWeight.w800,
-            ),
-          ),
-          const Spacer(),
-          if (activeTab == _DriverTab.attendance)
-            DriverAvatar(empId: empId)
-          else
-            IconButton(
-              onPressed: onLogoutTapped,
-              icon: const Icon(Icons.power_settings_new_rounded,
-                  color: Colors.white),
-            ),
-        ],
-      ),
-    );
-  }
-}
-
-class DriverAvatar extends StatefulWidget {
-  final String empId;
-  const DriverAvatar({super.key, required this.empId});
-
-  @override
-  State<DriverAvatar> createState() => _DriverAvatarState();
-}
-
-class _DriverAvatarState extends State<DriverAvatar> {
-  bool hasProfile = false;
-  bool imageLoading = true;
-  String? imageName;
-
-  @override
-  void initState() {
-    super.initState();
-    fetchEmployeeImage();
-  }
-
-  Future<void> fetchEmployeeImage() async {
-    try {
-      final dio = await authorizedDio();
-      final response = await dio.get(
-        '${ApiConfig.desktopBase}staff-profile/',
-        queryParameters: {'staff_id_id': widget.empId},
-      );
-      final json = response.data;
-
-      if (json["status"] == "success") {
-        setState(() {
-          imageName = json["data"]["photo"] ?? "";
-          hasProfile = imageName != null && imageName!.isNotEmpty;
-          imageLoading = false;
-        });
-      } else {
-        setState(() {
-          hasProfile = false;
-          imageLoading = false;
-        });
-      }
-    } catch (e) {
-      setState(() {
-        hasProfile = false;
-        imageLoading = false;
-      });
-    }
-  }
-
-  String convertToUrl(String path) {
-    final clean = path.replaceAll("\\", "/");
-    return "$kOperatorProfileBaseUrl/media/$clean";
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: () async {
-        await Navigator.push(
-          context,
-          MaterialPageRoute(
-            builder: (_) => ProfilePage(empId: widget.empId),
-          ),
-        );
-        fetchEmployeeImage();
-      },
-      child: CircleAvatar(
-        radius: 30,
-        backgroundColor: Colors.white,
-        backgroundImage: (hasProfile && imageName != null)
-            ? NetworkImage(convertToUrl(imageName!))
-            : null,
-        child: imageLoading
-            ? const SizedBox(
-                width: 22,
-                height: 22,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  color: Colors.green,
-                ),
-              )
-            : (!hasProfile)
-                ? Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: const [
-                      Icon(Icons.person_add_alt_1,
-                          size: 26, color: Colors.green),
-                      SizedBox(height: 2),
-                      Text(
-                        "Register",
-                        style: TextStyle(
-                          fontSize: 8,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.green,
-                        ),
-                      ),
-                    ],
-                  )
-                : null,
-      ),
-    );
-  }
-}
-
 // ============================================================
 // PART 3: HomeTab Widget with Map and Navigation
 // ============================================================
@@ -1030,6 +564,8 @@ class _HomeTab extends StatefulWidget {
     required this.driverLocation,
     required this.onCenter,
     required this.customers, // ✅ DECLARED
+    required this.currentAssignments,
+    required this.activeTripDetail,
     required this.tripStops,
     required this.tripPolyline,
     required this.activeTripId,
@@ -1047,6 +583,8 @@ class _HomeTab extends StatefulWidget {
   final LatLng driverLocation;
   final VoidCallback onCenter;
   final List<_DriverAssignmentStop> customers; // ✅ ADD THIS
+  final List<OperatorTripHistorySummary> currentAssignments;
+  final OperatorTripHistoryDetail? activeTripDetail;
   final List<_TripPlannedStop> tripStops;
   final List<LatLng> tripPolyline;
   final String? activeTripId;
@@ -1064,6 +602,9 @@ class _HomeTab extends StatefulWidget {
 }
 
 class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
+  static const EdgeInsets _overviewFitPadding =
+      EdgeInsets.fromLTRB(46, 238, 46, 252);
+
   List<LatLng> _orsRoute = [];
   List<LatLng> _tripPolyline = [];
   double _driverBearing = 0.0;
@@ -1080,7 +621,6 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   String? _routePlanId;
   String? _vehicleType;
   bool _rerouting = false;
-  String? _rerouteError;
   int _tripRouteRequestId = 0;
   List<String> _lastActualSequence = [];
   bool _autoRerouteDone = false;
@@ -1114,11 +654,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   }
 
   LatLng _sanitizeDriverLocation(LatLng location) {
-    if (GammaGeofenceConfig.contains(location) ||
-        GammaGeofenceConfig.isNear(location)) {
-      return location;
-    }
-    return GammaGeofenceConfig.center;
+    return location;
   }
 
   @override
@@ -1253,17 +789,15 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   void _fitDriverAndNextCustomer() {
     if (_customers.isEmpty) return;
 
-    final nextCustomer = _customers.first;
-
     final bounds = LatLngBounds.fromPoints([
       _driverLocation,
-      nextCustomer.location,
+      ..._customers.map((customer) => customer.location),
     ]);
 
     widget.mapController.fitCamera(
       CameraFit.bounds(
         bounds: bounds,
-        padding: const EdgeInsets.all(80),
+        padding: _overviewFitPadding,
       ),
     );
   }
@@ -1278,7 +812,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     widget.mapController.fitCamera(
       CameraFit.bounds(
         bounds: bounds,
-        padding: const EdgeInsets.all(80),
+        padding: _overviewFitPadding,
       ),
     );
   }
@@ -1369,7 +903,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       widget.mapController.fitCamera(
         CameraFit.bounds(
           bounds: bounds,
-          padding: const EdgeInsets.all(80),
+          padding: _overviewFitPadding,
         ),
       );
       widget.mapController.rotate(0);
@@ -1501,7 +1035,6 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
 
     setState(() {
       _rerouting = true;
-      _rerouteError = null;
     });
 
     try {
@@ -1595,10 +1128,8 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
             _lastActualSequence = newSequence;
           });
         } catch (_) {
-          if (!mounted) return;
-          setState(() {
-            _rerouteError = 'Failed to log actual sequence';
-          });
+          // Best effort only: route display should not fail when sequence logging
+          // has a transient backend issue.
         }
       }
 
@@ -1611,7 +1142,6 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() {
         _rerouting = false;
-        _rerouteError = message;
       });
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
@@ -1620,7 +1150,6 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       if (!mounted) return;
       setState(() {
         _rerouting = false;
-        _rerouteError = 'Reroute failed';
       });
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
@@ -1972,6 +1501,31 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       }
     }
     final navigationCustomer = isNavigating ? activeCustomer : null;
+    final activeTripSummary = widget.activeTripDetail?.summary;
+    final headerTrips = <OperatorTripHistorySummary>[
+      if (activeTripSummary != null) activeTripSummary,
+      ...widget.currentAssignments.where(
+        (trip) =>
+            trip.assignmentUniqueId != activeTripSummary?.assignmentUniqueId,
+      ),
+    ];
+    final nextCustomer =
+        !isNavigating && _customers.isNotEmpty ? _customers.first : null;
+    final nextCustomerPosition = nextCustomer == null
+        ? 0
+        : widget.customers
+            .indexWhere((customer) => customer.id == nextCustomer.id);
+    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    final bottomOverlayOffset = 84.0 + bottomInset;
+    final mapControlsTop = isNavigating
+        ? 12.0
+        : headerTrips.isNotEmpty && nextCustomer != null
+            ? 280.0
+            : headerTrips.isNotEmpty
+                ? 182.0
+                : nextCustomer != null
+                    ? 126.0
+                    : 12.0;
 
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
@@ -2052,12 +1606,13 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                     ),
                     ..._tripStops.map(
                       (stop) => Marker(
-                        width: 34,
-                        height: 34,
+                        width: 42,
+                        height: 48,
                         point: stop.location,
                         child: _TripStopMarker(
                           sequence: stop.sequence,
                           propertyType: stop.propertyType,
+                          isCollected: stop.isCollected,
                         ),
                       ),
                     ),
@@ -2069,7 +1624,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
 
           // Top controls
           Positioned(
-            top: 12,
+            top: mapControlsTop,
             right: 12,
             child: Column(
               children: [
@@ -2107,19 +1662,25 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
             ),
           ),
 
-          if (_tripStops.isNotEmpty ||
-              widget.tripLoading ||
-              widget.tripError != null)
+          if (!isNavigating && headerTrips.isNotEmpty)
             Positioned(
-              top: 64,
-              left: 12,
-              right: 12,
-              child: _TripRouteSummaryCard(
-                tripId: _tripId ?? widget.activeTripId,
-                routePlanId: _routePlanId ?? widget.activeRoutePlanId,
-                stopCount: _tripStops.length,
-                loading: widget.tripLoading || _rerouting,
-                error: _rerouteError ?? widget.tripError,
+              top: 16,
+              left: 16,
+              right: 16,
+              child: _DriverTripHeaderCarousel(trips: headerTrips),
+            ),
+
+          if (nextCustomer != null)
+            Positioned(
+              top: headerTrips.isNotEmpty ? 176 : 16,
+              left: 16,
+              right: 16,
+              child: _NextCollectionPointCard(
+                customer: nextCustomer,
+                distance: _getDistanceToCustomer(nextCustomer),
+                position:
+                    nextCustomerPosition >= 0 ? nextCustomerPosition + 1 : 1,
+                total: widget.customers.length,
               ),
             ),
 
@@ -2137,76 +1698,225 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
             ),
 
           // Navigation action tray
-          if (navigationCustomer != null)
-            Positioned(
-              left: 0,
-              right: 0,
-              bottom: 12,
-              child: AnimatedContainer(
-                duration: _kNavigationTransitionDuration,
-                curve: Curves.easeInOut,
-                height: 120,
-                child: _NavigationActionCard(
-                  customer: navigationCustomer,
-                  distance: _getDistanceToCustomer(navigationCustomer),
-                  onComplete: () => _handleCollect(navigationCustomer),
-                  onSkip: () => _handleSkip(navigationCustomer),
-                ),
-              ),
-            ),
+          // Navigation action tray
+if (navigationCustomer != null)
+  Positioned(
+    left: 0,
+    right: 0,
+    bottom: bottomOverlayOffset,
+    child: AnimatedContainer(
+      duration: _kNavigationTransitionDuration,
+      curve: Curves.easeInOut,
+      height: 120,
+      child: _NavigationActionCard(
+        customer: navigationCustomer,
+        distance: _getDistanceToCustomer(navigationCustomer),
+        onComplete: () => _handleCollect(navigationCustomer),
+        onSkip: () => _handleSkip(navigationCustomer),
+      ),
+    ),
+  ),
 
           // Bottom customer carousel - compact design
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 12,
-            child: AnimatedContainer(
-              duration: _kNavigationTransitionDuration,
-              curve: Curves.easeInOut,
-              height: isNavigating ? 0 : 140, // Reduced from 180 to 140
-              child: widget.loading
-                  ? const Center(child: CircularProgressIndicator())
-                  : widget.error != null
-                      ? Center(
-                          child: Text(
-                            widget.error!,
-                            style: const TextStyle(
-                              color: Colors.red,
-                              fontWeight: FontWeight.w700,
-                            ),
-                          ),
-                        )
-                      : _customers.isEmpty
-                          ? const Center(
-                              child: Text(
-                                'All customers completed!',
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w700,
-                                  color: Colors.green,
-                                ),
-                              ),
-                            )
-                          : ListView.separated(
-                              padding:
-                                  const EdgeInsets.symmetric(horizontal: 16),
-                              scrollDirection: Axis.horizontal,
-                              itemBuilder: (context, index) {
-                                final customer = _customers[index];
-                                return _CustomerCard(
-                                  customer: customer,
-                                  distance: _getDistanceToCustomer(customer),
-                                  onComplete: () => _handleCollect(customer),
-                                  onSkip: () => _handleSkip(customer),
-                                  onStart: () => _startNavigation(customer.id),
-                                  onOpenAssignment: () =>
-                                      _openAssignmentScreen(customer),
-                                );
-                              },
-                              separatorBuilder: (_, __) =>
-                                  const SizedBox(width: 10),
-                              itemCount: _customers.length,
-                            ),
+          // Positioned(
+          //   left: 0,
+          //   right: 0,
+          //   bottom: bottomOverlayOffset,
+          //   child: AnimatedContainer(
+          //     duration: _kNavigationTransitionDuration,
+          //     curve: Curves.easeInOut,
+          //     height: isNavigating ? 0 : 140,
+          //     child: widget.loading
+          //         ? const Center(child: CircularProgressIndicator())
+          //         : widget.error != null
+          //             ? Center(
+          //                 child: Text(
+          //                   widget.error!,
+          //                   style: const TextStyle(
+          //                     color: Colors.red,
+          //                     fontWeight: FontWeight.w700,
+          //                   ),
+          //                 ),
+          //               )
+          //             : _customers.isEmpty
+          //                 ? const Center(
+          //                     child: Text(
+          //                       'All customers completed!',
+          //                       style: TextStyle(
+          //                         fontSize: 16,
+          //                         fontWeight: FontWeight.w700,
+          //                         color: Colors.green,
+          //                       ),
+          //                     ),
+          //                   )
+          //                 : ListView.separated(
+          //                     padding:
+          //                         const EdgeInsets.symmetric(horizontal: 16),
+          //                     scrollDirection: Axis.horizontal,
+          //                     itemBuilder: (context, index) {
+          //                       final customer = _customers[index];
+          //                       return _CustomerCard(
+          //                         customer: customer,
+          //                         distance: _getDistanceToCustomer(customer),
+          //                         onComplete: () => _handleCollect(customer),
+          //                         onSkip: () => _handleSkip(customer),
+          //                         onStart: () => _startNavigation(customer.id),
+          //                         onOpenAssignment: () =>
+          //                             _openAssignmentScreen(customer),
+          //                       );
+          //                     },
+          //                     separatorBuilder: (_, __) =>
+          //                         const SizedBox(width: 10),
+          //                     itemCount: _customers.length,
+          //                   ),
+          //   ),
+          // ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DriverTripHeaderCarousel extends StatelessWidget {
+  const _DriverTripHeaderCarousel({required this.trips});
+
+  final List<OperatorTripHistorySummary> trips;
+
+  @override
+  Widget build(BuildContext context) {
+    if (trips.length == 1) {
+      return OperatorTripHeaderCard.fromSummary(trips.first);
+    }
+
+    return SizedBox(
+      height: 150,
+      child: PageView.builder(
+        padEnds: false,
+        itemCount: trips.length,
+        itemBuilder: (context, index) {
+          return Padding(
+            padding: EdgeInsets.only(right: index == trips.length - 1 ? 0 : 10),
+            child: OperatorTripHeaderCard.fromSummary(trips[index]),
+          );
+        },
+      ),
+    );
+  }
+}
+
+class _NextCollectionPointCard extends StatelessWidget {
+  const _NextCollectionPointCard({
+    required this.customer,
+    required this.distance,
+    required this.position,
+    required this.total,
+  });
+
+  final _DriverAssignmentStop customer;
+  final String distance;
+  final int position;
+  final int total;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
+      decoration: BoxDecoration(
+        color: OperatorTheme.surface,
+        borderRadius: OperatorTheme.cardRadius,
+        border: Border.all(color: OperatorTheme.hairline),
+        boxShadow: OperatorTheme.softShadow,
+      ),
+      child: Row(
+        children: [
+          Container(
+            width: 44,
+            height: 44,
+            alignment: Alignment.center,
+            decoration: const BoxDecoration(
+              gradient: OperatorTheme.accentGradient,
+              borderRadius: BorderRadius.all(Radius.circular(14)),
+            ),
+            child: Text(
+              position.toString(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Next collection point',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: OperatorTheme.mutedText,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  customer.name,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: OperatorTheme.strongText,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  total > 0 ? 'Stop $position of $total' : 'Ready for route',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: const TextStyle(
+                    color: OperatorTheme.mutedText,
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 12),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
+            decoration: BoxDecoration(
+              color: OperatorTheme.accentSoft,
+              borderRadius: OperatorTheme.chipRadius,
+              border: Border.all(
+                color: OperatorTheme.accent.withValues(alpha: 0.18),
+              ),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  distance,
+                  style: const TextStyle(
+                    color: OperatorTheme.accentDeep,
+                    fontSize: 17,
+                    fontWeight: FontWeight.w900,
+                  ),
+                ),
+                const Text(
+                  'away',
+                  style: TextStyle(
+                    color: OperatorTheme.accent,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
             ),
           ),
         ],
@@ -2214,6 +1924,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     );
   }
 }
+
 // ============================================================
 // PART 4: NavigationHeader, Cards, History, Profile, and Markers
 // ============================================================
@@ -2710,87 +2421,214 @@ class _CustomerCard extends StatelessWidget {
   }
 }
 
-class _AssignmentsTab extends StatefulWidget {
+class _AssignmentsTab extends StatelessWidget {
   const _AssignmentsTab({
     required this.currentAssignments,
     required this.historyAssignments,
+    required this.activeTripDetail,
     required this.loading,
     required this.error,
     required this.onRefresh,
   });
 
-  final List<DailyAssignmentModel> currentAssignments;
-  final List<DailyAssignmentModel> historyAssignments;
+  final List<OperatorTripHistorySummary> currentAssignments;
+  final List<OperatorTripHistorySummary> historyAssignments;
+  final OperatorTripHistoryDetail? activeTripDetail;
   final bool loading;
   final String? error;
   final Future<void> Function() onRefresh;
 
   @override
-  State<_AssignmentsTab> createState() => _AssignmentsTabState();
-}
-
-class _AssignmentsTabState extends State<_AssignmentsTab> {
-  bool _didSetInitialTab = false;
-
-  List<TabData> _buildTabs() {
-    return [
-      TabData(
-        index: 0,
-        title: const Tab(text: 'Current'),
-        content: _DriverAssignmentList(
-          assignments: widget.currentAssignments,
-          emptyTitle: 'No current assignments',
-          emptySubtitle: 'You are all caught up for now.',
-          onRefresh: widget.onRefresh,
-        ),
-      ),
-      TabData(
-        index: 1,
-        title: const Tab(text: 'History'),
-        content: _DriverAssignmentList(
-          assignments: widget.historyAssignments,
-          emptyTitle: 'No completed assignments',
-          emptySubtitle: 'Completed assignments will appear here.',
-          onRefresh: widget.onRefresh,
-        ),
-      ),
-    ];
-  }
-
-  @override
   Widget build(BuildContext context) {
-    if (widget.loading) {
+    if (loading) {
       return const Center(child: CircularProgressIndicator());
     }
-    if (widget.error != null) {
+    if (error != null) {
       return _AssignmentsErrorState(
-        message: widget.error!,
-        onRetry: () => widget.onRefresh(),
+        message: error!,
+        onRetry: () => onRefresh(),
       );
     }
 
+    return DefaultTabController(
+      length: 2,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _AssignmentsHeader(
+            currentCount: currentAssignments.length,
+            historyCount: historyAssignments.length,
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(20, 4, 20, 0),
+            child: TabBar(
+              labelColor: OperatorTheme.primary,
+              unselectedLabelColor: OperatorTheme.mutedText,
+              indicatorColor: OperatorTheme.primary,
+              tabs: [
+                Tab(text: 'Current Trip'),
+                Tab(text: 'History'),
+              ],
+            ),
+          ),
+          Expanded(
+            child: TabBarView(
+              children: [
+                _DriverCurrentTripTab(
+                  detail: activeTripDetail,
+                  fallbackTrips: currentAssignments,
+                  onRefresh: onRefresh,
+                ),
+                _DriverTripHistoryTab(
+                  assignments: historyAssignments,
+                  onRefresh: onRefresh,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DriverCurrentTripTab extends StatelessWidget {
+  const _DriverCurrentTripTab({
+    required this.detail,
+    required this.fallbackTrips,
+    required this.onRefresh,
+  });
+
+  final OperatorTripHistoryDetail? detail;
+  final List<OperatorTripHistorySummary> fallbackTrips;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    final summary = detail?.summary ??
+        (fallbackTrips.isNotEmpty ? fallbackTrips.first : null);
+
+    return RefreshIndicator(
+      color: OperatorTheme.accent,
+      onRefresh: onRefresh,
+      child: summary == null
+          ? ListView(
+              padding: const EdgeInsets.fromLTRB(20, 40, 20, 140),
+              children: const [
+                _DriverEmptyAssignmentMessage(
+                  icon: Icons.route_rounded,
+                  message: 'No current trip assigned.',
+                ),
+              ],
+            )
+          : ListView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 140),
+              children: [
+                OperatorTripSummaryCard(
+                  trip: summary,
+                ),
+                const SizedBox(height: 18),
+                Row(
+                  children: [
+                    const Text(
+                      'Collection Points',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                        color: OperatorTheme.strongText,
+                      ),
+                    ),
+                    const Spacer(),
+                    Text(
+                      '${detail?.collectionPoints.length ?? 0}',
+                      style: const TextStyle(
+                        color: OperatorTheme.mutedText,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 10),
+                if (detail == null || detail!.collectionPoints.isEmpty)
+                  const _DriverEmptyAssignmentMessage(
+                    icon: Icons.location_off_rounded,
+                    message: 'No collection points found for this trip.',
+                  )
+                else
+                  ...detail!.collectionPoints.map(
+                    (cp) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: OperatorCpCard(cp: cp),
+                    ),
+                  ),
+              ],
+            ),
+    );
+  }
+}
+
+class _DriverTripHistoryTab extends StatelessWidget {
+  const _DriverTripHistoryTab({
+    required this.assignments,
+    required this.onRefresh,
+  });
+
+  final List<OperatorTripHistorySummary> assignments;
+  final Future<void> Function() onRefresh;
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      color: OperatorTheme.accent,
+      onRefresh: onRefresh,
+      child: assignments.isEmpty
+          ? ListView(
+              padding: const EdgeInsets.fromLTRB(20, 40, 20, 140),
+              children: const [
+                _DriverEmptyAssignmentMessage(
+                  icon: Icons.history_toggle_off_rounded,
+                  message: 'No completed trips yet.',
+                ),
+              ],
+            )
+          : ListView.separated(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 140),
+              itemCount: assignments.length,
+              separatorBuilder: (_, __) => const SizedBox(height: 12),
+              itemBuilder: (context, index) {
+                final trip = assignments[index];
+                return OperatorTripSummaryCard(
+                  trip: trip,
+                );
+              },
+            ),
+    );
+  }
+}
+
+class _DriverEmptyAssignmentMessage extends StatelessWidget {
+  const _DriverEmptyAssignmentMessage({
+    required this.icon,
+    required this.message,
+  });
+
+  final IconData icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
     return Column(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        _AssignmentsHeader(
-          currentCount: widget.currentAssignments.length,
-          historyCount: widget.historyAssignments.length,
-        ),
-        const SizedBox(height: 8),
-        Expanded(
-          child: DynamicTabBarWidget(
-            dynamicTabs: _buildTabs(),
-            onTabControllerUpdated: (controller) {
-              if (_didSetInitialTab || controller.length == 0) return;
-              _didSetInitialTab = true;
-              controller.animateTo(0);
-            },
-            onTabChanged: (_) => widget.onRefresh(),
-            isScrollable: false,
-            indicatorColor: _driverPrimary,
-            labelColor: _driverPrimary,
-            unselectedLabelColor: Colors.black54,
-            labelStyle: const TextStyle(fontWeight: FontWeight.w700),
-            unselectedLabelStyle: const TextStyle(fontWeight: FontWeight.w600),
+        Icon(icon, color: OperatorTheme.mutedText, size: 46),
+        const SizedBox(height: 10),
+        Text(
+          message,
+          textAlign: TextAlign.center,
+          style: const TextStyle(
+            color: OperatorTheme.mutedText,
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
           ),
         ),
       ],
@@ -2810,24 +2648,28 @@ class _AssignmentsHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
       child: Row(
         children: [
           const Text(
             AppCopy.driverAssignments,
-            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800),
+            style: TextStyle(
+              color: OperatorTheme.strongText,
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+            ),
           ),
           const Spacer(),
           _CountChip(
             label: AppCopy.driverCurrent,
             count: currentCount,
-            color: _driverPrimary,
+            color: OperatorTheme.primary,
           ),
           const SizedBox(width: 8),
           _CountChip(
             label: AppCopy.driverHistory,
             count: historyCount,
-            color: Colors.grey.shade600,
+            color: OperatorTheme.mutedText,
           ),
         ],
       ),
@@ -2892,201 +2734,11 @@ class _AssignmentsErrorState extends StatelessWidget {
           ElevatedButton(
             onPressed: onRetry,
             style: ElevatedButton.styleFrom(
-              backgroundColor: _driverPrimary,
+              backgroundColor: OperatorTheme.primary,
               foregroundColor: Colors.white,
             ),
             child: const Text('Retry'),
           ),
-        ],
-      ),
-    );
-  }
-}
-
-class _DriverAssignmentList extends StatelessWidget {
-  const _DriverAssignmentList({
-    required this.assignments,
-    required this.emptyTitle,
-    required this.emptySubtitle,
-    required this.onRefresh,
-  });
-
-  final List<DailyAssignmentModel> assignments;
-  final String emptyTitle;
-  final String emptySubtitle;
-  final Future<void> Function() onRefresh;
-
-  @override
-  Widget build(BuildContext context) {
-    return RefreshIndicator(
-      onRefresh: onRefresh,
-      child: assignments.isEmpty
-          ? ListView(
-              padding: const EdgeInsets.all(24),
-              children: [
-                const SizedBox(height: 60),
-                Icon(Icons.assignment_rounded,
-                    size: 56, color: Colors.grey.shade300),
-                const SizedBox(height: 16),
-                Text(
-                  emptyTitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w700,
-                  ),
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  emptySubtitle,
-                  textAlign: TextAlign.center,
-                  style: TextStyle(
-                    fontSize: 13,
-                    color: Colors.grey.shade500,
-                  ),
-                ),
-              ],
-            )
-          : ListView.separated(
-              padding: const EdgeInsets.fromLTRB(16, 12, 16, 24),
-              itemCount: assignments.length,
-              separatorBuilder: (_, __) => const SizedBox(height: 12),
-              itemBuilder: (context, index) {
-                return _DriverAssignmentCard(
-                  assignment: assignments[index],
-                );
-              },
-            ),
-    );
-  }
-}
-
-class _DriverAssignmentCard extends StatelessWidget {
-  const _DriverAssignmentCard({
-    required this.assignment,
-  });
-
-  final DailyAssignmentModel assignment;
-
-  String _formatDate(DateTime value) {
-    final local = value.toLocal();
-    final month = local.month.toString().padLeft(2, '0');
-    final day = local.day.toString().padLeft(2, '0');
-    return '${local.year}-$month-$day';
-  }
-
-  String? _statusTimestamp() {
-    if (assignment.completedAt != null) {
-      return 'Completed: ${_formatDate(assignment.completedAt!)}';
-    }
-    if (assignment.skippedAt != null) {
-      return 'Skipped: ${_formatDate(assignment.skippedAt!)}';
-    }
-    if (assignment.cancelledAt != null) {
-      return 'Cancelled: ${_formatDate(assignment.cancelledAt!)}';
-    }
-    return null;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final statusNote = _statusTimestamp();
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.06),
-            blurRadius: 12,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: Text(
-                  assignment.ward,
-                  style: const TextStyle(
-                    fontSize: 15,
-                    fontWeight: FontWeight.w800,
-                  ),
-                ),
-              ),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                decoration: BoxDecoration(
-                  color: assignment.statusColor.withValues(alpha: 0.12),
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Text(
-                  assignment.statusLabel,
-                  style: TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w700,
-                    color: assignment.statusColor,
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Shift: ${assignment.shiftDisplay} • ${assignment.typeDisplay}',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          Text(
-            'Operator: ${assignment.operatorName}',
-            style: TextStyle(
-              fontSize: 12,
-              color: Colors.grey.shade600,
-            ),
-          ),
-          if (assignment.customerName != null &&
-              assignment.customerName!.trim().isNotEmpty)
-            Text(
-              'Citizen: ${assignment.customerName}',
-              style: TextStyle(
-                fontSize: 12,
-                color: Colors.grey.shade600,
-              ),
-            ),
-          if (statusNote != null)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                statusNote,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.grey.shade700,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          if (assignment.skipReason != null &&
-              assignment.skipReason!.trim().isNotEmpty)
-            Padding(
-              padding: const EdgeInsets.only(top: 6),
-              child: Text(
-                'Reason: ${assignment.skipReason}',
-                style: TextStyle(
-                  fontSize: 12,
-                  color: Colors.orange.shade700,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
         ],
       ),
     );
@@ -3588,10 +3240,12 @@ class _TripStopMarker extends StatelessWidget {
   const _TripStopMarker({
     required this.sequence,
     required this.propertyType,
+    required this.isCollected,
   });
 
   final int sequence;
   final String propertyType;
+  final bool isCollected;
 
   Color _colorForType() {
     switch (propertyType.toLowerCase()) {
@@ -3608,130 +3262,49 @@ class _TripStopMarker extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = _colorForType();
-    return Container(
-      decoration: BoxDecoration(
-        color: color,
-        shape: BoxShape.circle,
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.2),
-            blurRadius: 4,
-            offset: const Offset(0, 2),
+    return Stack(
+      alignment: Alignment.topCenter,
+      children: [
+        ColorFiltered(
+          colorFilter: isCollected
+              ? const ColorFilter.mode(Colors.green, BlendMode.modulate)
+              : const ColorFilter.mode(Colors.transparent, BlendMode.dst),
+          child: Image.asset(
+            'assets/icons/pin.png',
+            width: 36,
+            height: 44,
+            fit: BoxFit.contain,
           ),
-        ],
-      ),
-      alignment: Alignment.center,
-      child: Text(
-        sequence.toString(),
-        style: const TextStyle(
-          color: Colors.white,
-          fontWeight: FontWeight.w700,
-          fontSize: 12,
         ),
-      ),
-    );
-  }
-}
-
-class _TripRouteSummaryCard extends StatelessWidget {
-  const _TripRouteSummaryCard({
-    required this.tripId,
-    required this.routePlanId,
-    required this.stopCount,
-    required this.loading,
-    required this.error,
-  });
-
-  final String? tripId;
-  final String? routePlanId;
-  final int stopCount;
-  final bool loading;
-  final String? error;
-
-  @override
-  Widget build(BuildContext context) {
-    if (loading) {
-      return _buildContainer(
-        child: Row(
-          children: const [
-            SizedBox(
-              height: 18,
-              width: 18,
-              child: CircularProgressIndicator(strokeWidth: 2),
+        Positioned(
+          top: 5,
+          child: Container(
+            width: 20,
+            height: 20,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: isCollected ? Colors.green.shade700 : color,
+              shape: BoxShape.circle,
+              border: Border.all(color: Colors.white, width: 1.5),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.18),
+                  blurRadius: 4,
+                  offset: const Offset(0, 2),
+                ),
+              ],
             ),
-            SizedBox(width: 12),
-            Expanded(
-              child: Text(
-                'Loading trip route...',
-                style: TextStyle(fontWeight: FontWeight.w600),
+            child: Text(
+              sequence.toString(),
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.w800,
+                fontSize: 10,
               ),
             ),
-          ],
-        ),
-      );
-    }
-
-    if (error != null) {
-      return _buildContainer(
-        child: Text(
-          error!,
-          style: const TextStyle(
-            color: Colors.redAccent,
-            fontWeight: FontWeight.w600,
           ),
         ),
-      );
-    }
-
-    if (tripId == null && stopCount == 0) {
-      return const SizedBox.shrink();
-    }
-
-    return _buildContainer(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Trip Route Plan',
-            style: TextStyle(
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            ),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            'Trip: ${tripId ?? 'N/A'}',
-            style: const TextStyle(fontSize: 12),
-          ),
-          if (routePlanId != null)
-            Text(
-              'Route Plan: $routePlanId',
-              style: const TextStyle(fontSize: 12),
-            ),
-          Text(
-            'Stops: $stopCount',
-            style: const TextStyle(fontSize: 12),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildContainer({required Widget child}) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.08),
-            blurRadius: 8,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: child,
+      ],
     );
   }
 }

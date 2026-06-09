@@ -3,7 +3,9 @@ import 'package:get_it/get_it.dart';
 import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
+import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/logic/operator_trip_bloc.dart';
 import 'package:iwms_citizen_app/shared/services/collection_history_service.dart';
 import 'package:iwms_citizen_app/shared/services/notification_service.dart';
 import 'package:iwms_citizen_app/data/repositories/site_repository.dart';
@@ -62,4 +64,11 @@ Future<void> setupDI() async {
   () => AssignmentRepository(getIt<Dio>()),
 );
 
+  // --- Operator-mobile flow ---
+  getIt.registerLazySingleton<OperatorTripRepository>(
+    () => OperatorTripRepository(),
+  );
+  getIt.registerFactory<OperatorTripBloc>(
+    () => OperatorTripBloc(repository: getIt<OperatorTripRepository>()),
+  );
 }

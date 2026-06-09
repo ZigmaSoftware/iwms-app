@@ -13,17 +13,18 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/o
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_assignment_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_overview_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_profile_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendance_home_operator.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_animated_nav_bar.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
-import 'package:iwms_citizen_app/router/app_router.dart';
-import 'package:go_router/go_router.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
-enum OperatorNavTab { home, assignments, overview, attendance, profile }
+/// Tabs surfaced in the operator shell. QR is intentionally NOT a tab —
+/// it lives as a PhonePe-style green floating action button docked in the
+/// bottom-app-bar notch. The 4 nav slots are: Home / Assignments / (QR FAB)
+/// / Attendance / Profile.
+enum OperatorNavTab { home, assignments, attendance, profile }
 
 class MainOperatorTabBar extends StatefulWidget {
   const MainOperatorTabBar({
@@ -38,9 +39,19 @@ class MainOperatorTabBar extends StatefulWidget {
 }
 
 class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
+  // Mapping between visible nav positions (4 slots) and OperatorNavTab.
+  // Layout: [Home][Assignments] (QR FAB) [Attendance][Profile]
+  static const _slotTabs = <OperatorNavTab>[
+    OperatorNavTab.home,
+    OperatorNavTab.assignments,
+    OperatorNavTab.attendance,
+    OperatorNavTab.profile,
+  ];
+
   OperatorNavTab _activeTab = OperatorNavTab.home;
   OperatorSessionDetails? _sessionDetails;
   DailyAssignmentModel? _selectedAssignment;
+  int _tripRefreshVersion = 0;
   late final AssignmentRepository _assignmentRepository;
 
   @override
@@ -90,15 +101,13 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
       final wardName = assignment.ward.trim();
       String wardLabel = session.wardLabel;
 
-      if (wardId.isNotEmpty && wardName.isNotEmpty && wardId != wardName) {
-        wardLabel = '$wardId • $wardName';
+      if (wardName.isNotEmpty) {
+        wardLabel = wardName;
       } else if (wardId.isNotEmpty) {
         wardLabel = wardId;
-      } else if (wardName.isNotEmpty) {
-        wardLabel = wardName;
       }
 
-      return session.copyWith(wardLabel: wardLabel);
+      return session.copyWith(wardLabel: wardLabel, zoneLabel: '');
     } catch (_) {
       return session;
     }
@@ -118,8 +127,8 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
       operatorCode: fallbackCode,
       operatoremp_id: fallbackEmpId!,
       employeeCode: fallbackEmployeeCode ?? "",
-      wardLabel: "Ward 12",
-      zoneLabel: "Zone 3",
+      wardLabel: "",
+      zoneLabel: "",
       contactInfo: OperatorContactInfo(
         phone: "+91 98765 43210",
         email: "${fallbackCode.toLowerCase()}@iwms.gov.in",
@@ -129,7 +138,7 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
   }
 
   void _setTab(OperatorNavTab tab, {DailyAssignmentModel? assignment}) {
-    if (_activeTab == tab) return;
+    if (_activeTab == tab && assignment == null) return;
     setState(() {
       _activeTab = tab;
       if (assignment != null) {
@@ -140,6 +149,19 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
 
   void _logout() {
     context.read<AuthBloc>().add(AuthLogoutRequested());
+  }
+
+  Future<void> _openQrScanner() async {
+    // Route the centralised bottom-nav QR FAB to the new operator-mobile
+    // trip flow. The legacy OperatorDataScreen / OperatorQRScanner pipeline
+    // is no longer used.
+    final result = await Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const OperatorTripScanScreen()),
+    );
+    if (!mounted || result == null) return;
+    setState(() {
+      _tripRefreshVersion++;
+    });
   }
 
   @override
@@ -178,7 +200,29 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
               employeeCode: resolvedEmployeeCode,
             ))
         .copyWith(displayName: nameFromState ?? _sessionDetails?.displayName);
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+
+    final navItems = <OperatorNavItem>[
+      OperatorNavItem(
+        icon: Icons.home_rounded,
+        label: localizations.operatorNavHome,
+      ),
+      OperatorNavItem(
+        icon: Icons.assignment_rounded,
+        label: localizations.operatorNavAssignments,
+      ),
+      OperatorNavItem(
+        icon: Icons.fact_check_rounded,
+        label: localizations.operatorNavAttendance,
+        blink: true,
+      ),
+      OperatorNavItem(
+        icon: Icons.person_rounded,
+        label: localizations.operatorNavProfile,
+      ),
+    ];
+
+    final activeSlot =
+        _slotTabs.indexOf(_activeTab).clamp(0, _slotTabs.length - 1);
 
     return WillPopScope(
       onWillPop: () async {
@@ -190,180 +234,42 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
       },
       child: Scaffold(
         backgroundColor: OperatorTheme.background,
+        extendBody: true,
         body: SafeArea(
+          bottom: false,
           child: AnimatedSwitcher(
-            duration: const Duration(milliseconds: 280),
-            switchInCurve: Curves.easeIn,
-            switchOutCurve: Curves.easeOut,
+            duration: const Duration(milliseconds: 260),
+            switchInCurve: Curves.easeOut,
+            switchOutCurve: Curves.easeIn,
+            transitionBuilder: (child, anim) {
+              return FadeTransition(
+                opacity: anim,
+                child: SlideTransition(
+                  position: Tween<Offset>(
+                    begin: const Offset(0, 0.02),
+                    end: Offset.zero,
+                  ).animate(anim),
+                  child: child,
+                ),
+              );
+            },
             child: KeyedSubtree(
               key: ValueKey<OperatorNavTab>(_activeTab),
               child: _buildTab(session),
             ),
           ),
         ),
-        bottomNavigationBar: Container(
-          decoration: BoxDecoration(
-            color: OperatorTheme.surface,
-            border: const Border(
-              top: BorderSide(color: OperatorTheme.cardBorder, width: 1),
-            ),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withOpacity(0.14),
-                blurRadius: 24,
-                spreadRadius: 2,
-                offset: const Offset(0, -8),
-              ),
-            ],
-          ),
-          padding: EdgeInsets.fromLTRB(
-            8,
-            4,
-            8,
-            bottomInset > 0 ? (bottomInset - 14).clamp(4, 14).toDouble() : 4,
-          ),
-          child: Row(
-            children: [
-              Expanded(
-                child: _buildNavItem(
-                  icon: const Icon(Icons.home_rounded),
-                  label: localizations.operatorNavHome,
-                  selected: _activeTab == OperatorNavTab.home,
-                  onTap: () => _setTab(OperatorNavTab.home),
-                ),
-              ),
-              Expanded(
-                child: _buildNavItem(
-                  icon: const Icon(Icons.assignment_outlined),
-                  label: localizations.operatorNavAssignments,
-                  selected: _activeTab == OperatorNavTab.assignments,
-                  onTap: () => _setTab(OperatorNavTab.assignments),
-                ),
-              ),
-              Expanded(
-                child: _buildNavItem(
-                  icon: const Icon(Icons.dashboard_outlined),
-                  label: localizations.operatorNavOverview,
-                  selected: _activeTab == OperatorNavTab.overview,
-                  onTap: () => _setTab(OperatorNavTab.overview),
-                ),
-              ),
-              Expanded(
-                child: _buildNavItem(
-                  icon: _buildAttendanceIcon(),
-                  label: localizations.operatorNavAttendance,
-                  selected: _activeTab == OperatorNavTab.attendance,
-                  onTap: () => _setTab(OperatorNavTab.attendance),
-                ),
-              ),
-              Expanded(
-                child: _buildNavItem(
-                  icon: const Icon(Icons.person_outline_rounded),
-                  label: localizations.operatorNavProfile,
-                  selected: _activeTab == OperatorNavTab.profile,
-                  onTap: () => _setTab(OperatorNavTab.profile),
-                ),
-              ),
-            ],
-          ),
+        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
+        floatingActionButton: OperatorQrFab(
+          onPressed: _openQrScanner,
+          label: localizations.operatorTapToScan,
+        ),
+        bottomNavigationBar: OperatorAnimatedNavBar(
+          activeIndex: activeSlot,
+          items: navItems,
+          onTabSelected: (index) => _setTab(_slotTabs[index]),
         ),
       ),
-    );
-  }
-
-  Widget _buildNavItem({
-    required Widget icon,
-    required String label,
-    required bool selected,
-    required VoidCallback onTap,
-  }) {
-    final itemColor = selected ? OperatorTheme.primary : Colors.black54;
-
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: onTap,
-        borderRadius: BorderRadius.circular(18),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 180),
-          curve: Curves.easeOut,
-          padding: const EdgeInsets.fromLTRB(4, 6, 4, 2),
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(18),
-            color: selected
-                ? OperatorTheme.accentLight.withOpacity(0.92)
-                : Colors.transparent,
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            mainAxisAlignment: MainAxisAlignment.end,
-            children: [
-              Transform.translate(
-                offset: const Offset(0, 2),
-                child: IconTheme(
-                  data: IconThemeData(
-                    color: itemColor,
-                    size: selected ? 24 : 23,
-                  ),
-                  child: icon,
-                ),
-              ),
-              const SizedBox(height: 3),
-              Text(
-                label,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: itemColor,
-                  fontSize: 10.5,
-                  fontWeight: selected ? FontWeight.w700 : FontWeight.w600,
-                  height: 1,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAttendanceIcon() {
-    return ValueListenableBuilder<bool>(
-      valueListenable: AttendanceBlinkStore.notifier,
-      builder: (context, isBlinking, child) {
-        return Stack(
-          clipBehavior: Clip.none,
-          children: [
-            child!,
-            if (isBlinking)
-              Positioned(
-                right: -2,
-                top: -2,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 260),
-                  opacity: isBlinking ? 1 : 0,
-                  child: Container(
-                    width: 12,
-                    height: 12,
-                    decoration: BoxDecoration(
-                      color: OperatorTheme.attendanceAlert,
-                      shape: BoxShape.circle,
-                      boxShadow: [
-                        BoxShadow(
-                          color: OperatorTheme.attendanceAlert
-                              .withValues(alpha: 0.6),
-                          blurRadius: 4,
-                          spreadRadius: 1,
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              ),
-          ],
-        );
-      },
-      child: const Icon(Icons.fact_check_outlined),
     );
   }
 
@@ -371,43 +277,24 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
     switch (_activeTab) {
       case OperatorNavTab.home:
         return OperatorHomeScreen(
+          key: ValueKey<int>(_tripRefreshVersion),
           operatorName: session.displayName,
           operatorCode: session.operatorCode,
           emp_id: session.operatoremp_id,
           employeeCode: session.employeeCode,
           wardLabel: session.wardLabel,
           zoneLabel: session.zoneLabel,
-          onScanPressed: () => context.push(AppRoutePaths.operatorQR),
+          designation: session.contactInfo.designation,
+          onScanPressed: _openQrScanner,
           onLogout: _logout,
           onOpenAssignments: (assignment) =>
               _setTab(OperatorNavTab.assignments, assignment: assignment),
-          onOpenAttendance: () => _setTab(OperatorNavTab.attendance),
           onOpenProfile: () => _setTab(OperatorNavTab.profile),
-          onOpenHistory: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) =>
-                    AttendanceHistory(empId: session.operatoremp_id),
-              ),
-            );
-          },
-          onOpenAttendanceSummary: () {
-            Navigator.of(context).push(
-              MaterialPageRoute(
-                builder: (_) => AttendancePage(
-                  operatorName: session.displayName,
-                  operatorCode: session.operatorCode,
-                ),
-              ),
-            );
-          },
         );
       case OperatorNavTab.assignments:
         return OperatorAssignmentScreen(
           initialAssignment: _selectedAssignment,
         );
-      case OperatorNavTab.overview:
-        return const OperatorOverviewScreen();
       case OperatorNavTab.attendance:
         return OperatorAttendanceScreenIntegration(
           operatorName: session.displayName,
@@ -423,13 +310,12 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
           zoneLabel: session.zoneLabel,
           onLogout: _logout,
           contactInfo: session.contactInfo,
-          onEditProfile: () => _openProfileEditor(),
+          onEditProfile: _openProfileEditor,
         );
     }
   }
 
   void _openProfileEditor() {
-    // Placeholder to hook into the actual profile edit logic/route when available.
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(content: Text('Opening operator profile editor...')),
     );

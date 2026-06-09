@@ -66,6 +66,16 @@ class ApiConfig {
   static const String wards = '${desktopBase}masters/wards/';
   static const String zones = '${desktopBase}masters/zones/';
 
+  // Operator-mobile flow
+  static const String operatorMyTripToday =
+      '${desktopBase}operator-mobile/my-trip-today/';
+  static const String operatorValidateBinQr =
+      '${desktopBase}operator-mobile/validate-bin-qr/';
+  static const String operatorScanBin =
+      '${desktopBase}operator-mobile/scan-bin/';
+  static const String operatorTripHistory =
+      '${desktopBase}operator-mobile/trip-history/';
+
   // ORS key is sourced from build-time env (`VITE_ORS_API_KEY`).
   static const String orsApiKey = kOrsApiKey;
 

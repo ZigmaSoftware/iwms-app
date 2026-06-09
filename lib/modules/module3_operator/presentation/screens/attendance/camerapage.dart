@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -12,6 +13,7 @@ import 'package:camera/camera.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'package:flutter_image_compress/flutter_image_compress.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 class CameraScreen extends StatefulWidget {
@@ -41,7 +43,10 @@ class _CameraScreenState extends State<CameraScreen>
   XFile? _image;
   bool _isLoading = false;
   bool _isProcessingCapture = false;
+  bool _isInitializingCamera = true;
   bool _autoCaptureScheduled = false;
+  bool _cameraPermissionNeedsSettings = false;
+  String? _cameraErrorMessage;
   final FlutterTts _flutterTts = FlutterTts();
   late String latitude;
   late String longitude;
@@ -64,6 +69,13 @@ class _CameraScreenState extends State<CameraScreen>
     _cameraController?.dispose();
     WakelockPlus.disable();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && _cameraPermissionNeedsSettings) {
+      _initializeCamera();
+    }
   }
 
   /// **Check if GPS is Enabled and Get Location**
@@ -185,33 +197,82 @@ class _CameraScreenState extends State<CameraScreen>
 
   /// **Initialize Camera**
   Future<void> _initializeCamera() async {
-    final status = await Permission.camera.request();
-    if (status.isGranted) {
-      try {
-        final cameras = await availableCameras();
-        final frontCamera = cameras.firstWhere(
-          (camera) => camera.lensDirection == CameraLensDirection.front,
-        );
+    if (mounted) {
+      setState(() {
+        _isInitializingCamera = true;
+        _cameraErrorMessage = null;
+        _cameraPermissionNeedsSettings = false;
+      });
+    }
 
-        _cameraController = CameraController(
-          frontCamera,
-          ResolutionPreset.medium,
-          enableAudio: false,
-        );
+    var status = await Permission.camera.status;
+    if (status.isDenied) {
+      status = await Permission.camera.request();
+    }
 
-        await _cameraController!.initialize();
+    if (!mounted) return;
 
-        if (mounted) {
-          setState(() {
-            _cameraController!.setFocusMode(FocusMode.auto);
-          });
-          _scheduleAutoCapture();
-        }
-      } catch (e) {
-        print('Error initializing camera: $e');
+    if (!status.isGranted) {
+      final needsSettings = status.isPermanentlyDenied || status.isRestricted;
+      setState(() {
+        _isInitializingCamera = false;
+        _cameraPermissionNeedsSettings = needsSettings;
+        _cameraErrorMessage = needsSettings
+            ? 'Camera permission is blocked. Enable camera access from app settings to punch attendance.'
+            : 'Camera permission is required to punch attendance.';
+      });
+      debugPrint('Camera permission denied: $status');
+      return;
+    }
+
+    try {
+      final cameras = await availableCameras();
+      if (cameras.isEmpty) {
+        throw CameraException('no_camera', 'No camera found on this device.');
       }
+
+      final selectedCamera = cameras.firstWhere(
+        (camera) => camera.lensDirection == CameraLensDirection.front,
+        orElse: () => cameras.first,
+      );
+
+      final controller = CameraController(
+        selectedCamera,
+        ResolutionPreset.high,
+        enableAudio: false,
+      );
+
+      await controller.initialize();
+
+      if (!mounted) {
+        await controller.dispose();
+        return;
+      }
+
+      setState(() {
+        _cameraController = controller;
+        _isInitializingCamera = false;
+      });
+      await controller.setFocusMode(FocusMode.auto);
+      await controller.setExposureMode(ExposureMode.auto);
+      _scheduleAutoCapture();
+    } catch (e) {
+      debugPrint('Error initializing camera: $e');
+      if (mounted) {
+        setState(() {
+          _isInitializingCamera = false;
+          _cameraErrorMessage = 'Unable to open camera. Please try again.';
+        });
+      }
+    }
+  }
+
+  Future<void> _retryCameraPermission() async {
+    if (_cameraPermissionNeedsSettings) {
+      await openAppSettings();
+      return;
     } else {
-      print('Camera permission denied');
+      await _initializeCamera();
     }
   }
 
@@ -221,7 +282,7 @@ class _CameraScreenState extends State<CameraScreen>
       return;
     }
     _autoCaptureScheduled = true;
-    Future.delayed(const Duration(milliseconds: 600), () {
+    Future.delayed(const Duration(milliseconds: 1800), () {
       if (mounted) _takePicture();
     });
   }
@@ -398,7 +459,6 @@ class _CameraScreenState extends State<CameraScreen>
       );
       _showError(message);
       await _speak(message);
-      if (mounted) Navigator.pop(context, false);
     } on TimeoutException catch (_) {
       // ---------------------------------------------------------
       // OFFLINE SAVE
@@ -442,7 +502,6 @@ class _CameraScreenState extends State<CameraScreen>
       const message = "Attendance marking failed.";
       _showError(message);
       await _speak(message);
-      if (mounted) Navigator.pop(context, false);
     }
 
     if (mounted) {
@@ -505,7 +564,6 @@ class _CameraScreenState extends State<CameraScreen>
         );
       }
       _speak(message);
-      if (mounted) Navigator.pop(context, false);
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -513,7 +571,6 @@ class _CameraScreenState extends State<CameraScreen>
         );
       }
       _speak("Trip attendance failed");
-      if (mounted) Navigator.pop(context, false);
     } finally {
       if (mounted) {
         setState(() => _isLoading = false);
@@ -532,12 +589,17 @@ class _CameraScreenState extends State<CameraScreen>
   Future<XFile> _compressImage(XFile image) async {
     final imageBytes = await image.readAsBytes();
     final compressedBytes = await FlutterImageCompress.compressWithList(
-        imageBytes,
-        minWidth: 640,
-        minHeight: 480,
-        quality: 50);
-    return XFile.fromData(Uint8List.fromList(compressedBytes),
-        path: image.path);
+      imageBytes,
+      minWidth: 960,
+      minHeight: 720,
+      quality: 88,
+    );
+    final directory = await getTemporaryDirectory();
+    final file = File(
+      '${directory.path}/attendance_${DateTime.now().microsecondsSinceEpoch}.jpg',
+    );
+    await file.writeAsBytes(Uint8List.fromList(compressedBytes), flush: true);
+    return XFile(file.path);
   }
 
   String _extractErrorMessage(String body, {required String fallback}) {
@@ -571,9 +633,26 @@ class _CameraScreenState extends State<CameraScreen>
   }
 
   Widget _cameraPreview() {
+    if (_cameraErrorMessage != null) {
+      return _CameraAccessView(
+        message: _cameraErrorMessage!,
+        actionLabel:
+            _cameraPermissionNeedsSettings ? 'Open Settings' : 'Try Again',
+        onAction: _retryCameraPermission,
+      );
+    }
+
+    if (_isInitializingCamera) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
     final controller = _cameraController;
     if (controller == null || !controller.value.isInitialized) {
-      return const Center(child: CircularProgressIndicator());
+      return _CameraAccessView(
+        message: 'Camera is not ready. Please try again.',
+        actionLabel: 'Try Again',
+        onAction: _initializeCamera,
+      );
     }
 
     final previewSize = controller.value.previewSize;
@@ -614,7 +693,12 @@ class _CameraScreenState extends State<CameraScreen>
             left: 20,
             right: 20,
             child: ElevatedButton.icon(
-              onPressed: _isLoading ? null : _takePicture,
+              onPressed: _isLoading ||
+                      _isProcessingCapture ||
+                      _cameraController == null ||
+                      !_cameraController!.value.isInitialized
+                  ? null
+                  : _takePicture,
               icon: const Icon(Icons.camera_alt_outlined),
               label: Text(
                 widget.isTripAttendance
@@ -647,6 +731,59 @@ class _CameraScreenState extends State<CameraScreen>
               ),
             ),
         ],
+      ),
+    );
+  }
+}
+
+class _CameraAccessView extends StatelessWidget {
+  const _CameraAccessView({
+    required this.message,
+    required this.actionLabel,
+    required this.onAction,
+  });
+
+  final String message;
+  final String actionLabel;
+  final VoidCallback onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      color: Colors.black,
+      padding: const EdgeInsets.symmetric(horizontal: 24),
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Icon(
+              Icons.camera_alt_outlined,
+              color: Colors.white,
+              size: 52,
+            ),
+            const SizedBox(height: 16),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            ElevatedButton.icon(
+              onPressed: onAction,
+              icon: const Icon(Icons.refresh),
+              label: Text(actionLabel),
+              style: ElevatedButton.styleFrom(
+                minimumSize: const Size(180, 46),
+                backgroundColor: Colors.green,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
