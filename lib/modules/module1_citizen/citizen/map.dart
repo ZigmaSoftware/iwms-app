@@ -43,8 +43,8 @@ class _MapScreenState extends State<MapScreen> {
   static const Map<_MapThemeOption, _MapThemeConfig> _mapThemes = {
     _MapThemeOption.standard: _MapThemeConfig(
       label: 'Standard',
-      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
-      subdomains: [],
+      urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+      subdomains: ['a', 'b', 'c'],
       attribution: '© OpenStreetMap contributors',
     ),
     _MapThemeOption.light: _MapThemeConfig(
@@ -437,10 +437,10 @@ class _MapScreenState extends State<MapScreen> {
       // Vehicles
       for (final v in vehiclesToShow)
         Marker(
-          width: 44,
-          height: 44,
+          width: 110,
+          height: 120,
           point: LatLng(v.latitude, v.longitude),
-          alignment: Alignment.center,
+          alignment: Alignment.bottomCenter,
           child: GestureDetector(
             onTap: () {
               context.read<VehicleBloc>().add(VehicleSelectionUpdated(v.id));
@@ -479,10 +479,8 @@ class _MapScreenState extends State<MapScreen> {
       ),
       children: [
         TileLayer(
-          key: ValueKey(themeConfig.urlTemplate),
           urlTemplate: themeConfig.urlTemplate,
           subdomains: themeConfig.subdomains,
-          userAgentPackageName: 'com.example.iwms_citizen_app',
         ),
 
         // Polygons from API
@@ -892,48 +890,33 @@ class _VehicleMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final statusColor = getVehicleStatusColor(vehicle.status);
+    final size = isSelected ? 40.0 : 30.0;
 
-    return SizedBox.expand(
+    return AnimatedScale(
+      scale: isSelected ? 1.15 : 1.0,
+      duration: const Duration(milliseconds: 180),
       child: Stack(
         alignment: Alignment.center,
         children: [
+          // Shadow (depth illusion)
+          Positioned(
+            bottom: 2,
+            child: Container(
+              width: size * 0.7,
+              height: 6,
+              // decoration: BoxDecoration(
+              //   color: Colors.black.withOpacity(0.25),
+              //   borderRadius: BorderRadius.circular(50),
+              // ),
+            ),
+          ),
+
+          // 3D Vehicle
           Image.asset(
             _vehicleIconByStatus(vehicle.status),
-            width: 30,
-            height: 30,
+            width: size,
+            height: size,
             fit: BoxFit.contain,
-          ),
-          if (isSelected)
-            Container(
-              width: 18,
-              height: 18,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: statusColor.withValues(alpha: 0.45),
-                  width: 2,
-                ),
-              ),
-            ),
-          Container(
-            width: 9,
-            height: 9,
-            decoration: BoxDecoration(
-              color: statusColor,
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: Colors.white,
-                width: 2,
-              ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withValues(alpha: 0.25),
-                  blurRadius: 4,
-                  offset: const Offset(0, 1),
-                ),
-              ],
-            ),
           ),
         ],
       ),
