@@ -290,6 +290,10 @@ class AuthRepository {
     String password, {
     String? username,
   }) async {
+    if (kIsWeb) {
+      return;
+    }
+
     if (!supportsOfflineAccess(user.role)) {
       return;
     }
@@ -472,6 +476,8 @@ class AuthRepository {
   }
 
   bool _shouldTryOfflineLogin(DioException error) {
+    if (kIsWeb) return false;
+
     return error.type == DioExceptionType.connectionError ||
         error.type == DioExceptionType.connectionTimeout ||
         error.error is SocketException;

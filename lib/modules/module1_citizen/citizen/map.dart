@@ -37,14 +37,20 @@ class MapScreen extends StatefulWidget {
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final LatLng _gammaCenter = GammaGeofenceConfig.center;
+  static const List<VehicleFilter> _visibleVehicleFilters = [
+    VehicleFilter.all,
+    VehicleFilter.running,
+    VehicleFilter.idle,
+    VehicleFilter.parked,
+  ];
 
   _MapThemeOption _selectedTheme = _MapThemeOption.light;
   String _searchQuery = '';
   static const Map<_MapThemeOption, _MapThemeConfig> _mapThemes = {
     _MapThemeOption.standard: _MapThemeConfig(
       label: 'Standard',
-      urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-      subdomains: ['a', 'b', 'c'],
+      urlTemplate: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png',
+      subdomains: [],
       attribution: '© OpenStreetMap contributors',
     ),
     _MapThemeOption.light: _MapThemeConfig(
@@ -157,6 +163,7 @@ class _MapScreenState extends State<MapScreen> {
         width: 8,
         height: 8,
         point: point,
+        alignment: Alignment.center,
         child: Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -437,10 +444,10 @@ class _MapScreenState extends State<MapScreen> {
       // Vehicles
       for (final v in vehiclesToShow)
         Marker(
-          width: 110,
-          height: 120,
+          width: 44,
+          height: 44,
           point: LatLng(v.latitude, v.longitude),
-          alignment: Alignment.bottomCenter,
+          alignment: Alignment.center,
           child: GestureDetector(
             onTap: () {
               context.read<VehicleBloc>().add(VehicleSelectionUpdated(v.id));
@@ -458,6 +465,7 @@ class _MapScreenState extends State<MapScreen> {
         width: 28,
         height: 28,
         point: _gammaCenter,
+        alignment: Alignment.center,
         child: _buildGammaFacilityMarker(),
       ),
     ];
@@ -479,8 +487,10 @@ class _MapScreenState extends State<MapScreen> {
       ),
       children: [
         TileLayer(
+          key: ValueKey(themeConfig.urlTemplate),
           urlTemplate: themeConfig.urlTemplate,
           subdomains: themeConfig.subdomains,
+          userAgentPackageName: 'com.example.iwms_citizen_app',
         ),
 
         // Polygons from API
@@ -537,7 +547,7 @@ class _MapScreenState extends State<MapScreen> {
     return SingleChildScrollView(
       scrollDirection: Axis.horizontal,
       child: Row(
-        children: VehicleFilter.values.map((filter) {
+        children: _visibleVehicleFilters.map((filter) {
           final isSelected = activeFilter == filter;
           final count = bloc.countVehiclesByFilter(filter);
           final label = '${localizations.vehicleFilterLabel(filter)} ($count)';
@@ -667,7 +677,6 @@ class _MapScreenState extends State<MapScreen> {
             alignment: WrapAlignment.start,
             children: _mapThemes.entries.map((entry) {
               final option = entry.key;
-              final config = entry.value;
               final bool isSelected = _selectedTheme == option;
 
               return ChoiceChip(
@@ -890,33 +899,48 @@ class _VehicleMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = isSelected ? 40.0 : 30.0;
+    final statusColor = getVehicleStatusColor(vehicle.status);
 
-    return AnimatedScale(
-      scale: isSelected ? 1.15 : 1.0,
-      duration: const Duration(milliseconds: 180),
+    return SizedBox.expand(
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Shadow (depth illusion)
-          Positioned(
-            bottom: 2,
-            child: Container(
-              width: size * 0.7,
-              height: 6,
-              // decoration: BoxDecoration(
-              //   color: Colors.black.withOpacity(0.25),
-              //   borderRadius: BorderRadius.circular(50),
-              // ),
-            ),
-          ),
-
-          // 3D Vehicle
           Image.asset(
             _vehicleIconByStatus(vehicle.status),
-            width: size,
-            height: size,
+            width: 30,
+            height: 30,
             fit: BoxFit.contain,
+          ),
+          if (isSelected)
+            Container(
+              width: 18,
+              height: 18,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: statusColor.withValues(alpha: 0.45),
+                  width: 2,
+                ),
+              ),
+            ),
+          Container(
+            width: 9,
+            height: 9,
+            decoration: BoxDecoration(
+              color: statusColor,
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white,
+                width: 2,
+              ),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withValues(alpha: 0.25),
+                  blurRadius: 4,
+                  offset: const Offset(0, 1),
+                ),
+              ],
+            ),
           ),
         ],
       ),
