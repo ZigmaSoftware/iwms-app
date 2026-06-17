@@ -15,9 +15,11 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/o
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_profile_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_qr_scanner.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_animated_nav_bar.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/utils/household_mode_store.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
 /// Tabs surfaced in the operator shell. QR is intentionally NOT a tab —
@@ -59,6 +61,9 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
     super.initState();
     _activeTab = widget.initialTab;
     _assignmentRepository = getIt<AssignmentRepository>();
+    // Hydrate the persisted Household-mode flag so the profile toggle and the
+    // QR FAB both reflect the operator's last choice on entry.
+    HouseholdModeStore.load();
     _loadOperatorDetails();
   }
 
@@ -152,9 +157,25 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
   }
 
   Future<void> _openQrScanner() async {
-    // Route the centralised bottom-nav QR FAB to the new operator-mobile
-    // trip flow. The legacy OperatorDataScreen / OperatorQRScanner pipeline
-    // is no longer used.
+    // The central bottom-nav QR FAB has two destinations, chosen by the
+    // persisted "Household collection" toggle on the profile screen:
+    //   • Household ON  → OperatorQRScanner: scan a customer QR, then enter
+    //     wet/dry/mixed waste with weights (Bluetooth scale or manual) + photo
+    //     via OperatorDataScreen.
+    //   • Household OFF → OperatorTripScanScreen: the default bin/trip flow.
+    if (HouseholdModeStore.isEnabled) {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const OperatorQRScanner()),
+      );
+      // The household flow manages its own submission/navigation; just
+      // refresh the trip view in case shared collection points changed.
+      if (!mounted) return;
+      setState(() {
+        _tripRefreshVersion++;
+      });
+      return;
+    }
+
     final result = await Navigator.of(context).push(
       MaterialPageRoute(builder: (_) => const OperatorTripScanScreen()),
     );

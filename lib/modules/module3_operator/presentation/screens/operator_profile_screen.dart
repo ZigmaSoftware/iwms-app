@@ -4,6 +4,7 @@ import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_dashboard_models.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_header.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_cards.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/utils/household_mode_store.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
 import 'package:iwms_citizen_app/logic/locale/locale_cubit.dart';
 
@@ -200,6 +201,8 @@ class OperatorProfileScreen extends StatelessWidget {
                   //   ),
                   // ),
                   const SizedBox(height: 32),
+                  const _HouseholdModeCard(),
+                  const SizedBox(height: 16),
                   const _OperatorLanguageCard(),
                   const SizedBox(height: 12),
                   FilledButton.icon(
@@ -233,6 +236,39 @@ class OperatorProfileScreen extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(
       const SnackBar(
         content: Text("Edit profile flow will open the existing screen."),
+      ),
+    );
+  }
+}
+
+/// Toggle that switches the operator between the default bin/trip scan flow
+/// (OFF) and the household waste-entry flow (ON). When ON, the central QR FAB
+/// scans a customer QR and opens the wet/dry/mixed weight + photo screen.
+/// State is persisted per-device via [HouseholdModeStore].
+class _HouseholdModeCard extends StatelessWidget {
+  const _HouseholdModeCard();
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+      child: ValueListenableBuilder<bool>(
+        valueListenable: HouseholdModeStore.listenable,
+        builder: (context, enabled, _) {
+          return SwitchListTile(
+            value: enabled,
+            onChanged: (value) => HouseholdModeStore.setEnabled(value),
+            activeColor: AppColors.primary,
+            secondary: const Icon(Icons.home_work_outlined,
+                color: AppColors.primary),
+            title: const Text('Household collection'),
+            subtitle: Text(
+              enabled
+                  ? 'QR scan opens customer waste entry (wet/dry, weight & photo).'
+                  : 'QR scan follows the default bin/trip flow.',
+            ),
+          );
+        },
       ),
     );
   }

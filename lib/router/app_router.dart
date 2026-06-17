@@ -30,6 +30,7 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/alloted_vehicle
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/main_operator_tabbar.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_page.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_data_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_history_screen.dart';
 
@@ -38,6 +39,7 @@ import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/dri
 
 // Admin
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/dashboard_screen.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/main_supervisor_tabbar.dart';
 
 // Route Observer
 
@@ -66,11 +68,19 @@ class AppRoutePaths {
   static const String operatorAttendance = '/operator/attendance';
   static const String operatorTrip = '/operator/trip';
   static const String operatorTripHistory = '/operator/trip/history';
+  // Household collection flow (customer QR → wet/dry/mixed weight + photo).
+  static const String operatorData = '/operator/data';
 
   static const String driverLogin = '/driver/login';
   static const String driverHome = '/driver/home';
 
   static const String adminHome = '/admin/home';
+
+  static const String supervisorHome = '/supervisor/home';
+  static const String supervisorTrips = '/supervisor/trips';
+  static const String supervisorAssignments = '/supervisor/assignments';
+  static const String supervisorProfile = '/supervisor/profile';
+
   static const String staffModuleSelection = '/staff/modules';
 }
 
@@ -223,6 +233,25 @@ class AppRouter {
           builder: (context, state) => const OperatorTripHistoryScreen(),
         ),
 
+        // Household collection: customer-details + wet/dry/mixed waste entry
+        // (weights via Bluetooth scale or manual, photo capture). Reached from
+        // OperatorQRScanner when the profile "Household collection" toggle is on.
+        GoRoute(
+          path: AppRoutePaths.operatorData,
+          builder: (context, state) {
+            final extra = state.extra as Map<String, dynamic>? ?? {};
+            return OperatorDataScreen(
+              customerId: (extra['customerId'] ?? '').toString(),
+              customerName: (extra['customerName'] ?? '').toString(),
+              contactNo: (extra['contactNo'] ?? '').toString(),
+              latitude: (extra['latitude'] ?? '').toString(),
+              longitude: (extra['longitude'] ?? '').toString(),
+              skipBluetoothInit: extra['skipBluetoothInit'] == true,
+              assignmentId: extra['assignmentId']?.toString(),
+            );
+          },
+        ),
+
         GoRoute(
           path: AppRoutePaths.attendanceHomepageOperator,
           builder: (context, state) =>
@@ -243,6 +272,27 @@ class AppRouter {
         GoRoute(
           path: AppRoutePaths.adminHome,
           builder: (context, state) => const DashboardScreen(),
+        ),
+
+        // Supervisor
+        GoRoute(
+          path: AppRoutePaths.supervisorHome,
+          builder: (context, state) => const MainSupervisorTabBar(),
+        ),
+        GoRoute(
+          path: AppRoutePaths.supervisorTrips,
+          builder: (context, state) =>
+              const MainSupervisorTabBar(initialTab: SupervisorNavTab.trips),
+        ),
+        GoRoute(
+          path: AppRoutePaths.supervisorAssignments,
+          builder: (context, state) => const MainSupervisorTabBar(
+              initialTab: SupervisorNavTab.assignments),
+        ),
+        GoRoute(
+          path: AppRoutePaths.supervisorProfile,
+          builder: (context, state) =>
+              const MainSupervisorTabBar(initialTab: SupervisorNavTab.profile),
         ),
         GoRoute(
           path: AppRoutePaths.staffModuleSelection,
@@ -356,6 +406,15 @@ class AppRouter {
             isDefault: true,
           ),
         ];
+      case 'supervisor':
+        return const [
+          AppSurfaceAccess(
+            key: 'supervisor',
+            label: 'Supervisor',
+            route: AppRoutePaths.supervisorHome,
+            isDefault: true,
+          ),
+        ];
       case 'admin':
       default:
         return const [
@@ -406,6 +465,7 @@ class AppRouter {
     if (location.startsWith('/citizen/')) return 'citizen';
     if (location.startsWith('/operator/')) return 'operator';
     if (location.startsWith('/driver/')) return 'driver';
+    if (location.startsWith('/supervisor/')) return 'supervisor';
     if (location.startsWith('/admin/')) return 'admin';
     return null;
   }

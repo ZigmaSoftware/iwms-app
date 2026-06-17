@@ -59,7 +59,7 @@ class UserModel extends Equatable {
     final compact = value.replaceAll(RegExp(r'[\s_-]+'), '');
     if (compact.contains('operator')) return 'operator';
     if (compact.contains('driver')) return 'driver';
-    if (compact.contains('supervisor')) return 'admin';
+    if (compact.contains('supervisor')) return 'supervisor';
     if (compact.contains('admin') || compact.contains('superadmin')) {
       return 'admin';
     }

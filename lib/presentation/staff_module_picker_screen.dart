@@ -102,6 +102,8 @@ class _SurfaceCard extends StatelessWidget {
         return Icons.qr_code_scanner_outlined;
       case 'driver':
         return Icons.local_shipping_outlined;
+      case 'supervisor':
+        return Icons.shield_outlined;
       default:
         return Icons.person_outline;
     }

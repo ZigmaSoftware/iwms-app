@@ -12,7 +12,7 @@ class DailyAssignmentModel {
   final String shift;
   final bool isActiveFlag;
   final DateTime date;
-  final String? customerName;
+  final String? customerName; 
   final String? customerId;
   final String? cancelledReason;
   final DateTime? cancelledAt;
