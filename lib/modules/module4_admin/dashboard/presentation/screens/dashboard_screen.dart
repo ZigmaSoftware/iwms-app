@@ -2208,6 +2208,13 @@ class MoreScreen extends StatelessWidget {
       _MoreItem(Icons.map_outlined, 'Manage sites & geofences'),
       _MoreItem(Icons.security, 'Admin controls'),
       _MoreItem(
+        Icons.person_outline,
+        'Staff Attendance',
+        onTap: () {
+          context.push(AppRoutePaths.attendancebp);
+        },
+      ),
+      _MoreItem(
         Icons.logout,
         'Logout',
         onTap: () {

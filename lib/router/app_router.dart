@@ -10,6 +10,7 @@ import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
 import 'package:iwms_citizen_app/logic/vehicle_tracking/vehicle_bloc.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/chatbot.dart';
+import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/bp_attendance.dart';
 import 'package:iwms_citizen_app/presentation/staff_module_picker_screen.dart';
 
 // Citizen Modules
@@ -80,7 +81,7 @@ class AppRoutePaths {
   static const String supervisorTrips = '/supervisor/trips';
   static const String supervisorAssignments = '/supervisor/assignments';
   static const String supervisorProfile = '/supervisor/profile';
-
+  static const String attendancebp = '/bp/attendance';
   static const String staffModuleSelection = '/staff/modules';
 }
 
@@ -306,6 +307,10 @@ class AppRouter {
               surfaces: _resolveAccessibleSurfaces(authState),
             );
           },
+        ),
+        GoRoute(
+          path: AppRoutePaths.attendancebp,
+          builder: (context, state) => const AttendanceDataScreen(),
         ),
       ],
     );

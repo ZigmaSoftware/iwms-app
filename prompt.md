@@ -2,7 +2,7 @@ mobile login fails for "operator_user" and password is "Operator123" kinldy chec
 
 
 I/flutter (26954): *** DioException ***:
-I/flutter (26954): uri: http://192.168.3.120:8000/api/v1/login/
+I/flutter (26954): uri: http://10.88.7.226:8000/api/v1/login/
 I/flutter (26954): DioException [connection timeout]: The request connection took longer than 0:00:10.000000 and it was aborted. To get rid of this exception, try raising the RequestOptions.connectTimeout above the duration of 0:00:10.000000 or improve the response time of the server.
 I/flutter (26954): 
 I/flutter (26954): Staff login failed: DioException [connection timeout]: The request connection took longer than 0:00:10.000000 and it was aborted. To get rid of this exception, try raising the RequestOptions.connectTimeout above the duration of 0:00:10.000000 or improve the response time of the server.
@@ -18,7 +18,7 @@ I/flutter (26954): #4      Bloc.on.<anonymous closure>.handleEvent (package:bloc
 I/flutter (26954): <asynchronous suspension>
 I/flutter (26954): 
 I/flutter (26954): *** Request ***
-I/flutter (26954): uri: http://192.168.3.120:8000/api/v1/login/
+I/flutter (26954): uri: http://10.88.7.226:8000/api/v1/login/
 I/flutter (26954): method: POST
 I/flutter (26954): responseType: ResponseType.json
 I/flutter (26954): followRedirects: true
@@ -34,7 +34,7 @@ I/flutter (26954): data:
 I/flutter (26954): {username: operator_user, password: Operator123, login_type: staff}
 I/flutter (26954): 
 I/flutter (26954): *** DioException ***:
-I/flutter (26954): uri: http://192.168.3.120:8000/api/v1/login/
+I/flutter (26954): uri: http://10.88.7.226:8000/api/v1/login/
 I/flutter (26954): DioException [connection timeout]: The request connection took longer than 0:00:10.000000 and it was aborted. To get rid of this exception, try raising the RequestOptions.connectTimeout above the duration of 0:00:10.000000 or improve the response time of the server.
 I/flutter (26954): 
 I/flutter (26954): Staff login failed: DioException [connection timeout]: The request connection took longer than 0:00:10.000000 and it was aborted. To get rid of this exception, try raising the RequestOptions.connectTimeout above the duration of 0:00:10.000000 or improve the response time of the server.
