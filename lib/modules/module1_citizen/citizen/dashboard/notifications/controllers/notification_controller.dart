@@ -15,7 +15,10 @@ class NotificationController extends ChangeNotifier {
     alerts.insert(0, alert);
     hasUnread = true;
     notifyListeners();
-    _service.showCollectorNearbyNotification(message: alert.message);
+    _service.showCollectorNearbyNotification(
+      title: alert.title,
+      message: alert.message,
+    );
   }
 
   void markRead() {

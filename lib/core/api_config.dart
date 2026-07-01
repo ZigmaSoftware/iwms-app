@@ -32,6 +32,15 @@ class ApiConfig {
       '${desktopBase}waste/citizen-summary/';
   static const String customerList =
       '${desktopBase}customers/customercreations/';
+
+  // --- Grievance: citizen mobile (self-scoped, auth-only) ---
+  static const String citizenGrievanceTickets =
+      '${desktopBase}citizen/grievance-tickets/';
+  static const String citizenGrievanceMeta =
+      '${desktopBase}citizen/grievance-tickets/meta/';
+  // --- Grievance: supervisor / staff (department-scoped) ---
+  static const String grievanceTickets = '${desktopBase}grievance/tickets/';
+
   static const String assignments = '${desktopBase}role-assign/assignments/';
   static const String staffAssignments =
       '${desktopBase}role-assign/staff-assignments/';

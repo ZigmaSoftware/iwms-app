@@ -30,7 +30,6 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/services/track_service.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/widgets/track_tab.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
-import 'package:iwms_citizen_app/shared/services/notification_service.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
 class CitizenDashboardPage extends StatefulWidget {
@@ -68,9 +67,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       fallbackSlides: _fallbackSlides,
     );
     _trackController = TrackController(TrackService());
-    _notificationController = NotificationController(
-      getIt<NotificationService>(),
-    );
+    _notificationController = getIt<NotificationController>();
     _navController = HomeNavController();
     _geofenceEvaluator = const GeofenceEvaluator();
     _authRepository = getIt<AuthRepository>();

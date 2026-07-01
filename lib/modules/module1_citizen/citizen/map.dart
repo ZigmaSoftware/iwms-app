@@ -40,6 +40,14 @@ class _MapScreenState extends State<MapScreen> {
 
   _MapThemeOption _selectedTheme = _MapThemeOption.light;
   String _searchQuery = '';
+
+  // Prevent camera auto-fit repeatedly after user zooms or moves map
+  bool _hasInitialFitDone = false;
+  LatLngBounds? _previousBounds;
+
+  // Site polygons from API
+  List<SitePolygon> _sites = const [];
+
   static const Map<_MapThemeOption, _MapThemeConfig> _mapThemes = {
     _MapThemeOption.standard: _MapThemeConfig(
       label: 'Standard',
@@ -56,12 +64,6 @@ class _MapScreenState extends State<MapScreen> {
     ),
   };
 
-  // Track previous bounds to prevent repeated camera jumps
-  LatLngBounds? _previousBounds;
-
-  // Site polygons from API
-  List<SitePolygon> _sites = const [];
-
   @override
   void initState() {
     super.initState();
@@ -71,7 +73,12 @@ class _MapScreenState extends State<MapScreen> {
   Future<void> _loadSites() async {
     final repo = getIt<SiteRepository>();
     final result = await repo.fetchSites();
-    if (mounted) setState(() => _sites = result);
+
+    if (!mounted) return;
+
+    setState(() {
+      _sites = result;
+    });
   }
 
   void _zoomIn() {
@@ -94,7 +101,19 @@ class _MapScreenState extends State<MapScreen> {
 
   void _setTheme(_MapThemeOption theme) {
     if (_selectedTheme == theme) return;
-    setState(() => _selectedTheme = theme);
+
+    setState(() {
+      _selectedTheme = theme;
+    });
+  }
+
+  bool _isValidLatLng(double lat, double lng) {
+    return lat >= -90 &&
+        lat <= 90 &&
+        lng >= -180 &&
+        lng <= 180 &&
+        lat != 0.0 &&
+        lng != 0.0;
   }
 
   // ---------------------------------------------------------------------------
@@ -104,23 +123,24 @@ class _MapScreenState extends State<MapScreen> {
   void _autoFitVehicles(List<VehicleModel> vehicles) {
     if (!mounted) return;
 
-    // Include home base + vehicles
+    final validVehiclePoints = vehicles
+        .where((v) => _isValidLatLng(v.latitude, v.longitude))
+        .map((v) => LatLng(v.latitude, v.longitude))
+        .toList();
+
     final points = <LatLng>[
       _gammaCenter,
-      ...vehicles.map((v) => LatLng(v.latitude, v.longitude)),
+      ...validVehiclePoints,
     ];
 
-    // No vehicles → fallback to home base
     if (points.length == 1) {
       _mapController.move(_gammaCenter, 14.0);
       _previousBounds = null;
       return;
     }
 
-    // Compute bounding box
     final bounds = LatLngBounds.fromPoints(points);
 
-    // Prevent repeated fit when nothing changed
     if (_previousBounds != null &&
         _previousBounds!.southWest == bounds.southWest &&
         _previousBounds!.northEast == bounds.northEast) {
@@ -132,10 +152,9 @@ class _MapScreenState extends State<MapScreen> {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
 
-      final padding = const EdgeInsets.all(80); // clean frame
       final cameraFit = CameraFit.bounds(
         bounds: bounds,
-        padding: padding,
+        padding: const EdgeInsets.all(80),
         maxZoom: 16,
         minZoom: 12,
       );
@@ -144,19 +163,21 @@ class _MapScreenState extends State<MapScreen> {
     });
   }
 
-  // UI helpers remain same (markers, polygon colors, arc path, etc.)
-
-  Widget _buildGammaFacilityMarker() =>
-      const HomeBaseMarker(size: 18); // smaller home base marker
+  Widget _buildGammaFacilityMarker() {
+    return const HomeBaseMarker(size: 18);
+  }
 
   Iterable<Marker> _buildArcMarkers(LatLng start, LatLng end) sync* {
     final arcPoints = _generateArcPoints(start, end);
+
     for (var i = 1; i < arcPoints.length - 1; i += 2) {
       final point = arcPoints[i];
+
       yield Marker(
         width: 8,
         height: 8,
         point: point,
+        alignment: Alignment.center,
         child: Container(
           decoration: BoxDecoration(
             shape: BoxShape.circle,
@@ -207,20 +228,23 @@ class _MapScreenState extends State<MapScreen> {
     return pts;
   }
 
-  // POLYGON COLORS
   Color _polygonFillFor(String name) {
     final up = name.toUpperCase();
+
     if (up.startsWith('GAMMA')) return Colors.blue.withValues(alpha: 0.10);
     if (up.startsWith('ALPHA')) return Colors.green.withValues(alpha: 0.10);
     if (up.startsWith('BETA')) return Colors.orange.withValues(alpha: 0.10);
+
     return kPrimaryColor.withValues(alpha: 0.08);
   }
 
   Color _polygonStrokeFor(String name) {
     final up = name.toUpperCase();
+
     if (up.startsWith('GAMMA')) return Colors.blue;
     if (up.startsWith('ALPHA')) return Colors.green;
     if (up.startsWith('BETA')) return Colors.deepOrange;
+
     return kPrimaryColor;
   }
 
@@ -234,8 +258,8 @@ class _MapScreenState extends State<MapScreen> {
           child: BlocConsumer<VehicleBloc, VehicleState>(
             listenWhen: (prev, curr) => curr is VehicleLoaded,
             listener: (context, state) {
-              if (state is VehicleLoaded) {
-                // Auto-fit once per new update
+              if (state is VehicleLoaded && !_hasInitialFitDone) {
+                _hasInitialFitDone = true;
                 _autoFitVehicles(state.vehicles);
               }
             },
@@ -252,6 +276,7 @@ class _MapScreenState extends State<MapScreen> {
 
               final vehicleName = selectedVehicle?.registrationNumber ??
                   localizations.mapUnknownVehicle;
+
               final headline = selectedVehicle != null
                   ? localizations.mapVehicleHeadline(vehicleName)
                   : localizations.mapLiveHeadline;
@@ -264,9 +289,6 @@ class _MapScreenState extends State<MapScreen> {
 
               return Column(
                 children: [
-                  // -----------------------------------------------------------
-                  // HEADER
-                  // -----------------------------------------------------------
                   SizedBox(
                     height: headerHeight,
                     width: double.infinity,
@@ -291,7 +313,8 @@ class _MapScreenState extends State<MapScreen> {
                           : null,
                       onRefresh: () {
                         context.read<VehicleBloc>().add(
-                            const VehicleFetchRequested(showLoading: true));
+                              const VehicleFetchRequested(showLoading: true),
+                            );
                       },
                     ),
                   ),
@@ -299,13 +322,12 @@ class _MapScreenState extends State<MapScreen> {
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: _buildHeaderFilterSection(
-                        context, state, localizations),
+                      context,
+                      state,
+                      localizations,
+                    ),
                   ),
                   const SizedBox(height: 8),
-
-                  // -----------------------------------------------------------
-                  // MAP CONTAINER
-                  // -----------------------------------------------------------
                   Expanded(
                     child: Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -333,7 +355,8 @@ class _MapScreenState extends State<MapScreen> {
                                 child: selectedVehicle != null
                                     ? Align(
                                         key: const ValueKey(
-                                            'selectedVehicleBubble'),
+                                          'selectedVehicleBubble',
+                                        ),
                                         alignment: Alignment.center,
                                         child: TrackingSpeechBubble(
                                           message:
@@ -349,7 +372,8 @@ class _MapScreenState extends State<MapScreen> {
                               ),
                               if (state is VehicleLoading)
                                 const Center(
-                                    child: CircularProgressIndicator()),
+                                  child: CircularProgressIndicator(),
+                                ),
                               if (state is VehicleError)
                                 Align(
                                   alignment: Alignment.topCenter,
@@ -366,7 +390,10 @@ class _MapScreenState extends State<MapScreen> {
                                   ),
                                 ),
                               _buildVehicleInfoPanel(
-                                  context, state, localizations),
+                                context,
+                                state,
+                                localizations,
+                              ),
                             ],
                           ),
                         ),
@@ -397,6 +424,7 @@ class _MapScreenState extends State<MapScreen> {
 
       vehiclesToShow = state.vehicles.where((vehicle) {
         final status = vehicle.status?.toLowerCase() ?? 'no data';
+
         switch (activeFilter) {
           case VehicleFilter.all:
             return true;
@@ -413,37 +441,52 @@ class _MapScreenState extends State<MapScreen> {
 
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
+
         vehiclesToShow = vehiclesToShow.where((v) {
           final reg = (v.registrationNumber ?? '').toLowerCase();
           final name = (v.driverName ?? '').toLowerCase();
           final addr = (v.address ?? '').toLowerCase();
+
           return reg.contains(q) || name.contains(q) || addr.contains(q);
         }).toList();
       }
+
+      vehiclesToShow = vehiclesToShow
+          .where((v) => _isValidLatLng(v.latitude, v.longitude))
+          .toList();
     }
 
-    // Build arc markers if selected
     final List<Marker> arcMarkers = [];
-    if (selectedVehicle != null) {
-      final point = LatLng(selectedVehicle.latitude, selectedVehicle.longitude);
+
+    if (selectedVehicle != null &&
+        _isValidLatLng(selectedVehicle.latitude, selectedVehicle.longitude)) {
+      final point = LatLng(
+        selectedVehicle.latitude,
+        selectedVehicle.longitude,
+      );
+
       arcMarkers.addAll(_buildArcMarkers(_gammaCenter, point));
     }
 
-    // Build final markers
     final markers = <Marker>[
-      // Arc decorations
       ...arcMarkers,
 
-      // Vehicles
+      // Vehicle markers
       for (final v in vehiclesToShow)
         Marker(
-          width: 110,
-          height: 120,
+          width: selectedVehicle?.id == v.id ? 52 : 44,
+          height: selectedVehicle?.id == v.id ? 52 : 44,
           point: LatLng(v.latitude, v.longitude),
-          alignment: Alignment.bottomCenter,
+
+          // Important fix:
+          // Use center alignment so marker stays on exact lat/lng during zoom.
+          alignment: Alignment.center,
+
           child: GestureDetector(
             onTap: () {
-              context.read<VehicleBloc>().add(VehicleSelectionUpdated(v.id));
+              context.read<VehicleBloc>().add(
+                    VehicleSelectionUpdated(v.id),
+                  );
             },
             child: _VehicleMarker(
               vehicle: v,
@@ -453,11 +496,12 @@ class _MapScreenState extends State<MapScreen> {
           ),
         ),
 
-      // Home Base Marker
+      // Home base marker
       Marker(
         width: 28,
         height: 28,
         point: _gammaCenter,
+        alignment: Alignment.center,
         child: _buildGammaFacilityMarker(),
       ),
     ];
@@ -472,27 +516,31 @@ class _MapScreenState extends State<MapScreen> {
         minZoom: 10,
         maxZoom: 18,
         interactionOptions: const InteractionOptions(
-            flags: InteractiveFlag.all & ~InteractiveFlag.rotate),
+          flags: InteractiveFlag.all & ~InteractiveFlag.rotate,
+        ),
         onTap: (tapPos, latlng) {
-          context.read<VehicleBloc>().add(const VehicleSelectionUpdated(null));
+          context.read<VehicleBloc>().add(
+                const VehicleSelectionUpdated(null),
+              );
         },
       ),
       children: [
         TileLayer(
           urlTemplate: themeConfig.urlTemplate,
           subdomains: themeConfig.subdomains,
+          userAgentPackageName: 'com.iwms.citizen.app',
         ),
-
-        // Polygons from API
         if (_sites.isNotEmpty)
           PolygonLayer(
             polygons: _sites
-                .map((s) => Polygon(
-                      points: s.points,
-                      color: _polygonFillFor(s.name),
-                      borderColor: _polygonStrokeFor(s.name),
-                      borderStrokeWidth: 2.2,
-                    ))
+                .map(
+                  (s) => Polygon(
+                    points: s.points,
+                    color: _polygonFillFor(s.name),
+                    borderColor: _polygonStrokeFor(s.name),
+                    borderStrokeWidth: 2.2,
+                  ),
+                )
                 .toList(),
           )
         else
@@ -506,9 +554,7 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ],
           ),
-
         MarkerLayer(markers: markers),
-
         RichAttributionWidget(
           alignment: AttributionAlignment.bottomRight,
           attributions: [
@@ -525,8 +571,12 @@ class _MapScreenState extends State<MapScreen> {
   // ---------------------------------------------------------------------------
   // HEADER FILTER SECTION
   // ---------------------------------------------------------------------------
-  Widget _buildHeaderFilterSection(BuildContext context, VehicleState state,
-      AppLocalizations localizations) {
+
+  Widget _buildHeaderFilterSection(
+    BuildContext context,
+    VehicleState state,
+    AppLocalizations localizations,
+  ) {
     final bloc = context.read<VehicleBloc>();
     VehicleFilter activeFilter = VehicleFilter.all;
 
@@ -542,8 +592,10 @@ class _MapScreenState extends State<MapScreen> {
           final count = bloc.countVehiclesByFilter(filter);
           final label = '${localizations.vehicleFilterLabel(filter)} ($count)';
           final color = _filterColor(filter);
+
           final textColor =
               filter == VehicleFilter.all ? Colors.black87 : Colors.white;
+
           final unselectedTint = filter == VehicleFilter.all
               ? Colors.black26
               : color.withValues(alpha: 0.22);
@@ -564,16 +616,24 @@ class _MapScreenState extends State<MapScreen> {
               selectedColor: color,
               backgroundColor: isSelected
                   ? color
-                  : (filter == VehicleFilter.all
+                  : filter == VehicleFilter.all
                       ? Colors.white.withValues(alpha: 0.95)
-                      : color.withValues(alpha: 0.12)),
+                      : color.withValues(alpha: 0.12),
               side: BorderSide(
                 color: isSelected ? color : unselectedTint,
               ),
               materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-              visualDensity: const VisualDensity(horizontal: -2, vertical: -2),
-              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-              onSelected: (_) => bloc.add(VehicleFilterUpdated(filter)),
+              visualDensity: const VisualDensity(
+                horizontal: -2,
+                vertical: -2,
+              ),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 8,
+                vertical: 4,
+              ),
+              onSelected: (_) {
+                bloc.add(VehicleFilterUpdated(filter));
+              },
             ),
           );
         }).toList(),
@@ -586,11 +646,11 @@ class _MapScreenState extends State<MapScreen> {
       height: 38,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        color: Colors.white, // outer shell
+        color: Colors.white,
         borderRadius: BorderRadius.circular(999),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withOpacity(0.06),
+            color: Colors.black.withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, 6),
           ),
@@ -598,17 +658,20 @@ class _MapScreenState extends State<MapScreen> {
       ),
       child: Row(
         children: [
-          const Icon(Icons.search, color: Colors.black54, size: 18),
+          const Icon(
+            Icons.search,
+            color: Colors.black54,
+            size: 18,
+          ),
           const SizedBox(width: 6),
           Expanded(
             child: TextField(
-              cursorColor: Colors.black, // ❌ no green cursor
+              cursorColor: Colors.black,
               style: const TextStyle(color: Colors.black),
-
               decoration: InputDecoration(
                 isDense: true,
-                filled: true, // 🔥 KEY
-                fillColor: Colors.white, // 🔥 KEY
+                filled: true,
+                fillColor: Colors.white,
                 hintText: localizations.mapSearchHint,
                 hintStyle: const TextStyle(
                   color: Colors.black45,
@@ -619,14 +682,25 @@ class _MapScreenState extends State<MapScreen> {
                 focusedBorder: InputBorder.none,
                 contentPadding: const EdgeInsets.symmetric(vertical: 8),
               ),
-
-              onChanged: (v) => setState(() => _searchQuery = v.trim()),
+              onChanged: (v) {
+                setState(() {
+                  _searchQuery = v.trim();
+                });
+              },
             ),
           ),
           if (_searchQuery.isNotEmpty)
             IconButton(
-              icon: const Icon(Icons.close, size: 18, color: Colors.black54),
-              onPressed: () => setState(() => _searchQuery = ''),
+              icon: const Icon(
+                Icons.close,
+                size: 18,
+                color: Colors.black54,
+              ),
+              onPressed: () {
+                setState(() {
+                  _searchQuery = '';
+                });
+              },
             ),
         ],
       ),
@@ -636,6 +710,7 @@ class _MapScreenState extends State<MapScreen> {
   // ---------------------------------------------------------------------------
   // MAP STYLE SELECTOR
   // ---------------------------------------------------------------------------
+
   Widget _buildMapStyleSelector(
     VehicleState state,
     AppLocalizations localizations,
@@ -661,13 +736,15 @@ class _MapScreenState extends State<MapScreen> {
               ),
             ],
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+          padding: const EdgeInsets.symmetric(
+            horizontal: 8,
+            vertical: 4,
+          ),
           child: Wrap(
             spacing: 4,
             alignment: WrapAlignment.start,
             children: _mapThemes.entries.map((entry) {
               final option = entry.key;
-              final config = entry.value;
               final bool isSelected = _selectedTheme == option;
 
               return ChoiceChip(
@@ -686,10 +763,14 @@ class _MapScreenState extends State<MapScreen> {
                   fontSize: 11,
                 ),
                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                visualDensity:
-                    const VisualDensity(horizontal: -3, vertical: -3),
-                labelPadding:
-                    const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                visualDensity: const VisualDensity(
+                  horizontal: -3,
+                  vertical: -3,
+                ),
+                labelPadding: const EdgeInsets.symmetric(
+                  horizontal: 6,
+                  vertical: 2,
+                ),
               );
             }).toList(),
           ),
@@ -713,6 +794,7 @@ class _MapScreenState extends State<MapScreen> {
   // ---------------------------------------------------------------------------
   // ZOOM CONTROL BUTTONS
   // ---------------------------------------------------------------------------
+
   Widget _buildZoomControls(VehicleState state) {
     final hasSelection =
         state is VehicleLoaded && state.selectedVehicle != null;
@@ -725,9 +807,15 @@ class _MapScreenState extends State<MapScreen> {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          _MapControlButton(icon: Icons.add, onPressed: _zoomIn),
+          _MapControlButton(
+            icon: Icons.add,
+            onPressed: _zoomIn,
+          ),
           const SizedBox(height: 8),
-          _MapControlButton(icon: Icons.remove, onPressed: _zoomOut),
+          _MapControlButton(
+            icon: Icons.remove,
+            onPressed: _zoomOut,
+          ),
           const SizedBox(height: 8),
           _MapControlButton(
             icon: Icons.my_location_outlined,
@@ -741,6 +829,7 @@ class _MapScreenState extends State<MapScreen> {
   // ---------------------------------------------------------------------------
   // VEHICLE INFO PANEL
   // ---------------------------------------------------------------------------
+
   Widget _buildVehicleInfoPanel(
     BuildContext context,
     VehicleState state,
@@ -772,7 +861,6 @@ class _MapScreenState extends State<MapScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Close bar + title + status
               Row(
                 children: [
                   Expanded(
@@ -785,8 +873,10 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ),
                   Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 6,
+                    ),
                     decoration: BoxDecoration(
                       color: statusColor.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(12),
@@ -802,17 +892,15 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                   IconButton(
                     onPressed: () {
-                      context
-                          .read<VehicleBloc>()
-                          .add(const VehicleSelectionUpdated(null));
+                      context.read<VehicleBloc>().add(
+                            const VehicleSelectionUpdated(null),
+                          );
                     },
                     icon: const Icon(Icons.close_rounded),
-                  )
+                  ),
                 ],
               ),
-
               const SizedBox(height: 12),
-
               if ((vehicle.address ?? '').isNotEmpty)
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -831,9 +919,7 @@ class _MapScreenState extends State<MapScreen> {
                     ),
                   ],
                 ),
-
               const SizedBox(height: 12),
-
               Wrap(
                 spacing: 16,
                 runSpacing: 8,
@@ -849,7 +935,6 @@ class _MapScreenState extends State<MapScreen> {
                   ),
                 ],
               ),
-
               const SizedBox(height: 6),
             ],
           ),
@@ -862,6 +947,7 @@ class _MapScreenState extends State<MapScreen> {
 // -----------------------------------------------------------------------------
 // VEHICLE MARKER WIDGET
 // -----------------------------------------------------------------------------
+
 class _VehicleMarker extends StatelessWidget {
   final VehicleModel vehicle;
   final bool isSelected;
@@ -875,6 +961,7 @@ class _VehicleMarker extends StatelessWidget {
 
   String _vehicleIconByStatus(String? status) {
     final s = status?.toLowerCase().replaceAll(' ', '') ?? 'nodata';
+
     switch (s) {
       case 'running':
         return 'assets/images/truck_3d.png';
@@ -890,35 +977,20 @@ class _VehicleMarker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final size = isSelected ? 40.0 : 30.0;
+    final size = isSelected ? 46.0 : 38.0;
 
     return AnimatedScale(
-      scale: isSelected ? 1.15 : 1.0,
+      scale: isSelected ? 1.1 : 1.0,
       duration: const Duration(milliseconds: 180),
-      child: Stack(
-        alignment: Alignment.center,
-        children: [
-          // Shadow (depth illusion)
-          Positioned(
-            bottom: 2,
-            child: Container(
-              width: size * 0.7,
-              height: 6,
-              // decoration: BoxDecoration(
-              //   color: Colors.black.withOpacity(0.25),
-              //   borderRadius: BorderRadius.circular(50),
-              // ),
-            ),
-          ),
-
-          // 3D Vehicle
-          Image.asset(
-            _vehicleIconByStatus(vehicle.status),
-            width: size,
-            height: size,
-            fit: BoxFit.contain,
-          ),
-        ],
+      child: SizedBox(
+        width: size,
+        height: size,
+        child: Image.asset(
+          _vehicleIconByStatus(vehicle.status),
+          width: size,
+          height: size,
+          fit: BoxFit.contain,
+        ),
       ),
     );
   }
@@ -927,6 +999,7 @@ class _VehicleMarker extends StatelessWidget {
 // -----------------------------------------------------------------------------
 // UI BUTTON + INFO TAG + MAP THEME CONFIG
 // -----------------------------------------------------------------------------
+
 class _MapControlButton extends StatelessWidget {
   final IconData icon;
   final VoidCallback onPressed;
@@ -951,7 +1024,10 @@ class _MapControlButton extends StatelessWidget {
         child: SizedBox(
           width: 48,
           height: 48,
-          child: Icon(icon, color: theme.colorScheme.primary),
+          child: Icon(
+            icon,
+            color: theme.colorScheme.primary,
+          ),
         ),
       ),
     );
@@ -972,10 +1048,14 @@ class _InfoTag extends StatelessWidget {
     final theme = Theme.of(context);
 
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      padding: const EdgeInsets.symmetric(
+        horizontal: 14,
+        vertical: 10,
+      ),
       decoration: BoxDecoration(
-        color:
-            theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.60),
+        color: theme.colorScheme.surfaceContainerHighest.withValues(
+          alpha: 0.60,
+        ),
         borderRadius: BorderRadius.circular(14),
       ),
       child: Column(
@@ -1004,6 +1084,7 @@ class _InfoTag extends StatelessWidget {
 // -----------------------------------------------------------------------------
 // MAP THEME ENUM + CONFIG
 // -----------------------------------------------------------------------------
+
 enum _MapThemeOption { standard, light }
 
 class _MapThemeConfig {
@@ -1034,3 +1115,6 @@ Color _filterColor(VehicleFilter filter) {
       return Colors.grey;
   }
 }
+
+
+

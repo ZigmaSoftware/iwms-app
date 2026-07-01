@@ -9,7 +9,8 @@ import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/data/models/user_model.dart';
 import 'package:iwms_citizen_app/logic/vehicle_tracking/vehicle_bloc.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/chatbot.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/grievance_chat.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/grievance_status_screen.dart';
 import 'package:iwms_citizen_app/presentation/staff_module_picker_screen.dart';
 
 // Citizen Modules
@@ -40,6 +41,7 @@ import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/dri
 // Admin
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/main_supervisor_tabbar.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_grievance_screen.dart';
 
 // Route Observer
 
@@ -56,6 +58,7 @@ class AppRoutePaths {
   static const String citizenPersonalMap = '/citizen/personal-map';
   static const String citizenAllotedVehicleMap = '/citizen/alloted-vehicle-map';
   static const String citizenGrievanceChat = '/citizen/grievance-chat';
+  static const String citizenGrievanceStatus = '/citizen/grievance-status';
   static const String citizenProfile = '/citizen/profile';
 
   static const String operatorLogin = '/operator/login';
@@ -80,6 +83,7 @@ class AppRoutePaths {
   static const String supervisorTrips = '/supervisor/trips';
   static const String supervisorAssignments = '/supervisor/assignments';
   static const String supervisorProfile = '/supervisor/profile';
+  static const String supervisorGrievances = '/supervisor/grievances';
 
   static const String staffModuleSelection = '/staff/modules';
 }
@@ -175,6 +179,12 @@ class AppRouter {
         GoRoute(
           path: AppRoutePaths.citizenGrievanceChat,
           builder: (context, state) => const GrievanceChatScreen(),
+        ),
+        GoRoute(
+          path: AppRoutePaths.citizenGrievanceStatus,
+          builder: (context, state) => GrievanceStatusScreen(
+            initialTicketId: state.uri.queryParameters['ticket'],
+          ),
         ),
         GoRoute(
           path: AppRoutePaths.citizenProfile,
@@ -293,6 +303,10 @@ class AppRouter {
           path: AppRoutePaths.supervisorProfile,
           builder: (context, state) =>
               const MainSupervisorTabBar(initialTab: SupervisorNavTab.profile),
+        ),
+        GoRoute(
+          path: AppRoutePaths.supervisorGrievances,
+          builder: (context, state) => const SupervisorGrievanceScreen(),
         ),
         GoRoute(
           path: AppRoutePaths.staffModuleSelection,

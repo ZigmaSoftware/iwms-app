@@ -9,6 +9,7 @@ import 'package:iwms_citizen_app/modules/module3_operator/logic/operator_trip_bl
 import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_repository.dart';
 import 'package:iwms_citizen_app/shared/services/collection_history_service.dart';
 import 'package:iwms_citizen_app/shared/services/notification_service.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/notifications/controllers/notification_controller.dart';
 import 'package:iwms_citizen_app/data/repositories/site_repository.dart';
 
 // --- Vehicle Tracking Imports ---
@@ -32,6 +33,9 @@ Future<void> setupDI() async {
     () => CollectionHistoryService(getIt<SharedPreferences>()),
   );
   getIt.registerLazySingleton(() => NotificationService());
+  getIt.registerLazySingleton(
+    () => NotificationController(getIt<NotificationService>()),
+  );
   await getIt<CollectionHistoryService>().initialize();
   await getIt<NotificationService>().initialize();
 

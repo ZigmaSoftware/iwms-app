@@ -4,7 +4,6 @@
 // ✅ Keeps Customer Details visible at all times
 
 import 'dart:convert';
-import 'dart:typed_data';
 import 'dart:io';
 import 'package:flutter_bluetooth_serial/flutter_bluetooth_serial.dart';
 import 'package:flutter/services.dart';
@@ -25,6 +24,7 @@ import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finali
 import 'package:iwms_citizen_app/modules/module3_operator/services/bluetoothservices.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/generateunique_id.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/image_compress_service.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
@@ -80,6 +80,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   final PendingRecordDao _pendingDao = PendingRecordDao();
   late final CollectionHistoryService _historyService;
   bool _collectionSubmitted = false;
+  bool _routeObserverSubscribed = false;
   final Map<String, TextEditingController> _manualWeightControllers = {};
 
   List<Map<String, dynamic>> wasteTypes = [];
@@ -223,7 +224,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       );
       if (type.isEmpty) continue;
 
-      final typeKey = type['waste_type_name'].toString().toLowerCase();
+      final typeKey = type['waste_type_name'].toString().trim().toLowerCase();
 
       if (!_wasteData.containsKey(typeKey)) continue;
 
@@ -231,7 +232,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       final updated = Map<String, dynamic>.from(_wasteData[typeKey]!);
 
       // UID must never be null for UI logic
-      final safeUid = r.uniqueId ?? "uid_${r.id}";
+      final safeUid = r.uniqueId;
 
       updated['isAdded'] = true;
       updated['unique_id'] = safeUid;
@@ -241,7 +242,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       updated['image'] = File(r.imagePath);
 
       _wasteData = {..._wasteData, typeKey: updated};
-      _syncManualWeightController(typeKey, r.weight?.toString());
+      _syncManualWeightController(typeKey, r.weight.toString());
 
       debugPrint(
           "📌 Loaded offline → $typeKey | weight=${r.weight} | uid=$safeUid");
@@ -303,7 +304,11 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    routeObserver.subscribe(this, ModalRoute.of(context)! as PageRoute);
+    final route = ModalRoute.of(context);
+    if (!_routeObserverSubscribed && route is PageRoute) {
+      routeObserver.subscribe(this, route);
+      _routeObserverSubscribed = true;
+    }
   }
 
   Future<void> _resetBluetooth() async {
@@ -322,7 +327,10 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
   @override
   void dispose() {
-    routeObserver.unsubscribe(this);
+    if (_routeObserverSubscribed) {
+      routeObserver.unsubscribe(this);
+      _routeObserverSubscribed = false;
+    }
     WidgetsBinding.instance.removeObserver(this);
     try {
       _connection?.dispose();
@@ -372,7 +380,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     wasteTypes = types;
     _wasteData = {
       for (var item in wasteTypes)
-        item['waste_type_name'].toString().toLowerCase(): {
+        item['waste_type_name'].toString().trim().toLowerCase(): {
           'waste_type_id': item['id'],
           'label': item['waste_type_name'],
           'unique_id': null,
@@ -388,28 +396,6 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
       _manualWeightControllers[type] =
           TextEditingController(text: _weightTextFor(type));
     }
-  }
-
-  // ==================== IMAGE CAPTURE ====================
-  Future<File?> _captureImage(String type) async {
-    final picked = await _picker.pickImage(source: ImageSource.camera);
-    if (picked == null) return null;
-
-    final original = File(picked.path);
-    final compressed = await ImageCompressService.compress(original);
-
-    _safeSetState(() {
-      activeType = type;
-      final updated = Map<String, dynamic>.from(_wasteData[type]!);
-      updated['image'] = compressed;
-      updated['weight'] = latestWeight;
-      _wasteData = {
-        ..._wasteData,
-        type: updated,
-      };
-      _syncManualWeightController(type, latestWeight);
-    });
-    return compressed;
   }
 
   Future<void> _fetchWasteRecord(String type) async {
@@ -544,6 +530,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
       await _fetchWasteRecord(type);
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(
@@ -595,6 +582,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         _safeSetState(() => activeType = null);
       }
 
+      if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text("$type saved offline — will sync automatically"),
@@ -613,7 +601,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
       _wasteData = {
         for (var item in wasteTypes)
-          item['waste_type_name'].toString().toLowerCase(): {
+          item['waste_type_name'].toString().trim().toLowerCase(): {
             'waste_type_id': item['id'],
             'unique_id': null,
             'image': null,
@@ -632,7 +620,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
     final totalWeight = _calculateTotalWeight();
     final summary = _buildSummarySnapshot();
-    Future<void> _syncLog(String status) async {
+    Future<void> syncLog(String status) async {
       if (!ApiConfig.legacyRoleAssignEnabled) return;
       if (widget.assignmentId == null || widget.assignmentId!.trim().isEmpty) {
         return;
@@ -680,7 +668,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
             widget.customerId,
             'collected',
           );
-          await _syncLog('collection_completed');
+          await syncLog('collection_completed');
           await _maybeCompleteAssignmentFromStore(widget.assignmentId!);
         }
         await _showSuccessSheet(totalWeight, summary);
@@ -719,7 +707,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
           widget.customerId,
           'collected',
         );
-        await _syncLog('collection_completed');
+        await syncLog('collection_completed');
         await _maybeCompleteAssignmentFromStore(widget.assignmentId!);
       }
       await _showSuccessSheet(totalWeight, summary, offline: true);
@@ -991,17 +979,146 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     );
   }
 
-  void _showDialog(String title, String msg) {
-    showDialog(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: Text(title),
-        content: Text(msg),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(ctx).pop(),
-            child: const Text('OK'),
-          )
+  Widget _buildCollectionHeader({
+    required int addedCount,
+    required double totalWeight,
+  }) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: OperatorTheme.headerGradient,
+        borderRadius: OperatorTheme.cardRadius,
+        boxShadow: OperatorTheme.softShadow,
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 42,
+                height: 42,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: const Icon(Icons.scale, color: Colors.white),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Live Weight',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: Colors.white.withValues(alpha: 0.76),
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      latestWeight == '--' ? '-- kg' : '$latestWeight kg',
+                      style: AppTextStyles.heading2.copyWith(
+                        color: Colors.white,
+                        fontSize: 28,
+                        fontWeight: FontWeight.w900,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.12),
+                  borderRadius: OperatorTheme.chipRadius,
+                ),
+                child: Text(
+                  '$addedCount/${wasteTypes.length} added',
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          _buildBluetoothBar(inverted: true),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: _headerMetric(
+                  icon: Icons.person_pin_circle_outlined,
+                  label: 'Customer',
+                  value: widget.customerId.isEmpty ? '-' : widget.customerId,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _headerMetric(
+                  icon: Icons.inventory_2_outlined,
+                  label: 'Total',
+                  value: '${totalWeight.toStringAsFixed(2)} kg',
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _headerMetric({
+    required IconData icon,
+    required String label,
+    required String value,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 18, color: Colors.white.withValues(alpha: 0.82)),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: Colors.white.withValues(alpha: 0.65),
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  value,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTextStyles.bodyMedium.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ],
       ),
     );
@@ -1010,17 +1127,27 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   /// Bluetooth scale status + connect control. Android only — on iOS the scale
   /// uses classic SPP which Apple does not allow, so operators enter weight
   /// manually (the manual field stays available on every platform).
-  Widget _buildBluetoothBar() {
+  Widget _buildBluetoothBarContent({required bool inverted}) {
     if (!_bluetoothSupported) {
       return Row(
-        children: const [
-          Icon(Icons.edit, size: 18, color: Colors.black54),
-          SizedBox(width: 6),
+        children: [
+          Icon(
+            Icons.edit,
+            size: 18,
+            color: inverted
+                ? Colors.white.withValues(alpha: 0.82)
+                : OperatorTheme.mutedText,
+          ),
+          const SizedBox(width: 6),
           Expanded(
             child: Text(
               'Enter weight manually below.',
-              style:
-                  TextStyle(color: Colors.black54, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: inverted
+                    ? Colors.white.withValues(alpha: 0.82)
+                    : OperatorTheme.mutedText,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ),
         ],
@@ -1028,11 +1155,13 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     }
 
     final Color statusColor = connected
-        ? Colors.green.shade700
-        : (_btConnecting ? Colors.orange.shade700 : Colors.red.shade600);
+        ? (inverted ? const Color(0xFF7EF59F) : OperatorTheme.success)
+        : (_btConnecting
+            ? OperatorTheme.warning
+            : (inverted ? const Color(0xFFFFB4B4) : OperatorTheme.danger));
     final String statusText = connected
         ? 'Scale connected${_connectedDeviceName != null ? ' · $_connectedDeviceName' : ''}'
-        : (_btConnecting ? 'Connecting…' : 'Scale not connected');
+        : (_btConnecting ? 'Connecting...' : 'Scale not connected');
 
     return Row(
       children: [
@@ -1057,6 +1186,10 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
           )
         else
           TextButton.icon(
+            style: TextButton.styleFrom(
+              foregroundColor: inverted ? Colors.white : OperatorTheme.accent,
+              padding: const EdgeInsets.symmetric(horizontal: 8),
+            ),
             onPressed: connected ? _disconnectScale : _connectScalePressed,
             icon: Icon(connected ? Icons.link_off : Icons.bluetooth_searching,
                 size: 18),
@@ -1064,6 +1197,10 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
           ),
       ],
     );
+  }
+
+  Widget _buildBluetoothBar({bool inverted = false}) {
+    return _buildBluetoothBarContent(inverted: inverted);
   }
 
   /// Manual Connect tap: ensure adapter on, then auto-match or show picker.
@@ -1092,43 +1229,133 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     });
   }
 
-  Widget _buildCustomerInfo() => Card(
-        color: AppColors.surface,
-        elevation: 0,
-        shape: RoundedRectangleBorder(
-          borderRadius: _kOperatorCardRadius,
+  Widget _buildCustomerInfo() => Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: OperatorTheme.surface,
+          borderRadius: OperatorTheme.cardRadius,
+          border: Border.all(color: OperatorTheme.hairline),
+          boxShadow: OperatorTheme.softShadow,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: OperatorTheme.accentSoft,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(
+                    Icons.home_work_outlined,
+                    color: OperatorTheme.accent,
+                    size: 21,
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(
+                    widget.customerName.trim().isEmpty
+                        ? 'Scanned household'
+                        : widget.customerName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTextStyles.heading2.copyWith(
+                      color: OperatorTheme.strongText,
+                      fontWeight: FontWeight.w900,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
             _infoTile('Customer Name', widget.customerName),
             _infoTile('Customer ID', widget.customerId),
-            _infoTile('Contact No', widget.contactNo),
+            if (widget.contactNo.trim().isNotEmpty)
+              _infoTile('Contact No', widget.contactNo),
           ],
         ),
       );
 
-  Widget _infoTile(String label, String value) => ListTile(
-        title: Text(
-          label,
-          style: AppTextStyles.bodyMedium.copyWith(
-            fontWeight: FontWeight.w600,
-            color: AppColors.textPrimary,
-          ),
-        ),
-        subtitle: Text(
-          value,
-          style: AppTextStyles.bodyMedium.copyWith(
-            fontWeight: FontWeight.w500,
-            color: AppColors.textSecondary,
-          ),
+  Widget _infoTile(String label, String value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 112,
+              child: Text(
+                label,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w700,
+                  color: OperatorTheme.mutedText,
+                ),
+              ),
+            ),
+            Expanded(
+              child: Text(
+                value.trim().isEmpty ? '-' : value,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodyMedium.copyWith(
+                  fontWeight: FontWeight.w800,
+                  color: OperatorTheme.strongText,
+                ),
+              ),
+            ),
+          ],
         ),
       );
+
+  Color _wasteAccent(String type) {
+    if (type.contains('wet')) return const Color(0xFF0EA5E9);
+    if (type.contains('dry')) return OperatorTheme.warning;
+    return OperatorTheme.accent;
+  }
+
+  IconData _wasteIcon(String type) {
+    if (type.contains('wet')) return Icons.water_drop_outlined;
+    if (type.contains('dry')) return Icons.inventory_2_outlined;
+    return Icons.recycling_outlined;
+  }
+
+  Widget _statusChip({
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: OperatorTheme.chipRadius,
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 5),
+          Text(
+            label,
+            style: AppTextStyles.bodyMedium.copyWith(
+              color: color,
+              fontSize: 12,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
 
   Widget _buildWasteSection(String type, String displayName) {
     final item = _wasteData[type]!;
     final image = item['image'] as File?;
     final isAdded = item['isAdded'] as bool;
+    final accent = _wasteAccent(type);
     final isEditingAdded =
         isAdded && activeType == type && item['finalWeight'] == null;
     final displayWeight =
@@ -1136,105 +1363,228 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
             ? item['finalWeight']
             : item['weight'];
 
-    return Card(
-      margin: const EdgeInsets.symmetric(vertical: 10),
-      shape: RoundedRectangleBorder(
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 8),
+      decoration: BoxDecoration(
+        color: OperatorTheme.surface,
         borderRadius: _kOperatorCardRadius,
-        side: BorderSide(
-          color: (type == activeType) ? AppColors.primary : Colors.black12,
-          width: (type == activeType) ? 1.5 : 1,
+        border: Border.all(
+          color: (type == activeType) ? accent : OperatorTheme.hairline,
+          width: (type == activeType) ? 1.6 : 1,
         ),
+        boxShadow: OperatorTheme.softShadow,
       ),
       child: Padding(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.all(14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(
-              displayName,
-              style: AppTextStyles.heading2,
+            Row(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: accent.withValues(alpha: 0.11),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Icon(_wasteIcon(type), color: accent, size: 21),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        displayName,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.heading2.copyWith(
+                          color: OperatorTheme.strongText,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        image == null ? 'Photo required' : 'Photo captured',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: OperatorTheme.mutedText,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                _statusChip(
+                  icon: isAdded ? Icons.check_circle : Icons.schedule,
+                  label: isAdded ? 'Added' : 'Pending',
+                  color:
+                      isAdded ? OperatorTheme.success : OperatorTheme.warning,
+                ),
+              ],
             ),
-            const SizedBox(height: 8),
-
-            // IMAGE
+            const SizedBox(height: 12),
             if (image != null)
               GestureDetector(
                 onTap: () => _showPreview(image),
                 child: ClipRRect(
-                  borderRadius: BorderRadius.circular(8),
-                  child: Image.file(image,
-                      width: double.infinity, height: 180, fit: BoxFit.cover),
+                  borderRadius: BorderRadius.circular(14),
+                  child: Stack(
+                    children: [
+                      Image.file(
+                        image,
+                        width: double.infinity,
+                        height: 154,
+                        fit: BoxFit.cover,
+                      ),
+                      Positioned(
+                        right: 10,
+                        bottom: 10,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 9, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.black.withValues(alpha: 0.58),
+                            borderRadius: OperatorTheme.chipRadius,
+                          ),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.visibility_outlined,
+                                  size: 14, color: Colors.white),
+                              SizedBox(width: 5),
+                              Text(
+                                'Preview',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w800,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               )
             else
               Container(
-                height: 180,
+                height: 132,
                 width: double.infinity,
                 decoration: BoxDecoration(
-                  color: AppColors.accentLight,
-                  borderRadius: BorderRadius.circular(12),
-                ),
-                child: const Icon(Icons.camera_alt_outlined,
-                    size: 48, color: Colors.grey),
-              ),
-
-            const SizedBox(height: 8),
-
-            Text(
-              "Weight: ${displayWeight == '--' ? '--' : '$displayWeight kg'}",
-              style: AppTextStyles.bodyMedium.copyWith(
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Text(
-                  'Manual (kg)',
-                  style: AppTextStyles.bodyMedium.copyWith(
-                    fontSize: 12,
-                    color: AppColors.textSecondary,
-                    fontWeight: FontWeight.w600,
+                  color: OperatorTheme.surfaceMuted,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: OperatorTheme.hairline,
+                    style: BorderStyle.solid,
                   ),
                 ),
-                const SizedBox(width: 10),
-                SizedBox(
-                  width: 90,
-                  height: 34,
-                  child: TextField(
-                    controller: _manualWeightControllers[type],
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    inputFormatters: [
-                      FilteringTextInputFormatter.allow(
-                        RegExp(r'^\d*\.?\d{0,2}$'),
-                      ),
-                    ],
-                    decoration: InputDecoration(
-                      hintText: '0.0',
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 8),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
+                child: Column(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.camera_alt_outlined,
+                        size: 34, color: OperatorTheme.mutedText),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Capture waste photo',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: OperatorTheme.mutedText,
+                        fontWeight: FontWeight.w700,
                       ),
                     ),
-                    onChanged: (value) => setState(
-                      () => _updateManualWeight(type, value),
+                  ],
+                ),
+              ),
+            const SizedBox(height: 12),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: OperatorTheme.surfaceMuted,
+                borderRadius: BorderRadius.circular(14),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Row(
+                      children: [
+                        Icon(Icons.monitor_weight_outlined,
+                            size: 19, color: accent),
+                        const SizedBox(width: 8),
+                        Flexible(
+                          child: Text(
+                            displayWeight == '--'
+                                ? 'Weight not set'
+                                : '$displayWeight kg',
+                            overflow: TextOverflow.ellipsis,
+                            style: AppTextStyles.bodyMedium.copyWith(
+                              color: OperatorTheme.strongText,
+                              fontWeight: FontWeight.w900,
+                            ),
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(width: 10),
+                  SizedBox(
+                    width: 104,
+                    height: 40,
+                    child: TextField(
+                      controller: _manualWeightControllers[type],
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      inputFormatters: [
+                        FilteringTextInputFormatter.allow(
+                          RegExp(r'^\d*\.?\d{0,2}$'),
+                        ),
+                      ],
+                      decoration: InputDecoration(
+                        hintText: 'kg',
+                        isDense: true,
+                        filled: true,
+                        fillColor: OperatorTheme.surface,
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 10, vertical: 10),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: OperatorTheme.hairline),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide:
+                              const BorderSide(color: OperatorTheme.hairline),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: accent, width: 1.4),
+                        ),
+                      ),
+                      onChanged: (value) => setState(
+                        () => _updateManualWeight(type, value),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-
-            const SizedBox(height: 10),
-
+            const SizedBox(height: 12),
             Row(
               children: [
                 Expanded(
                   child: OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: OperatorTheme.primary,
+                      side: const BorderSide(color: OperatorTheme.hairline),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
                     onPressed: () async {
                       final picked =
                           await _picker.pickImage(source: ImageSource.camera);
@@ -1265,9 +1615,9 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
                         );
                       });
                     },
-                    icon: const Icon(Icons.camera_alt, size: 18),
+                    icon: const Icon(Icons.camera_alt_outlined, size: 18),
                     label: Text(
-                      "Capture",
+                      image == null ? "Capture" : "Retake",
                       style: AppTextStyles.bodyMedium.copyWith(
                         fontWeight: FontWeight.w600,
                       ),
@@ -1278,9 +1628,15 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
                 Expanded(
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          isAdded ? Colors.orange.shade600 : AppColors.primary,
+                      backgroundColor: isAdded
+                          ? OperatorTheme.warning
+                          : OperatorTheme.accent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
                       padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
                     ),
                     onPressed: () {
                       if (isAdded && !isEditingAdded) {
@@ -1299,6 +1655,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
                       isAdded ? (isEditingAdded ? "Save" : "Update") : "Add",
                       style: AppTextStyles.labelLarge.copyWith(
                         fontSize: 13,
+                        color: Colors.white,
                       ),
                     ),
                   ),
@@ -1331,6 +1688,10 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
   // ==================== MAIN UI ====================
   @override
   Widget build(BuildContext context) {
+    final totalWeight = _calculateTotalWeight();
+    final addedCount =
+        _wasteData.values.where((item) => item['isAdded'] == true).length;
+
     return WillPopScope(
       onWillPop: () async {
         final navigator = Navigator.of(context);
@@ -1342,9 +1703,13 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         return false;
       },
       child: Scaffold(
-        backgroundColor: AppColors.background,
+        backgroundColor: OperatorTheme.background,
         appBar: AppBar(
-          backgroundColor: AppColors.primary,
+          elevation: 0,
+          backgroundColor: Colors.transparent,
+          flexibleSpace: const DecoratedBox(
+            decoration: BoxDecoration(gradient: OperatorTheme.headerGradient),
+          ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
             onPressed: () {
@@ -1357,81 +1722,148 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
             },
           ),
           title: Text(
-            "Customer Details",
-            style: AppTextStyles.heading2.copyWith(color: Colors.white),
+            "Household Collection",
+            style: AppTextStyles.heading2.copyWith(
+              color: Colors.white,
+              fontWeight: FontWeight.w800,
+            ),
           ),
         ),
-        // ✅ FIX: Removed the ternary operator that replaced body with Loader if empty.
-        // Now, the body is ALWAYS the Column, so Headers and Customer Info never disappear.
         body: Column(
           children: [
-            Container(
-              width: double.infinity,
-              color: AppColors.accentLight,
-              padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    "📟 Live Weight: ${latestWeight == '--' ? '--' : '$latestWeight kg'}",
-                    style: AppTextStyles.heading2.copyWith(
-                      color: AppColors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  _buildBluetoothBar(),
-                ],
-              ),
-            ),
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.fromLTRB(16, 16, 16, 120),
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildCollectionHeader(
+                      addedCount: addedCount,
+                      totalWeight: totalWeight,
+                    ),
+                    const SizedBox(height: 14),
                     _buildCustomerInfo(),
-                    const SizedBox(height: 12),
-
-                    // If wasteTypes is ever empty (fallback), show a message instead of disappearing
+                    const SizedBox(height: 18),
+                    Text(
+                      'Waste entries',
+                      style: AppTextStyles.heading2.copyWith(
+                        color: OperatorTheme.strongText,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Capture photo, confirm weight, then add each waste type.',
+                      style: AppTextStyles.bodyMedium.copyWith(
+                        color: OperatorTheme.mutedText,
+                      ),
+                    ),
+                    const SizedBox(height: 10),
                     if (wasteTypes.isEmpty)
-                      const Padding(
-                        padding: EdgeInsets.all(20.0),
-                        child: Text("No waste types configured."),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(18),
+                        decoration: BoxDecoration(
+                          color: OperatorTheme.surface,
+                          borderRadius: OperatorTheme.cardRadius,
+                          border: Border.all(color: OperatorTheme.hairline),
+                        ),
+                        child: Text(
+                          "No waste types configured.",
+                          style: AppTextStyles.bodyMedium.copyWith(
+                            color: OperatorTheme.mutedText,
+                          ),
+                        ),
                       )
                     else
-                      ...wasteTypes.map((w) {
-                        final type =
-                            w['waste_type_name'].toString().toLowerCase();
-                        final name = w['waste_type_name'];
+                      ...wasteTypes.asMap().entries.map((entry) {
+                        final index = entry.key;
+                        final w = entry.value;
+                        final type = w['waste_type_name']
+                            .toString()
+                            .trim()
+                            .toLowerCase();
+                        final name = w['waste_type_name'].toString();
                         return KeyedSubtree(
-                          key: ValueKey(
-                              "wastecard_${type}_${_wasteData[type]!['unique_id']}_${_wasteData[type]!['weight']}"),
+                          key: ValueKey("wastecard_${index}_$type"),
                           child: _buildWasteSection(type, name),
                         );
                       }),
-
-                    const SizedBox(height: 20),
-                    _isSubmitting
-                        ? const CircularProgressIndicator()
-                        : ElevatedButton(
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor:
-                                  const Color.fromRGBO(0, 61, 125, 0.8),
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 40, vertical: 12),
-                            ),
-                            onPressed: _submitForm,
-                            child: Text(
-                              'Submit',
-                              style: AppTextStyles.labelLarge.copyWith(
-                                fontSize: 14,
-                              ),
-                            ),
-                          ),
                   ],
                 ),
               ),
             ),
           ],
+        ),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
+            decoration: const BoxDecoration(
+              color: OperatorTheme.surface,
+              border: Border(top: BorderSide(color: OperatorTheme.hairline)),
+              boxShadow: OperatorTheme.softShadow,
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Total waste',
+                        style: AppTextStyles.bodyMedium.copyWith(
+                          color: OperatorTheme.mutedText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+                      Text(
+                        '${totalWeight.toStringAsFixed(2)} kg',
+                        style: AppTextStyles.heading2.copyWith(
+                          color: OperatorTheme.strongText,
+                          fontWeight: FontWeight.w900,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  height: 48,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: OperatorTheme.accent,
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: const EdgeInsets.symmetric(horizontal: 18),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                    ),
+                    onPressed: _isSubmitting ? null : _submitForm,
+                    icon: _isSubmitting
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              color: Colors.white,
+                            ),
+                          )
+                        : const Icon(Icons.check_circle_outline, size: 20),
+                    label: Text(
+                      _isSubmitting ? 'Submitting' : 'Submit',
+                      style: AppTextStyles.labelLarge.copyWith(
+                        fontSize: 14,
+                        color: Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );
