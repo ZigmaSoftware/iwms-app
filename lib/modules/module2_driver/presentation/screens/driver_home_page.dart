@@ -23,9 +23,14 @@ import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/ors_service.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/attendance/attendance_driver.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/captain_home_tab.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/driver_theme.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/driver_animated_nav_bar.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/captain_nav_bar.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/driver_header.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_qr_scanner.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart'
+    show OperatorTripScanScreen;
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_cp_card.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_trip_header_card.dart';
@@ -97,7 +102,10 @@ class _TripPlannedStop {
   });
 }
 
-enum _DriverTab { home, assignments, attendance, profile }
+/// Captain shell tabs. Home is the today-first dashboard; Map hosts the
+/// turn-by-turn navigation view; the centre Scan FAB owns collection.
+/// (Assignments folded into Home — trip history opens from a quick action.)
+enum _DriverTab { home, map, attendance, profile }
 
 class DriverHomePage extends StatefulWidget {
   const DriverHomePage({super.key});
@@ -118,6 +126,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   String? _activeVehicleType;
   List<OperatorTripHistorySummary> _currentAssignments = [];
   List<OperatorTripHistorySummary> _historyAssignments = [];
+  OperatorTripToday? _todayTrip;
   OperatorTripHistoryDetail? _activeTripDetail;
   LatLng? _staticDriverLocation;
   bool _loadingCustomers = true;
@@ -130,6 +139,8 @@ class _DriverHomePageState extends State<DriverHomePage> {
   @override
   void initState() {
     super.initState();
+    // Hydrate the persisted light/dark choice before first paint settles.
+    CaptainThemeStore.load();
     _tripRepository = getIt<OperatorTripRepository>();
     WidgetsBinding.instance.addPostFrameCallback(
       (_) => _centerOnDriver(GammaGeofenceConfig.center),
@@ -196,7 +207,34 @@ class _DriverHomePageState extends State<DriverHomePage> {
             final selectedVehicle = _selectedVehicleFrom(state);
             final driverLocation = _resolveDriverLocation(selectedVehicle);
 
-            return Scaffold(
+            // Rebuild the whole Captain shell when the light/dark toggle
+            // flips so every mode-aware token re-resolves.
+            return ValueListenableBuilder<bool>(
+              valueListenable: CaptainThemeStore.isDark,
+              builder: (context, _, __) => _buildShell(
+                context,
+                driverLocation,
+                nameFromState,
+                empIdFromState,
+                employeeIdFromState,
+                selectedVehicle,
+              ),
+            );
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildShell(
+    BuildContext context,
+    LatLng driverLocation,
+    String? nameFromState,
+    String? empIdFromState,
+    String? employeeIdFromState,
+    VehicleModel? selectedVehicle,
+  ) {
+    return Scaffold(
               backgroundColor: DriverTheme.background,
               extendBody: true,
               body: SafeArea(
@@ -242,36 +280,36 @@ class _DriverHomePageState extends State<DriverHomePage> {
                   ],
                 ),
               ),
-              bottomNavigationBar: DriverAnimatedNavBar(
+              floatingActionButtonLocation:
+                  FloatingActionButtonLocation.centerDocked,
+              floatingActionButton: CaptainScanFab(onPressed: _openScanner),
+              bottomNavigationBar: CaptainNavBar(
                 activeIndex: _activeTab.index,
                 onTabSelected: (index) {
                   final tab = _tabFromIndex(index);
                   if (_activeTab != tab) setState(() => _activeTab = tab);
                 },
                 items: const [
-                  DriverNavItem(
+                  CaptainNavItem(
                     icon: Icons.home_rounded,
                     label: AppCopy.driverTabHome,
                   ),
-                  DriverNavItem(
-                    icon: Icons.assignment_rounded,
-                    label: AppCopy.driverTabAssignments,
+                  CaptainNavItem(
+                    icon: Icons.map_rounded,
+                    label: AppCopy.driverTabMap,
                   ),
-                  DriverNavItem(
+                  CaptainNavItem(
                     icon: Icons.event_available_rounded,
                     label: AppCopy.driverTabAttendance,
+                    blink: true,
                   ),
-                  DriverNavItem(
+                  CaptainNavItem(
                     icon: Icons.person_outline_rounded,
                     label: AppCopy.driverTabProfile,
                   ),
                 ],
               ),
             );
-          },
-        ),
-      ),
-    );
   }
 
   Future<void> _loadAssignmentsForDriver() async {
@@ -375,6 +413,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
         _customers = stops;
         _tripStops = tripStops;
         _tripPolyline = tripStops.map((stop) => stop.location).toList();
+        _todayTrip = todayTrip;
         _activeTripId = activeTrip?.assignmentUniqueId;
         _activeRoutePlanId = detail?.summary.tripPlan?.uniqueId;
         _activeVehicleType = null;
@@ -482,6 +521,17 @@ class _DriverHomePageState extends State<DriverHomePage> {
       String empIdFromState, VehicleModel? vehicle) {
     switch (tab) {
       case _DriverTab.home:
+        return CaptainHomeTab(
+          trip: _todayTrip,
+          loading: _loadingTrip,
+          error: _tripError,
+          onRefresh: _loadAssignmentsForDriver,
+          onOpenMap: () => setState(() => _activeTab = _DriverTab.map),
+          onScan: _openScanner,
+          onOpenTrips: _openTripsPage,
+          driverName: nameFromState,
+        );
+      case _DriverTab.map:
         return _HomeTab(
           mapController: _mapController,
           driverLocation: driverLocation,
@@ -501,15 +551,6 @@ class _DriverHomePageState extends State<DriverHomePage> {
           onRefresh: _loadAssignmentsForDriver,
           onStatusChanged: _updateCustomerStatus,
         );
-      case _DriverTab.assignments:
-        return _AssignmentsTab(
-          currentAssignments: _currentAssignments,
-          historyAssignments: _historyAssignments,
-          activeTripDetail: _activeTripDetail,
-          loading: _loadingAssignments,
-          error: _assignmentError,
-          onRefresh: _loadAssignmentsForDriver,
-        );
       case _DriverTab.attendance:
         return AttendancePageDriver(
           driverName: nameFromState,
@@ -528,7 +569,7 @@ class _DriverHomePageState extends State<DriverHomePage> {
   _DriverTab _tabFromIndex(int index) {
     switch (index) {
       case 1:
-        return _DriverTab.assignments;
+        return _DriverTab.map;
       case 2:
         return _DriverTab.attendance;
       case 3:
@@ -536,6 +577,102 @@ class _DriverHomePageState extends State<DriverHomePage> {
       case 0:
       default:
         return _DriverTab.home;
+    }
+  }
+
+  /// Full trips view (current + history tabs), preserved from the old
+  /// Assignments tab and now pushed from the Home dashboard.
+  void _openTripsPage() {
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        // The trips view keeps the operator module's light styling (dark
+        // text), so it needs a light scaffold — not the Captain black.
+        builder: (_) => Scaffold(
+          backgroundColor: OperatorTheme.background,
+          appBar: AppBar(
+            title: const Text('My Trips'),
+            backgroundColor: CaptainTheme.primary,
+            foregroundColor: Colors.white,
+            elevation: 0,
+          ),
+          body: _AssignmentsTab(
+            currentAssignments: _currentAssignments,
+            historyAssignments: _historyAssignments,
+            activeTripDetail: _activeTripDetail,
+            loading: _loadingAssignments,
+            error: _assignmentError,
+            onRefresh: _loadAssignmentsForDriver,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Centre Scan FAB → choose between the two collection flows the vehicle
+  /// crew performs (both inherited from the operator app):
+  ///   • Bin QR — validate a bin against today's trip, then weight entry.
+  ///   • Household — scan a customer QR, then wet/dry/mixed weighment.
+  Future<void> _openScanner() async {
+    final choice = await showModalBottomSheet<String>(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (sheetContext) => SafeArea(
+        child: Container(
+          margin: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+          padding: const EdgeInsets.fromLTRB(18, 18, 18, 20),
+          decoration: BoxDecoration(
+            color: CaptainTheme.surface,
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: CaptainTheme.hairline),
+            boxShadow: CaptainTheme.elevatedShadow,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'What are you collecting?',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: CaptainTheme.strongText,
+                ),
+              ),
+              const SizedBox(height: 14),
+              _ScanChoiceTile(
+                icon: Icons.delete_rounded,
+                color: CaptainTheme.accent,
+                title: 'Bin collection',
+                subtitle: 'Scan a bin QR and record its weight',
+                onTap: () => Navigator.of(sheetContext).pop('bin'),
+              ),
+              const SizedBox(height: 10),
+              _ScanChoiceTile(
+                icon: Icons.home_work_rounded,
+                color: CaptainTheme.info,
+                title: 'Household collection',
+                subtitle: 'Scan a customer QR, enter wet / dry / mixed weights',
+                onTap: () => Navigator.of(sheetContext).pop('household'),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+    if (!mounted || choice == null) return;
+
+    if (choice == 'bin') {
+      final result = await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const OperatorTripScanScreen()),
+      );
+      if (!mounted) return;
+      if (result != null) await _loadAssignmentsForDriver();
+    } else if (choice == 'household') {
+      await Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => const OperatorQRScanner()),
+      );
+      if (!mounted) return;
+      await _loadAssignmentsForDriver();
     }
   }
 
@@ -552,6 +689,81 @@ class _DriverHomePageState extends State<DriverHomePage> {
         }
       }
     });
+  }
+}
+
+/// One option row in the Scan chooser sheet — big tap target, icon plate,
+/// title + one-line explanation.
+class _ScanChoiceTile extends StatelessWidget {
+  const _ScanChoiceTile({
+    required this.icon,
+    required this.color,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  final IconData icon;
+  final Color color;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: color.withValues(alpha: 0.07),
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(16),
+        child: Container(
+          padding: const EdgeInsets.all(14),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(16),
+            border: Border.all(color: color.withValues(alpha: 0.28)),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.14),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontSize: 14.5,
+                        fontWeight: FontWeight.w800,
+                        color: CaptainTheme.strongText,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        color: CaptainTheme.mutedText,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: color),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
 
@@ -3029,6 +3241,61 @@ class _ProfileTab extends StatelessWidget {
                 label: 'Shift',
                 value: 'Morning (6:00 AM - 2:00 PM)',
                 icon: Icons.access_time_outlined,
+              ),
+            ],
+          ),
+
+          const SizedBox(height: 16),
+
+          // Appearance — Captain-wide light/dark toggle (persisted).
+          _ProfileSection(
+            title: 'Appearance',
+            icon: Icons.brightness_6_outlined,
+            children: [
+              ValueListenableBuilder<bool>(
+                valueListenable: CaptainThemeStore.isDark,
+                builder: (context, isDark, _) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      children: [
+                        Icon(
+                          isDark
+                              ? Icons.dark_mode_outlined
+                              : Icons.light_mode_outlined,
+                          size: 18,
+                          color: Colors.grey.shade600,
+                        ),
+                        const SizedBox(width: 12),
+                        const Expanded(
+                          child: Text(
+                            'Theme',
+                            style: TextStyle(
+                              fontSize: 14,
+                              color: Colors.black87,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        Text(
+                          isDark ? 'Dark' : 'Light',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.grey.shade700,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Switch(
+                          value: isDark,
+                          activeColor: CaptainTheme.accent,
+                          onChanged: (value) =>
+                              CaptainThemeStore.setDark(value),
+                        ),
+                      ],
+                    ),
+                  );
+                },
               ),
             ],
           ),

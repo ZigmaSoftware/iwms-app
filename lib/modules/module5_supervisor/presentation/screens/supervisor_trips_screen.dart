@@ -7,6 +7,7 @@ import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/s
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_assignment_card.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_assignment_detail_sheet.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_state_views.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_visuals.dart';
 
 enum _TripFilter { all, inProgress, completed }
 
@@ -39,25 +40,27 @@ class _SupervisorTripsScreenState extends State<SupervisorTripsScreen> {
       color: SupervisorTheme.background,
       child: SafeArea(
         bottom: false,
-        child: BlocBuilder<SupervisorBloc, SupervisorState>(
-          builder: (context, state) {
-            return Column(
-              children: [
-                _topBar(),
-                _filterChips(state),
-                Expanded(child: _buildBody(context, state)),
-              ],
-            );
-          },
+        child: SupervisorPatternBackground(
+          child: BlocBuilder<SupervisorBloc, SupervisorState>(
+            builder: (context, state) {
+              return Column(
+                children: [
+                  _topBar(),
+                  _filterChips(state),
+                  Expanded(child: _buildBody(context, state)),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
   }
 
   Widget _topBar() {
-    return const Padding(
-      padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
-      child: Align(
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 14, 20, 4),
+      child: const Align(
         alignment: Alignment.centerLeft,
         child: Text(
           'Trips today',

@@ -402,11 +402,15 @@ class AppRouter {
             isDefault: true,
           ),
         ];
+      // DEPRECATED surface: the operator app was merged into the driver
+      // ("Captain") shell — one phone per vehicle, held by the driver.
+      // Operator logins still resolve here for backward compatibility only;
+      // see lib/modules/module3_operator/README.md.
       case 'operator':
         return const [
           AppSurfaceAccess(
             key: 'operator',
-            label: 'Operator',
+            label: 'Operator (deprecated)',
             route: AppRoutePaths.operatorHome,
             isDefault: true,
           ),

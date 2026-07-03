@@ -64,7 +64,7 @@ class SupervisorAssignmentDetailSheet extends StatelessWidget {
             style: const TextStyle(
               fontSize: 12,
               color: SupervisorTheme.mutedText,
-              letterSpacing: 0.4,
+              letterSpacing: 0,
             ),
           ),
           const SizedBox(height: 18),
@@ -78,16 +78,15 @@ class SupervisorAssignmentDetailSheet extends StatelessWidget {
             _row(Icons.delete_outline_rounded, 'Waste type',
                 assignment.wasteTypeName),
           if (assignment.vehicleNo.isNotEmpty)
-            _row(Icons.local_shipping_outlined, 'Vehicle',
-                assignment.vehicleNo),
+            _row(
+                Icons.local_shipping_outlined, 'Vehicle', assignment.vehicleNo),
           if (assignment.driverName.isNotEmpty)
             _row(Icons.drive_eta_rounded, 'Driver', assignment.driverName),
           if (assignment.operatorName.isNotEmpty)
-            _row(Icons.engineering_rounded, 'Operator',
-                assignment.operatorName),
+            _row(
+                Icons.engineering_rounded, 'Operator', assignment.operatorName),
           if (assignment.scheduledTime.isNotEmpty)
-            _row(Icons.schedule_rounded, 'Scheduled',
-                assignment.scheduledTime),
+            _row(Icons.schedule_rounded, 'Scheduled', assignment.scheduledTime),
           if (assignment.remarks.isNotEmpty)
             _row(Icons.notes_rounded, 'Remarks', assignment.remarks),
           const SizedBox(height: 20),
@@ -143,9 +142,9 @@ class SupervisorAssignmentDetailSheet extends StatelessWidget {
               child: ElevatedButton.icon(
                 onPressed: null,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: SupervisorTheme.accent,
+                  backgroundColor: SupervisorTheme.primary,
                   disabledBackgroundColor:
-                      SupervisorTheme.accent.withValues(alpha: 0.4),
+                      SupervisorTheme.primary.withValues(alpha: 0.4),
                   foregroundColor: Colors.white,
                   disabledForegroundColor: Colors.white70,
                   padding: const EdgeInsets.symmetric(vertical: 13),
@@ -166,7 +165,7 @@ class SupervisorAssignmentDetailSheet extends StatelessWidget {
                   disabledForegroundColor:
                       SupervisorTheme.danger.withValues(alpha: 0.4),
                   side: BorderSide(
-                    color: SupervisorTheme.danger.withValues(alpha: 0.4),
+                    color: SupervisorTheme.primary.withValues(alpha: 0.28),
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 13),
                   shape: RoundedRectangleBorder(

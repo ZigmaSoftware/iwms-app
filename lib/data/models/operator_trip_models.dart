@@ -215,6 +215,9 @@ class OperatorTripToday {
   final OperatorTripPlanBrief? tripPlan;
   final OperatorTripProgress progress;
   final List<OperatorTripCollectionPoint> collectionPoints;
+  // Everyone working this vehicle today (driver + operator + extras). The
+  // merged driver app renders this read-only so the driver knows their crew.
+  final OperatorTripCrew? crew;
 
   const OperatorTripToday({
     required this.assignmentUniqueId,
@@ -230,6 +233,7 @@ class OperatorTripToday {
     this.scheduledTime,
     this.actualStartTime,
     this.actualEndTime,
+    this.crew,
   });
 
   /// Display name for the trip's service area (panchayat or ward).
@@ -289,9 +293,13 @@ class OperatorTripToday {
               Map<String, dynamic>.from(json['ward'] as Map),
             )
           : null,
-      wasteType: OperatorTripWasteType.fromJson(
-        Map<String, dynamic>.from(json['waste_type'] as Map),
-      ),
+      // Multi-waste-type trips can ship `waste_type: null`; fall back to a
+      // harmless placeholder instead of crashing the parse.
+      wasteType: json['waste_type'] is Map
+          ? OperatorTripWasteType.fromJson(
+              Map<String, dynamic>.from(json['waste_type'] as Map),
+            )
+          : const OperatorTripWasteType(uniqueId: '', name: ''),
       vehicle: json['vehicle'] is Map<String, dynamic>
           ? OperatorTripVehicle.fromJson(
               Map<String, dynamic>.from(json['vehicle'] as Map),
@@ -310,6 +318,118 @@ class OperatorTripToday {
                 Map<String, dynamic>.from(e as Map),
               ))
           .toList(),
+      crew: json['crew'] is Map
+          ? OperatorTripCrew.fromJson(
+              Map<String, dynamic>.from(json['crew'] as Map),
+            )
+          : null,
+    );
+  }
+}
+
+/// One crew member on today's trip (driver / operator / extra operator),
+/// as served by the `crew` block on `/operator-mobile/my-trip-today/`.
+class OperatorTripCrewMember {
+  final String uniqueId;
+  final String? name;
+  final String? empId;
+  final String? role;
+  final String? phone;
+  final String? photoUrl;
+
+  const OperatorTripCrewMember({
+    required this.uniqueId,
+    this.name,
+    this.empId,
+    this.role,
+    this.phone,
+    this.photoUrl,
+  });
+
+  String get displayName => (name?.trim().isNotEmpty == true) ? name! : '—';
+
+  /// "Company Operator" → "Operator", "company_driver" → "Driver".
+  String get roleLabel {
+    final raw = (role ?? '').replaceAll('_', ' ').trim();
+    if (raw.isEmpty) return '';
+    final cleaned = raw.toLowerCase().startsWith('company ')
+        ? raw.substring(8)
+        : raw;
+    if (cleaned.isEmpty) return '';
+    return cleaned[0].toUpperCase() + cleaned.substring(1).toLowerCase();
+  }
+
+  String get initials {
+    final parts = displayName
+        .split(RegExp(r'[\s_]+'))
+        .where((p) => p.trim().isNotEmpty)
+        .toList();
+    if (parts.isEmpty || parts.first == '—') return '?';
+    if (parts.length == 1) {
+      final word = parts.first;
+      return word.length >= 2
+          ? word.substring(0, 2).toUpperCase()
+          : word.toUpperCase();
+    }
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+
+  factory OperatorTripCrewMember.fromJson(Map<String, dynamic> json) {
+    return OperatorTripCrewMember(
+      uniqueId: json['unique_id']?.toString() ?? '',
+      name: json['name']?.toString(),
+      empId: json['emp_id']?.toString(),
+      role: json['role']?.toString(),
+      phone: json['phone']?.toString(),
+      photoUrl: json['photo_url']?.toString(),
+    );
+  }
+}
+
+/// The full crew block: driver + primary operator + extra operators.
+class OperatorTripCrew {
+  final OperatorTripCrewMember? driver;
+  final OperatorTripCrewMember? operator;
+  final List<OperatorTripCrewMember> extraOperators;
+  final bool isAltActive;
+  final String? templateCode;
+  final String? altTemplateCode;
+
+  const OperatorTripCrew({
+    this.driver,
+    this.operator,
+    this.extraOperators = const [],
+    this.isAltActive = false,
+    this.templateCode,
+    this.altTemplateCode,
+  });
+
+  /// All operators on the vehicle (primary + extras).
+  List<OperatorTripCrewMember> get operators => [
+        if (operator != null) operator!,
+        ...extraOperators,
+      ];
+
+  factory OperatorTripCrew.fromJson(Map<String, dynamic> json) {
+    return OperatorTripCrew(
+      driver: json['driver'] is Map
+          ? OperatorTripCrewMember.fromJson(
+              Map<String, dynamic>.from(json['driver'] as Map),
+            )
+          : null,
+      operator: json['operator'] is Map
+          ? OperatorTripCrewMember.fromJson(
+              Map<String, dynamic>.from(json['operator'] as Map),
+            )
+          : null,
+      extraOperators: (json['extra_operators'] as List? ?? [])
+          .whereType<Map>()
+          .map((e) =>
+              OperatorTripCrewMember.fromJson(Map<String, dynamic>.from(e)))
+          .toList(),
+      isAltActive: json['is_alt_active'] == true,
+      templateCode: json['template_code']?.toString(),
+      altTemplateCode: json['alt_template_code']?.toString(),
     );
   }
 }

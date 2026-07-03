@@ -111,7 +111,7 @@ class _DriverHeaderState extends State<DriverHeader> {
   Widget build(BuildContext context) {
     final designation = (widget.designation?.trim().isNotEmpty == true)
         ? widget.designation!
-        : 'Driver';
+        : 'Captain • Vehicle crew lead';
     // The ID badge shows the human-readable employee id (e.g. "13753223"),
     // not the internal staff unique id ("STC-...") that backs the photo API.
     final badgeId =
@@ -121,9 +121,9 @@ class _DriverHeaderState extends State<DriverHeader> {
 
     return Container(
       width: double.infinity,
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: DriverTheme.headerGradient,
-        borderRadius: BorderRadius.only(
+        borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(22),
           bottomRight: Radius.circular(22),
         ),
@@ -174,7 +174,7 @@ class _DriverHeaderState extends State<DriverHeader> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.wb_sunny_rounded,
+              Icon(Icons.wb_sunny_rounded,
                   color: DriverTheme.accent, size: 12),
               const SizedBox(width: 4),
               Text(
@@ -290,7 +290,7 @@ class _DriverHeaderState extends State<DriverHeader> {
       child: Container(
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          gradient: const LinearGradient(
+          gradient: LinearGradient(
             colors: [DriverTheme.accent, DriverTheme.accentDeep],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
@@ -311,7 +311,7 @@ class _DriverHeaderState extends State<DriverHeader> {
               ? NetworkImage(_convertToUrl(imageName!))
               : null,
           child: imageLoading
-              ? const SizedBox(
+              ? SizedBox(
                   width: 18,
                   height: 18,
                   child: CircularProgressIndicator(
@@ -320,7 +320,7 @@ class _DriverHeaderState extends State<DriverHeader> {
                   ),
                 )
               : (!hasProfile)
-                  ? const Column(
+                  ? Column(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
                         Icon(Icons.person_add_alt_1_rounded,

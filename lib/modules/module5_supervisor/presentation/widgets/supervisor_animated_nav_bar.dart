@@ -30,7 +30,7 @@ class SupervisorAnimatedNavBar extends StatelessWidget {
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
 
     return BottomAppBar(
-      color: SupervisorTheme.surface,
+      color: SupervisorTheme.primary,
       elevation: 0,
       shape: const CircularNotchedRectangle(),
       notchMargin: notchMargin,
@@ -82,14 +82,13 @@ class _AnimatedNavTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color =
-        selected ? SupervisorTheme.primary : SupervisorTheme.mutedText;
+    final color = selected ? SupervisorTheme.accent : Colors.white70;
 
     return InkResponse(
       onTap: onTap,
       radius: 38,
-      highlightColor: SupervisorTheme.surfaceMuted,
-      splashColor: SupervisorTheme.surfaceMuted,
+      highlightColor: Colors.white.withValues(alpha: 0.08),
+      splashColor: Colors.white.withValues(alpha: 0.08),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
@@ -102,7 +101,7 @@ class _AnimatedNavTab extends StatelessWidget {
             height: 3,
             margin: const EdgeInsets.only(bottom: 4),
             decoration: BoxDecoration(
-              color: SupervisorTheme.accent,
+              color: selected ? SupervisorTheme.accent : Colors.transparent,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -121,7 +120,7 @@ class _AnimatedNavTab extends StatelessWidget {
               color: color,
               fontSize: 10.5,
               fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              letterSpacing: 0.2,
+              letterSpacing: 0,
               height: 1,
             ),
           ),
@@ -190,10 +189,10 @@ class _SupervisorFabState extends State<SupervisorFab>
           );
         },
         child: Material(
-          color: SupervisorTheme.accent,
+          color: SupervisorTheme.primary,
           shape: const CircleBorder(),
           elevation: 8,
-          shadowColor: SupervisorTheme.accentDeep.withValues(alpha: 0.55),
+          shadowColor: SupervisorTheme.primary.withValues(alpha: 0.45),
           child: InkWell(
             customBorder: const CircleBorder(),
             onTap: widget.onPressed,
@@ -202,9 +201,20 @@ class _SupervisorFabState extends State<SupervisorFab>
               child: Container(
                 width: 60,
                 height: 60,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  gradient: SupervisorTheme.accentGradient,
+                  gradient: const LinearGradient(
+                    colors: [
+                      SupervisorTheme.primary,
+                      SupervisorTheme.primarySoft,
+                    ],
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                  ),
+                  border: Border.all(
+                    color: SupervisorTheme.accent,
+                    width: 2,
+                  ),
                 ),
                 child: Icon(
                   widget.icon,

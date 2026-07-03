@@ -51,8 +51,13 @@ class SupervisorEmptyView extends StatelessWidget {
                 onPressed: onRefresh,
                 icon: const Icon(Icons.refresh_rounded,
                     color: SupervisorTheme.accent),
-                label: const Text('Refresh',
-                    style: TextStyle(color: SupervisorTheme.accent)),
+                label: const Text(
+                  'Refresh',
+                  style: TextStyle(
+                    color: SupervisorTheme.accent,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ],
           ],
@@ -98,7 +103,7 @@ class SupervisorErrorView extends StatelessWidget {
               ElevatedButton.icon(
                 onPressed: onRetry,
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: SupervisorTheme.accent,
+                  backgroundColor: SupervisorTheme.primary,
                   foregroundColor: Colors.white,
                   shape: RoundedRectangleBorder(
                     borderRadius: SupervisorTheme.chipRadius,
@@ -137,9 +142,10 @@ class SupervisorFilterChip extends StatelessWidget {
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
           color: selected ? SupervisorTheme.primary : SupervisorTheme.surface,
-          borderRadius: SupervisorTheme.chipRadius,
+          borderRadius: BorderRadius.circular(22),
           border: Border.all(
-            color: selected ? SupervisorTheme.primary : SupervisorTheme.hairline,
+            color:
+                selected ? SupervisorTheme.primary : SupervisorTheme.hairline,
           ),
         ),
         child: Text(
@@ -147,8 +153,8 @@ class SupervisorFilterChip extends StatelessWidget {
           style: TextStyle(
             color: selected ? Colors.white : SupervisorTheme.mutedText,
             fontSize: 12.5,
-            fontWeight: FontWeight.w700,
-            letterSpacing: 0.2,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0,
           ),
         ),
       ),

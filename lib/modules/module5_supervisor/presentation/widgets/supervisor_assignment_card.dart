@@ -24,7 +24,7 @@ class SupervisorAssignmentCard extends StatelessWidget {
       child: InkWell(
         borderRadius: SupervisorTheme.cardRadius,
         onTap: onTap,
-        child: Ink(
+        child: Container(
           decoration: BoxDecoration(
             color: SupervisorTheme.surface,
             borderRadius: SupervisorTheme.cardRadius,
@@ -39,8 +39,8 @@ class SupervisorAssignmentCard extends StatelessWidget {
                 decoration: BoxDecoration(
                   color: s.color.withValues(alpha: 0.08),
                   borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(20),
-                    topRight: Radius.circular(20),
+                    topLeft: Radius.circular(18),
+                    topRight: Radius.circular(18),
                   ),
                 ),
                 padding:
@@ -55,7 +55,7 @@ class SupervisorAssignmentCard extends StatelessWidget {
                         color: s.color,
                         fontSize: 11.5,
                         fontWeight: FontWeight.w800,
-                        letterSpacing: 0.6,
+                        letterSpacing: 0,
                       ),
                     ),
                     const Spacer(),
@@ -92,7 +92,7 @@ class SupervisorAssignmentCard extends StatelessWidget {
                       style: const TextStyle(
                         color: SupervisorTheme.mutedText,
                         fontSize: 11.5,
-                        letterSpacing: 0.4,
+                        letterSpacing: 0,
                       ),
                     ),
                     const SizedBox(height: 8),
@@ -136,7 +136,7 @@ class SupervisorAssignmentCard extends StatelessWidget {
           child: Text(
             staffName,
             overflow: TextOverflow.ellipsis,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 12,
               color: SupervisorTheme.mutedText,
             ),
@@ -187,7 +187,7 @@ class SupervisorAssignmentCard extends StatelessWidget {
               color: color,
               fontSize: 10,
               fontWeight: FontWeight.w800,
-              letterSpacing: 0.4,
+              letterSpacing: 0,
             ),
           ),
         ],
@@ -210,7 +210,7 @@ class SupervisorAssignmentCard extends StatelessWidget {
           color: color,
           fontSize: 11,
           fontWeight: FontWeight.w700,
-          letterSpacing: 0.4,
+          letterSpacing: 0,
         ),
       ),
     );

@@ -22,6 +22,12 @@ import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink
 import 'package:iwms_citizen_app/modules/module3_operator/utils/household_mode_store.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
+/// DEPRECATED (July 2026): the standalone operator app surface is retired —
+/// one phone per vehicle, held by the driver. Use the merged Captain shell
+/// (`module2_driver/driver_home_page.dart`) instead. This shell is kept for
+/// backward compatibility with existing operator logins; see
+/// `module3_operator/README.md` for the migration map.
+///
 /// Tabs surfaced in the operator shell. QR is intentionally NOT a tab —
 /// it lives as a PhonePe-style green floating action button docked in the
 /// bottom-app-bar notch. The 4 nav slots are: Home / Assignments / (QR FAB)

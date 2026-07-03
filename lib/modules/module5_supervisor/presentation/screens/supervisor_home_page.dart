@@ -8,6 +8,7 @@ import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/s
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_cards.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_header.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_state_views.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_visuals.dart';
 
 /// Dashboard tab — header + zone KPIs + activity/alerts feed.
 class SupervisorHomePage extends StatelessWidget {
@@ -41,7 +42,14 @@ class SupervisorHomePage extends StatelessWidget {
                 zoneCount: state.scope.zoneIds.length,
               ),
               Expanded(
-                child: _buildBody(context, state, kpis),
+                // Static dotted background: painted once behind the scroll view
+                // so it stays fixed while the content scrolls. The KPI cards are
+                // transparent tints (very low fill + near-zero blur), so the
+                // dots show through them via normal compositing — no need to put
+                // the pattern inside the viewport.
+                child: SupervisorPatternBackground(
+                  child: _buildBody(context, state, kpis),
+                ),
               ),
             ],
           ),
@@ -72,10 +80,27 @@ class SupervisorHomePage extends StatelessWidget {
       onRefresh: () async {
         context.read<SupervisorBloc>().add(const SupervisorRefreshRequested());
       },
-      child: ListView(
+      child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
-        padding: const EdgeInsets.fromLTRB(18, 18, 18, 220),
-        children: [
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(18, 12, 18, 200),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+          SupervisorKpiAreaChart(kpis: kpis),
+          const SizedBox(height: 10),
+          const Row(
+            children: [
+              Expanded(child: SupervisorTimeChip(label: 'Trips')),
+              SizedBox(width: 8),
+              Expanded(child: SupervisorTimeChip(label: 'Review')),
+              SizedBox(width: 8),
+              Expanded(
+                child: SupervisorTimeChip(label: 'Today', selected: true),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
           const Text(
             'Today at a glance',
             style: TextStyle(
@@ -84,7 +109,7 @@ class SupervisorHomePage extends StatelessWidget {
               color: SupervisorTheme.strongText,
             ),
           ),
-          const SizedBox(height: 12),
+          const SizedBox(height: 10),
           _kpiGrid(kpis),
           const SizedBox(height: 12),
           _grievanceTile(context),
@@ -95,9 +120,9 @@ class SupervisorHomePage extends StatelessWidget {
           const SizedBox(height: 22),
           Row(
             children: [
-              const Text(
+              Text(
                 'Activity & alerts',
-                style: TextStyle(
+                style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: SupervisorTheme.strongText,
@@ -107,13 +132,11 @@ class SupervisorHomePage extends StatelessWidget {
               if (onOpenAssignments != null)
                 TextButton(
                   onPressed: onOpenAssignments,
-                  child: const Text(
-                    'Review',
-                    style: TextStyle(
-                      color: SupervisorTheme.accent,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
+                  child: const Text('Review',
+                      style: TextStyle(
+                        color: SupervisorTheme.accent,
+                        fontWeight: FontWeight.w700,
+                      )),
                 ),
             ],
           ),
@@ -127,7 +150,9 @@ class SupervisorHomePage extends StatelessWidget {
                 child: SupervisorAlertTile(alert: a),
               ),
             ),
-        ],
+            ],
+          ),
+        ),
       ),
     );
   }
@@ -163,14 +188,31 @@ class SupervisorHomePage extends StatelessWidget {
         onTap: onOpenAssignments,
       ),
     ];
-    return GridView.count(
-      crossAxisCount: 2,
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      mainAxisSpacing: 12,
-      crossAxisSpacing: 12,
-      childAspectRatio: 1.12,
-      children: cards,
+    // Laid out as plain Rows rather than a nested GridView on purpose: a
+    // GridView is itself a scroll viewport (its own compositing layer), which
+    // would isolate the cards from the dotted background and stop their
+    // BackdropFilter from frosting it. Keeping the cards in the same layer as
+    // the background makes the liquid-glass effect consistent at all times.
+    const spacing = 12.0;
+    const aspect = 1.02;
+
+    Widget cell(Widget card) =>
+        Expanded(child: AspectRatio(aspectRatio: aspect, child: card));
+
+    Widget row(Widget a, Widget b) => Row(
+          children: [
+            cell(a),
+            const SizedBox(width: spacing),
+            cell(b),
+          ],
+        );
+
+    return Column(
+      children: [
+        row(cards[0], cards[1]),
+        const SizedBox(height: spacing),
+        row(cards[2], cards[3]),
+      ],
     );
   }
 
@@ -184,10 +226,10 @@ class SupervisorHomePage extends StatelessWidget {
             builder: (_) => const SupervisorGrievanceScreen(),
           ),
         ),
-        child: Ink(
+        child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            gradient: SupervisorTheme.accentGradient,
+            color: SupervisorTheme.primary,
             borderRadius: SupervisorTheme.cardRadius,
             boxShadow: SupervisorTheme.softShadow,
           ),
@@ -203,13 +245,13 @@ class SupervisorHomePage extends StatelessWidget {
                     color: Colors.white, size: 18),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
                       'Grievances',
-                      style: TextStyle(
+                      style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w800,
                         color: Colors.white,
@@ -218,7 +260,10 @@ class SupervisorHomePage extends StatelessWidget {
                     SizedBox(height: 2),
                     Text(
                       'View & act on citizen complaints for your department',
-                      style: TextStyle(fontSize: 11.5, color: Colors.white70),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        color: Colors.white70,
+                      ),
                     ),
                   ],
                 ),
@@ -237,7 +282,7 @@ class SupervisorHomePage extends StatelessWidget {
       child: InkWell(
         borderRadius: SupervisorTheme.cardRadius,
         onTap: onOpenTeam,
-        child: Ink(
+        child: Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
             color: SupervisorTheme.surface,
@@ -257,10 +302,10 @@ class SupervisorHomePage extends StatelessWidget {
                     color: SupervisorTheme.accent, size: 18),
               ),
               const SizedBox(width: 12),
-              const Expanded(
+              Expanded(
                 child: Text(
                   'Team on duty',
-                  style: TextStyle(
+                  style: const TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w800,
                     color: SupervisorTheme.strongText,
@@ -286,13 +331,17 @@ class SupervisorHomePage extends StatelessWidget {
             Border.all(color: SupervisorTheme.accent.withValues(alpha: 0.25)),
       ),
       child: Row(
-        children: const [
-          Icon(Icons.task_alt_rounded, color: SupervisorTheme.accent, size: 20),
-          SizedBox(width: 10),
+        children: [
+          const Icon(
+            Icons.task_alt_rounded,
+            color: SupervisorTheme.accent,
+            size: 20,
+          ),
+          const SizedBox(width: 10),
           Expanded(
             child: Text(
               'All clear — no pending alerts in your zones.',
-              style: TextStyle(
+              style: const TextStyle(
                 fontSize: 13,
                 fontWeight: FontWeight.w700,
                 color: SupervisorTheme.accentDeep,

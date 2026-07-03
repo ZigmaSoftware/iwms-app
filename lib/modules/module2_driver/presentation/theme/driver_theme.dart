@@ -1,66 +1,51 @@
 import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 
-/// Driver-scoped design tokens. Uses the EXACT same color palette and structure
-/// as OperatorTheme (charcoal slate grey + attendance green) so the driver and
-/// operator shells feel like one unified product. The operator's proven palette:
-/// grey for primary surfaces and text, green for CTAs and accents.
+/// Legacy driver design tokens, now forwarding to [CaptainTheme].
+///
+/// The driver module was rebranded "Captain" when the operator app was merged
+/// into it (one phone per vehicle, held by the driver). Existing screens keep
+/// importing `DriverTheme`; every token below resolves to the Captain palette
+/// so the whole module re-skins in one place — and, since Captain gained a
+/// light/dark toggle, these are getters that resolve against the live mode.
+/// They can no longer be captured inside `const` constructors. New code
+/// should import [CaptainTheme] directly.
 class DriverTheme {
-  // Core palette — EXACT OPERATOR COLORS
-  static const Color primary = Color(0xFF1F2937); // slate-800 (charcoal)
-  static const Color primaryAccent = Color(0xFF111827); // slate-900
-  static const Color primarySoft = Color(0xFF374151); // slate-700
+  DriverTheme._();
 
-  static const Color accent = Color(0xFF0F8A58); // attendance green
-  static const Color accentDeep = Color(0xFF0D3B26); // deep attendance green
-  static const Color accentSoft = Color(0xFFE7F6EE); // attendance green bg
+  // Core palette — forwarded to CaptainTheme (mode-aware)
+  static Color get primary => CaptainTheme.primary;
+  static Color get primaryAccent => CaptainTheme.primaryAccent;
+  static Color get primarySoft => CaptainTheme.primarySoft;
 
-  static const Color background = Color(0xFFFAFAFA);
-  static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceMuted = Color(0xFFF3F4F6); // slate-100
+  static Color get accent => CaptainTheme.accent;
+  static Color get accentDeep => CaptainTheme.accentDeep;
+  static Color get accentSoft => CaptainTheme.accentSoft;
 
-  static const Color strongText = Color(0xFF0F172A); // slate-900
-  static const Color mutedText = Color(0xFF6B7280); // slate-500
-  static const Color hairline = Color(0xFFE5E7EB); // slate-200
+  static Color get background => CaptainTheme.background;
+  static Color get surface => CaptainTheme.surface;
+  static Color get surfaceMuted => CaptainTheme.surfaceMuted;
 
-  static const Color success = Color(0xFF059669); // emerald-600
-  static const Color warning = Color(0xFFF59E0B);
-  static const Color danger = Color(0xFFDC2626); // red-600
-  static const Color info = Color(0xFF2563EB); // blue-600
+  static Color get strongText => CaptainTheme.strongText;
+  static Color get mutedText => CaptainTheme.mutedText;
+  static Color get hairline => CaptainTheme.hairline;
 
-  // Gradients — EXACT OPERATOR STYLE
-  static const LinearGradient headerGradient = LinearGradient(
-    colors: [primary, primaryAccent],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  static Color get success => CaptainTheme.success;
+  static Color get warning => CaptainTheme.warning;
+  static Color get danger => CaptainTheme.danger;
+  static Color get info => CaptainTheme.info;
 
-  static const LinearGradient accentGradient = LinearGradient(
-    colors: [accent, accentDeep],
-    begin: Alignment.topLeft,
-    end: Alignment.bottomRight,
-  );
+  // Gradients
+  static LinearGradient get headerGradient => CaptainTheme.headerGradient;
+  static LinearGradient get accentGradient => CaptainTheme.accentGradient;
 
-  // Shadows — match operator
-  static const List<BoxShadow> softShadow = [
-    BoxShadow(
-      color: Color(0x14000000),
-      blurRadius: 18,
-      offset: Offset(0, 8),
-    ),
-  ];
+  // Shadows
+  static List<BoxShadow> get softShadow => CaptainTheme.softShadow;
+  static List<BoxShadow> get elevatedShadow => CaptainTheme.elevatedShadow;
 
-  static const List<BoxShadow> elevatedShadow = [
-    BoxShadow(
-      color: Color(0x1F000000),
-      blurRadius: 24,
-      offset: Offset(0, 12),
-    ),
-  ];
+  // Radii
+  static const BorderRadius cardRadius = CaptainTheme.cardRadius;
+  static const BorderRadius chipRadius = CaptainTheme.chipRadius;
 
-  // Radii — match operator
-  static const BorderRadius cardRadius = BorderRadius.all(Radius.circular(20));
-  static const BorderRadius chipRadius = BorderRadius.all(Radius.circular(12));
-
-  static const EdgeInsets pagePadding =
-      EdgeInsets.symmetric(horizontal: 20, vertical: 16);
+  static const EdgeInsets pagePadding = CaptainTheme.pagePadding;
 }

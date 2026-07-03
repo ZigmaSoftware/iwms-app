@@ -6,6 +6,7 @@ import 'package:iwms_citizen_app/modules/module5_supervisor/logic/supervisor_blo
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_cards.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_header.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_visuals.dart';
 
 /// Profile tab — identity header, zone scope summary, language switcher,
 /// and logout. Mirrors OperatorProfileScreen's structure.
@@ -39,21 +40,23 @@ class SupervisorProfileScreen extends StatelessWidget {
                 zoneCount: state.scope.zoneIds.length,
               ),
               Expanded(
-                child: ListView(
-                  physics: const BouncingScrollPhysics(),
-                  padding: EdgeInsets.fromLTRB(
-                    20,
-                    16,
-                    20,
-                    MediaQuery.viewPaddingOf(context).bottom + 200,
+                child: SupervisorPatternBackground(
+                  child: ListView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: EdgeInsets.fromLTRB(
+                      20,
+                      16,
+                      20,
+                      MediaQuery.viewPaddingOf(context).bottom + 200,
+                    ),
+                    children: [
+                      _zoneCard(state),
+                      const SizedBox(height: 16),
+                      _languageCard(context),
+                      const SizedBox(height: 16),
+                      _logoutButton(context),
+                    ],
                   ),
-                  children: [
-                    _zoneCard(state),
-                    const SizedBox(height: 16),
-                    _languageCard(context),
-                    const SizedBox(height: 16),
-                    _logoutButton(context),
-                  ],
                 ),
               ),
             ],
@@ -153,12 +156,11 @@ class SupervisorProfileScreen extends StatelessWidget {
   Widget _logoutButton(BuildContext context) {
     return SizedBox(
       width: double.infinity,
-      child: OutlinedButton.icon(
+      child: ElevatedButton.icon(
         onPressed: onLogout,
-        style: OutlinedButton.styleFrom(
-          foregroundColor: SupervisorTheme.danger,
-          side:
-              BorderSide(color: SupervisorTheme.danger.withValues(alpha: 0.4)),
+        style: ElevatedButton.styleFrom(
+          backgroundColor: SupervisorTheme.primary,
+          foregroundColor: Colors.white,
           padding: const EdgeInsets.symmetric(vertical: 14),
           shape: RoundedRectangleBorder(
             borderRadius: SupervisorTheme.cardRadius,

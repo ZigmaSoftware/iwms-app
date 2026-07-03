@@ -7,9 +7,11 @@ import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/s
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_assignment_card.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_assignment_detail_sheet.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_state_views.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_visuals.dart';
 
-/// Assignments tab — review list grouped by approval status. View-only this
+/// Assignments tab — review list grouped by approval status. View-only this. 
 /// phase (approve/reject is scaffolded in the detail sheet but disabled).
+
 class SupervisorAssignmentsScreen extends StatelessWidget {
   const SupervisorAssignmentsScreen({super.key});
 
@@ -19,28 +21,30 @@ class SupervisorAssignmentsScreen extends StatelessWidget {
       color: SupervisorTheme.background,
       child: SafeArea(
         bottom: false,
-        child: BlocBuilder<SupervisorBloc, SupervisorState>(
-          builder: (context, state) {
-            return Column(
-              children: [
-                const Padding(
-                  padding: EdgeInsets.fromLTRB(20, 18, 20, 8),
-                  child: Align(
-                    alignment: Alignment.centerLeft,
-                    child: Text(
-                      'Assignment review',
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: SupervisorTheme.strongText,
+        child: SupervisorPatternBackground(
+          child: BlocBuilder<SupervisorBloc, SupervisorState>(
+            builder: (context, state) {
+              return Column(
+                children: [
+                  const Padding(
+                    padding: EdgeInsets.fromLTRB(20, 14, 20, 4),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'Assignment review',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: SupervisorTheme.strongText,
+                        ),
                       ),
                     ),
                   ),
-                ),
-                Expanded(child: _buildBody(context, state)),
-              ],
-            );
-          },
+                  Expanded(child: _buildBody(context, state)),
+                ],
+              );
+            },
+          ),
         ),
       ),
     );
@@ -68,7 +72,8 @@ class SupervisorAssignmentsScreen extends StatelessWidget {
       );
     }
 
-    final pending = state.assignments.where((a) => a.isPendingApproval).toList();
+    final pending =
+        state.assignments.where((a) => a.isPendingApproval).toList();
     final reviewed =
         state.assignments.where((a) => !a.isPendingApproval).toList();
 
@@ -82,14 +87,15 @@ class SupervisorAssignmentsScreen extends StatelessWidget {
         padding: const EdgeInsets.fromLTRB(18, 6, 18, 220),
         children: [
           if (pending.isNotEmpty) ...[
-            _sectionHeader('Awaiting review', pending.length,
-                SupervisorTheme.warning),
+            _sectionHeader(
+                'Awaiting review', pending.length, SupervisorTheme.warning),
             const SizedBox(height: 10),
             ..._cards(context, pending),
             const SizedBox(height: 18),
           ],
           if (reviewed.isNotEmpty) ...[
-            _sectionHeader('Reviewed', reviewed.length, SupervisorTheme.success),
+            _sectionHeader(
+                'Reviewed', reviewed.length, SupervisorTheme.success),
             const SizedBox(height: 10),
             ..._cards(context, reviewed),
           ],
@@ -145,3 +151,16 @@ class SupervisorAssignmentsScreen extends StatelessWidget {
     );
   }
 }
+
+
+
+
+
+
+
+
+
+
+
+
+

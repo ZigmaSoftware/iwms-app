@@ -1,10 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 
-/// Supervisor header — charcoal slate gradient top section with an avatar
-/// anchored LEFT, identity (name, designation) stacked to its right,
-/// a greeting pill + logout on the right, and an optional zone strip below.
-/// Mirrors OperatorHeader's structure and tokens exactly.
+/// Supervisor header.
 class SupervisorHeader extends StatelessWidget {
   const SupervisorHeader({
     super.key,
@@ -47,23 +44,13 @@ class SupervisorHeader extends StatelessWidget {
     return Container(
       width: double.infinity,
       decoration: const BoxDecoration(
-        gradient: SupervisorTheme.headerGradient,
-        borderRadius: BorderRadius.only(
-          bottomLeft: Radius.circular(22),
-          bottomRight: Radius.circular(22),
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x29000000),
-            blurRadius: 16,
-            offset: Offset(0, 6),
-          ),
-        ],
+        color: SupervisorTheme.surface,
+        boxShadow: SupervisorTheme.softShadow,
       ),
       child: SafeArea(
         bottom: false,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 30, 16, 14),
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 14),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -71,10 +58,9 @@ class SupervisorHeader extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
                   _avatar(),
-                  const SizedBox(width: 11),
+                  const SizedBox(width: 12),
                   Expanded(child: _identitySection()),
-                  const SizedBox(width: 8),
-                  _greetingPill(),
+                  _logoutButton(),
                 ],
               ),
               const SizedBox(height: 10),
@@ -88,30 +74,19 @@ class SupervisorHeader extends StatelessWidget {
 
   Widget _avatar() {
     return Container(
-      decoration: BoxDecoration(
+      decoration: const BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          colors: [SupervisorTheme.accent, SupervisorTheme.accentDeep],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: SupervisorTheme.accent.withValues(alpha: 0.28),
-            blurRadius: 8,
-            offset: const Offset(0, 3),
-          ),
-        ],
+        color: SupervisorTheme.accent,
       ),
       padding: const EdgeInsets.all(2),
       child: CircleAvatar(
         radius: 23,
-        backgroundColor: Colors.white,
+        backgroundColor: SupervisorTheme.surface,
         child: Text(
           _initials(name),
           style: const TextStyle(
             fontSize: 16,
-            fontWeight: FontWeight.w800,
+            fontWeight: FontWeight.w700,
             color: SupervisorTheme.primary,
           ),
         ),
@@ -125,29 +100,29 @@ class SupervisorHeader extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       children: [
         Text(
-          _toTitleCase(name),
+          '${_greeting()}, ${_toTitleCase(name)}',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
           style: const TextStyle(
-            fontSize: 16,
-            color: Colors.white,
-            fontWeight: FontWeight.w800,
+            fontSize: 17,
+            color: SupervisorTheme.strongText,
+            fontWeight: FontWeight.w700,
             height: 1.12,
           ),
         ),
-        const SizedBox(height: 3),
+        const SizedBox(height: 5),
         Row(
           children: [
             const Icon(Icons.shield_outlined,
-                color: Color.fromARGB(255, 242, 158, 31), size: 11),
+                color: SupervisorTheme.warning, size: 12),
             const SizedBox(width: 4),
             Flexible(
               child: Text(
                 designation,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.85),
+                style: const TextStyle(
+                  color: SupervisorTheme.mutedText,
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
                 ),
@@ -159,47 +134,20 @@ class SupervisorHeader extends StatelessWidget {
     );
   }
 
-  Widget _greetingPill() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.wb_sunny_rounded,
-                  color: SupervisorTheme.accent, size: 12),
-              const SizedBox(width: 4),
-              Text(
-                _greeting(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
-            ],
-          ),
+  Widget _logoutButton() {
+    return SizedBox(
+      width: 40,
+      height: 40,
+      child: IconButton(
+        padding: EdgeInsets.zero,
+        icon: const Icon(
+          Icons.more_vert_rounded,
+          color: SupervisorTheme.strongText,
+          size: 22,
         ),
-        const SizedBox(width: 8),
-        SizedBox(
-          width: 36,
-          height: 36,
-          child: IconButton(
-            padding: EdgeInsets.zero,
-            icon:
-                const Icon(Icons.logout_rounded, color: Colors.white, size: 18),
-            onPressed: onLogout,
-            tooltip: 'Logout',
-          ),
-        ),
-      ],
+        onPressed: onLogout,
+        tooltip: 'Logout',
+      ),
     );
   }
 
@@ -209,50 +157,41 @@ class SupervisorHeader extends StatelessWidget {
         : (zoneCount > 0
             ? '$zoneCount zone${zoneCount == 1 ? '' : 's'} assigned'
             : 'No zones assigned');
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 8),
-      decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.08),
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
-      ),
-      child: Row(
-        children: [
-          const Icon(Icons.map_outlined,
-              color: SupervisorTheme.accent, size: 14),
-          const SizedBox(width: 6),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11.5,
-                fontWeight: FontWeight.w700,
-              ),
+    return Row(
+      children: [
+        const Icon(Icons.map_outlined, color: SupervisorTheme.accent, size: 14),
+        const SizedBox(width: 6),
+        Expanded(
+          child: Text(
+            label,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: SupervisorTheme.strongText,
+              fontSize: 11.5,
+              fontWeight: FontWeight.w600,
             ),
           ),
-          Container(
-            width: 6,
-            height: 6,
-            decoration: const BoxDecoration(
-              shape: BoxShape.circle,
-              color: SupervisorTheme.success,
-            ),
+        ),
+        Container(
+          width: 6,
+          height: 6,
+          decoration: const BoxDecoration(
+            shape: BoxShape.circle,
+            color: SupervisorTheme.success,
           ),
-          const SizedBox(width: 6),
-          const Text(
-            'On Duty',
-            style: TextStyle(
-              color: SupervisorTheme.success,
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.1,
-            ),
+        ),
+        const SizedBox(width: 6),
+        const Text(
+          'On Duty',
+          style: TextStyle(
+            color: SupervisorTheme.success,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0,
           ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }
