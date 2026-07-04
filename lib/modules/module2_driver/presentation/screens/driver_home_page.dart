@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
 import 'package:animations/animations.dart';
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/core/ui/app_copy.dart';
 import 'package:latlong2/latlong.dart';
 
@@ -26,6 +25,7 @@ import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/att
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/captain_home_tab.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/driver_theme.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/captain_glass.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/captain_nav_bar.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/driver_header.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_qr_scanner.dart';
@@ -33,14 +33,21 @@ import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/o
     show OperatorTripScanScreen;
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/theme/operator_theme.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_cp_card.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_trip_header_card.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/operator_trip_summary_card.dart';
 import 'package:iwms_citizen_app/shared/constants/skip_reasons.dart';
 
-const Color _driverPrimary = AppColors.primary;
-const Color _driverAccent = AppColors.driverAccent;
 const Duration _kNavigationTransitionDuration = Duration(milliseconds: 600);
 const List<String> _skipReasons = kSkipReasons;
+
+/// Colour matrix that turns the light OSM raster into a dark-map look
+/// (invert luminance, then rotate the hue back so water/land keep sensible
+/// tones). Applied via [ColorFiltered] only when the Captain dark theme is on.
+const List<double> _darkMapMatrix = <double>[
+  -0.6, -0.4, -0.4, 0, 255, //
+  -0.4, -0.6, -0.4, 0, 255, //
+  -0.4, -0.4, -0.6, 0, 255, //
+  0, 0, 0, 1, 0, //
+];
 
 enum _NavigationMode { overview, navigating }
 
@@ -241,17 +248,14 @@ class _DriverHomePageState extends State<DriverHomePage> {
                 bottom: false,
                 child: Column(
                   children: [
-                    AnimatedSwitcher(
-                      duration: const Duration(milliseconds: 250),
-                      child: DriverHeader(
-                        key: ValueKey(_activeTab),
-                        name: nameFromState ?? 'Driver',
-                        empId: empIdFromState ?? '',
-                        displayId: employeeIdFromState,
-                        onLogout: () => _logout(context),
-                        onProfileTap: () =>
-                            setState(() => _activeTab = _DriverTab.profile),
-                      ),
+                    DriverHeader(
+                      name: nameFromState ?? 'Driver',
+                      empId: empIdFromState ?? '',
+                      displayId: employeeIdFromState,
+                      onLogout: () => _logout(context),
+                      onProfileTap: () =>
+                          setState(() => _activeTab = _DriverTab.profile),
+                      collapsed: _activeTab == _DriverTab.map,
                     ),
                     Expanded(
                       child: PageTransitionSwitcher(
@@ -1130,6 +1134,12 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
     }
   }
 
+  void _zoomBy(double delta) {
+    final camera = widget.mapController.camera;
+    final next = (camera.zoom + delta).clamp(10.0, 18.0);
+    widget.mapController.move(camera.center, next);
+  }
+
   void _startDriverDrag(DragStartDetails details) {
     _isDraggingDriver = true;
     _driverScreenPoint =
@@ -1674,15 +1684,15 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
   Color _statusColor(_CustomerStatus status) {
     switch (status) {
       case _CustomerStatus.collected:
-        return Colors.green;
+        return CaptainTheme.success;
       case _CustomerStatus.later:
-        return Colors.deepOrange;
+        return CaptainTheme.gold;
       case _CustomerStatus.skipped:
-        return Colors.orange;
+        return CaptainTheme.warning;
       case _CustomerStatus.navigating:
-        return Colors.blue;
+        return CaptainTheme.accent;
       case _CustomerStatus.pending:
-        return Colors.red;
+        return CaptainTheme.danger;
     }
   }
 
@@ -1713,14 +1723,6 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
       }
     }
     final navigationCustomer = isNavigating ? activeCustomer : null;
-    final activeTripSummary = widget.activeTripDetail?.summary;
-    final headerTrips = <OperatorTripHistorySummary>[
-      if (activeTripSummary != null) activeTripSummary,
-      ...widget.currentAssignments.where(
-        (trip) =>
-            trip.assignmentUniqueId != activeTripSummary?.assignmentUniqueId,
-      ),
-    ];
     final nextCustomer =
         !isNavigating && _customers.isNotEmpty ? _customers.first : null;
     final nextCustomerPosition = nextCustomer == null
@@ -1729,15 +1731,12 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
             .indexWhere((customer) => customer.id == nextCustomer.id);
     final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
     final bottomOverlayOffset = 84.0 + bottomInset;
-    final mapControlsTop = isNavigating
-        ? 12.0
-        : headerTrips.isNotEmpty && nextCustomer != null
-            ? 280.0
-            : headerTrips.isNotEmpty
-                ? 182.0
-                : nextCustomer != null
-                    ? 126.0
-                    : 12.0;
+    // The map now carries ONLY the next-collection-point card (the daily
+    // assignment carousel was removed to declutter the view); controls sit
+    // just below it, or at the top when there's no next stop.
+    final mapControlsTop =
+        isNavigating ? 12.0 : (nextCustomer != null ? 118.0 : 12.0);
+    final dark = CaptainThemeStore.isDark.value;
 
     return RefreshIndicator(
       onRefresh: widget.onRefresh,
@@ -1757,20 +1756,33 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                 ),
               ),
               children: [
-                TileLayer(
-                  urlTemplate:
-                      'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-                  subdomains: const ['a', 'b', 'c'],
-                  userAgentPackageName: 'com.iwms.citizen.app',
-                ),
+                // In dark mode the light OSM raster is run through an
+                // invert+hue matrix so it reads as a proper dark map instead
+                // of glaring white on the black Captain canvas.
+                dark
+                    ? ColorFiltered(
+                        colorFilter: const ColorFilter.matrix(_darkMapMatrix),
+                        child: TileLayer(
+                          urlTemplate:
+                              'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                          subdomains: const ['a', 'b', 'c'],
+                          userAgentPackageName: 'com.iwms.citizen.app',
+                        ),
+                      )
+                    : TileLayer(
+                        urlTemplate:
+                            'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+                        subdomains: const ['a', 'b', 'c'],
+                        userAgentPackageName: 'com.iwms.citizen.app',
+                      ),
                 if (_orsRoute.isNotEmpty)
                   PolylineLayer(
                     polylines: [
                       Polyline(
                         points: _orsRoute,
                         color: isNavigating
-                            ? Colors.blueAccent
-                            : Colors.blue.shade300,
+                            ? CaptainTheme.accent
+                            : CaptainTheme.accent.withValues(alpha: 0.7),
                         strokeWidth: isNavigating ? 6.0 : 4.5,
                       ),
                     ],
@@ -1780,7 +1792,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                     polylines: [
                       Polyline(
                         points: _tripPolyline,
-                        color: Colors.deepOrangeAccent,
+                        color: CaptainTheme.gold,
                         strokeWidth: 4.0,
                       ),
                     ],
@@ -1853,6 +1865,26 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                     tooltip: 'Center on me',
                   ),
                   const SizedBox(height: 8),
+                  // Fit the whole route in view — quick way to see all
+                  // remaining stops at a glance.
+                  _MapButton(
+                    icon: Icons.zoom_out_map_rounded,
+                    onPressed: _recenterNavigation,
+                    tooltip: 'Fit route',
+                  ),
+                  const SizedBox(height: 8),
+                  _MapButton(
+                    icon: Icons.add_rounded,
+                    onPressed: () => _zoomBy(1),
+                    tooltip: 'Zoom in',
+                  ),
+                  const SizedBox(height: 8),
+                  _MapButton(
+                    icon: Icons.remove_rounded,
+                    onPressed: () => _zoomBy(-1),
+                    tooltip: 'Zoom out',
+                  ),
+                  const SizedBox(height: 8),
                   _MapButton(
                     icon: Icons.refresh_rounded,
                     onPressed: () async {
@@ -1874,17 +1906,11 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
             ),
           ),
 
-          if (!isNavigating && headerTrips.isNotEmpty)
-            Positioned(
-              top: 16,
-              left: 16,
-              right: 16,
-              child: _DriverTripHeaderCarousel(trips: headerTrips),
-            ),
-
+          // Next collection point — the only card overlaid on the map (the
+          // daily-assignment carousel was removed for a cleaner view).
           if (nextCustomer != null)
             Positioned(
-              top: headerTrips.isNotEmpty ? 176 : 16,
+              top: 12,
               left: 16,
               right: 16,
               child: _NextCollectionPointCard(
@@ -1893,6 +1919,7 @@ class _HomeTabState extends State<_HomeTab> with TickerProviderStateMixin {
                 position:
                     nextCustomerPosition >= 0 ? nextCustomerPosition + 1 : 1,
                 total: widget.customers.length,
+                onNavigate: () => _startNavigation(nextCustomer.id),
               ),
             ),
 
@@ -1989,65 +2016,36 @@ if (navigationCustomer != null)
   }
 }
 
-class _DriverTripHeaderCarousel extends StatelessWidget {
-  const _DriverTripHeaderCarousel({required this.trips});
-
-  final List<OperatorTripHistorySummary> trips;
-
-  @override
-  Widget build(BuildContext context) {
-    if (trips.length == 1) {
-      return OperatorTripHeaderCard.fromSummary(trips.first);
-    }
-
-    return SizedBox(
-      height: 150,
-      child: PageView.builder(
-        padEnds: false,
-        itemCount: trips.length,
-        itemBuilder: (context, index) {
-          return Padding(
-            padding: EdgeInsets.only(right: index == trips.length - 1 ? 0 : 10),
-            child: OperatorTripHeaderCard.fromSummary(trips[index]),
-          );
-        },
-      ),
-    );
-  }
-}
-
 class _NextCollectionPointCard extends StatelessWidget {
   const _NextCollectionPointCard({
     required this.customer,
     required this.distance,
     required this.position,
     required this.total,
+    required this.onNavigate,
   });
 
   final _DriverAssignmentStop customer;
   final String distance;
   final int position;
   final int total;
+  final VoidCallback onNavigate;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
+    return CaptainGlassCard(
+      onTap: onNavigate,
+      tint: CaptainTheme.gold,
       padding: const EdgeInsets.fromLTRB(14, 13, 14, 13),
-      decoration: BoxDecoration(
-        color: OperatorTheme.surface,
-        borderRadius: OperatorTheme.cardRadius,
-        border: Border.all(color: OperatorTheme.hairline),
-        boxShadow: OperatorTheme.softShadow,
-      ),
       child: Row(
         children: [
           Container(
             width: 44,
             height: 44,
             alignment: Alignment.center,
-            decoration: const BoxDecoration(
-              gradient: OperatorTheme.accentGradient,
-              borderRadius: BorderRadius.all(Radius.circular(14)),
+            decoration: BoxDecoration(
+              gradient: CaptainTheme.accentGradient,
+              borderRadius: const BorderRadius.all(Radius.circular(14)),
             ),
             child: Text(
               position.toString(),
@@ -2064,23 +2062,31 @@ class _NextCollectionPointCard extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisSize: MainAxisSize.min,
               children: [
-                const Text(
-                  'Next collection point',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: OperatorTheme.mutedText,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  children: [
+                    Icon(Icons.flag_rounded,
+                        size: 12, color: CaptainTheme.gold),
+                    const SizedBox(width: 4),
+                    Text(
+                      'NEXT COLLECTION POINT',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(
+                        color: CaptainTheme.gold,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.5,
+                      ),
+                    ),
+                  ],
                 ),
                 const SizedBox(height: 4),
                 Text(
                   customer.name,
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: OperatorTheme.strongText,
+                  style: TextStyle(
+                    color: CaptainTheme.strongText,
                     fontSize: 17,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2090,8 +2096,8 @@ class _NextCollectionPointCard extends StatelessWidget {
                   total > 0 ? 'Stop $position of $total' : 'Ready for route',
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    color: OperatorTheme.mutedText,
+                  style: TextStyle(
+                    color: CaptainTheme.mutedText,
                     fontSize: 12.5,
                     fontWeight: FontWeight.w600,
                   ),
@@ -2103,10 +2109,10 @@ class _NextCollectionPointCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 13, vertical: 8),
             decoration: BoxDecoration(
-              color: OperatorTheme.accentSoft,
-              borderRadius: OperatorTheme.chipRadius,
+              color: CaptainTheme.accentSoft,
+              borderRadius: CaptainTheme.chipRadius,
               border: Border.all(
-                color: OperatorTheme.accent.withValues(alpha: 0.18),
+                color: CaptainTheme.accent.withValues(alpha: 0.35),
               ),
             ),
             child: Column(
@@ -2114,16 +2120,16 @@ class _NextCollectionPointCard extends StatelessWidget {
               children: [
                 Text(
                   distance,
-                  style: const TextStyle(
-                    color: OperatorTheme.accentDeep,
+                  style: TextStyle(
+                    color: CaptainTheme.accent,
                     fontSize: 17,
                     fontWeight: FontWeight.w900,
                   ),
                 ),
-                const Text(
+                Text(
                   'away',
                   style: TextStyle(
-                    color: OperatorTheme.accent,
+                    color: CaptainTheme.accent.withValues(alpha: 0.85),
                     fontSize: 10,
                     fontWeight: FontWeight.w800,
                   ),
@@ -2154,92 +2160,87 @@ class _NavigationHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.all(12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.15),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(10),
-                decoration: BoxDecoration(
-                  color: Colors.blue.shade50,
-                  shape: BoxShape.circle,
-                ),
-                child: Icon(Icons.navigation_rounded,
-                    color: Colors.blue.shade700, size: 20),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      distance,
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.blue.shade700,
-                      ),
-                    ),
-                    Text(
-                      customer.name,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w600,
-                        color: Colors.black87,
-                      ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  ],
-                ),
-              ),
-              IconButton(
-                onPressed: onStop,
-                icon: const Icon(Icons.close_rounded),
-                tooltip: 'Stop navigation',
-                style: IconButton.styleFrom(
-                  backgroundColor: Colors.grey.shade100,
-                ),
-              ),
-            ],
-          ),
-          if (customer.address.isNotEmpty) ...[
-            const SizedBox(height: 8),
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: CaptainGlassCard(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Row(
               children: [
-                Icon(Icons.location_on_outlined,
-                    size: 16, color: Colors.grey.shade600),
-                const SizedBox(width: 4),
+                CaptainGlassChip(
+                  icon: Icons.navigation_rounded,
+                  color: CaptainTheme.accent,
+                  size: 20,
+                ),
+                const SizedBox(width: 12),
                 Expanded(
-                  child: Text(
-                    customer.address,
-                    style: TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey.shade600,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        distance,
+                        style: TextStyle(
+                          fontSize: 24,
+                          fontWeight: FontWeight.w800,
+                          color: CaptainTheme.accent,
+                        ),
+                      ),
+                      Text(
+                        customer.name,
+                        style: TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: CaptainTheme.strongText,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+                SizedBox(
+                  width: 36,
+                  height: 36,
+                  child: Material(
+                    color: Colors.transparent,
+                    shape: const CircleBorder(),
+                    clipBehavior: Clip.antiAlias,
+                    child: IconButton(
+                      padding: EdgeInsets.zero,
+                      icon: Icon(Icons.close_rounded,
+                          color: CaptainTheme.mutedText, size: 18),
+                      onPressed: onStop,
+                      tooltip: 'Stop navigation',
                     ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
               ],
             ),
+            if (customer.address.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Icon(Icons.location_on_outlined,
+                      size: 16, color: CaptainTheme.mutedText),
+                  const SizedBox(width: 4),
+                  Expanded(
+                    child: Text(
+                      customer.address,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: CaptainTheme.mutedText,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -2266,127 +2267,120 @@ class _NavigationActionCard extends StatelessWidget {
     final isDone = customer.status == _CustomerStatus.collected ||
         customer.status == _CustomerStatus.skipped;
 
-    return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16),
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.12),
-            blurRadius: 14,
-            offset: const Offset(0, 4),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          CircleAvatar(
-            radius: 18,
-            backgroundColor: Colors.blue.shade50,
-            child: Text(
-              displayName[0].toUpperCase(),
-              style: TextStyle(
-                fontWeight: FontWeight.w800,
-                color: Colors.blue.shade700,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: CaptainGlassCard(
+        padding: const EdgeInsets.all(12),
+        child: Row(
+          children: [
+            Container(
+              width: 36,
+              height: 36,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                gradient: CaptainTheme.accentGradient,
+              ),
+              alignment: Alignment.center,
+              child: Text(
+                displayName[0].toUpperCase(),
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: Colors.white,
+                  fontSize: 14,
+                ),
               ),
             ),
-          ),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  displayName,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(
-                    fontWeight: FontWeight.w800,
-                    fontSize: 13,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  distance,
-                  style: TextStyle(
-                    color: Colors.grey.shade600,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  customer.shift.replaceAll('_', ' ').toUpperCase(),
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                Text(
-                  'Type: ${customer.assignmentType.toUpperCase()}',
-                  style: TextStyle(
-                    color: Colors.grey.shade500,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                if (customer.wardName.trim().isNotEmpty &&
-                    customer.wardName.trim() != displayName.trim())
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                   Text(
-                    'Ward: ${customer.wardName}',
+                    displayName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
                     style: TextStyle(
-                      color: Colors.grey.shade500,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 13,
+                      color: CaptainTheme.strongText,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    distance,
+                    style: TextStyle(
+                      color: CaptainTheme.mutedText,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    customer.shift.replaceAll('_', ' ').toUpperCase(),
+                    style: TextStyle(
+                      color: CaptainTheme.mutedText.withValues(alpha: 0.8),
                       fontSize: 10,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Column(
+              children: [
+                SizedBox(
+                  height: 32,
+                  child: ElevatedButton(
+                    onPressed: isDone ? null : onComplete,
+                    style: ElevatedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      backgroundColor: isDone
+                          ? CaptainTheme.mutedText.withValues(alpha: 0.3)
+                          : CaptainTheme.success,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      'Done',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: isDone ? CaptainTheme.mutedText : Colors.white,
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                SizedBox(
+                  height: 28,
+                  child: OutlinedButton(
+                    onPressed: isDone ? null : onSkip,
+                    style: OutlinedButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(horizontal: 12),
+                      side: BorderSide(
+                        color: CaptainTheme.hairline,
+                      ),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                    ),
+                    child: Text(
+                      'Skip',
+                      style: TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: CaptainTheme.strongText,
+                      ),
+                    ),
+                  ),
+                ),
               ],
             ),
-          ),
-          const SizedBox(width: 8),
-          Column(
-            children: [
-              SizedBox(
-                height: 32,
-                child: ElevatedButton(
-                  onPressed: isDone ? null : onComplete,
-                  style: ElevatedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    backgroundColor: Colors.green.shade700,
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    'Complete',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 6),
-              SizedBox(
-                height: 28,
-                child: OutlinedButton(
-                  onPressed: isDone ? null : onSkip,
-                  style: OutlinedButton.styleFrom(
-                    padding: const EdgeInsets.symmetric(horizontal: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  child: const Text(
-                    'Skip',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
@@ -2671,7 +2665,7 @@ class _AssignmentsTab extends StatelessWidget {
             currentCount: currentAssignments.length,
             historyCount: historyAssignments.length,
           ),
-          const Padding(
+          Padding(
             padding: EdgeInsets.fromLTRB(20, 4, 20, 0),
             child: TabBar(
               labelColor: OperatorTheme.primary,
@@ -2742,7 +2736,7 @@ class _DriverCurrentTripTab extends StatelessWidget {
                 const SizedBox(height: 18),
                 Row(
                   children: [
-                    const Text(
+                    Text(
                       'Collection Points',
                       style: TextStyle(
                         fontSize: 16,
@@ -2753,7 +2747,7 @@ class _DriverCurrentTripTab extends StatelessWidget {
                     const Spacer(),
                     Text(
                       '${detail?.collectionPoints.length ?? 0}',
-                      style: const TextStyle(
+                      style: TextStyle(
                         color: OperatorTheme.mutedText,
                         fontWeight: FontWeight.w700,
                       ),
@@ -2837,7 +2831,7 @@ class _DriverEmptyAssignmentMessage extends StatelessWidget {
         Text(
           message,
           textAlign: TextAlign.center,
-          style: const TextStyle(
+          style: TextStyle(
             color: OperatorTheme.mutedText,
             fontSize: 14,
             fontWeight: FontWeight.w600,
@@ -2863,7 +2857,7 @@ class _AssignmentsHeader extends StatelessWidget {
       padding: const EdgeInsets.fromLTRB(20, 14, 20, 0),
       child: Row(
         children: [
-          const Text(
+          Text(
             AppCopy.driverAssignments,
             style: TextStyle(
               color: OperatorTheme.strongText,
@@ -3143,314 +3137,223 @@ class _ProfileTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(16),
-      child: Column(
-        children: [
-          // Profile Header
-          Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [_driverPrimary, _driverAccent],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(20),
-            ),
-            child: Column(
-              children: [
-                const CircleAvatar(
-                  radius: 50,
-                  backgroundColor: Colors.white,
-                  child: Icon(Icons.person, size: 50, color: _driverPrimary),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  driverName,
-                  style: const TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
+    return CaptainBackground(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          children: [
+            // Profile card
+            CaptainGlassCard(
+              padding: const EdgeInsets.all(18),
+              child: Column(
+                children: [
+                  Container(
+                    width: 64,
+                    height: 64,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: CaptainTheme.accentGradient,
+                    ),
+                    alignment: Alignment.center,
+                    child: Icon(Icons.person_rounded,
+                        size: 32, color: Colors.white),
                   ),
-                ),
-                Text(
-                  'Employee ID: $empId',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    color: Colors.white70,
-                    fontWeight: FontWeight.w600,
+                  const SizedBox(height: 12),
+                  Text(
+                    driverName.isEmpty ? 'Captain' : driverName,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: CaptainTheme.strongText,
+                    ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 2),
+                  Text(
+                    'ID: $empId',
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: CaptainTheme.mutedText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ),
 
-          const SizedBox(height: 20),
+            const SizedBox(height: 18),
 
-          // Vehicle Information
-          if (vehicle != null) ...[
-            _ProfileSection(
-              title: 'Vehicle Information',
-              icon: Icons.local_shipping_rounded,
-              children: [
-                _ProfileItem(
-                  label: 'Vehicle Number',
-                  value: vehicle!.vehicleNumber ?? 'N/A',
-                  icon: Icons.confirmation_number_outlined,
-                ),
-                _ProfileItem(
-                  label: 'Vehicle Type',
-                  value: vehicle!.vehicleType ?? 'N/A',
-                  icon: Icons.category_outlined,
-                ),
-                _ProfileItem(
-                  label: 'Status',
-                  value: vehicle!.status ?? 'N/A',
-                  icon: Icons.circle,
-                  valueColor: (vehicle!.status ?? '').toLowerCase() == 'running'
-                      ? Colors.green
-                      : Colors.orange,
-                ),
-                _ProfileItem(
-                  label: 'Driver Name',
-                  value: vehicle!.driverName ?? 'N/A',
-                  icon: Icons.person_outline,
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-          ],
-
-          // Work Information
-          _ProfileSection(
-            title: 'Work Information',
-            icon: Icons.work_outline_rounded,
-            children: [
-              _ProfileItem(
-                label: 'Role',
-                value: 'Waste Collection Driver',
-                icon: Icons.badge_outlined,
-              ),
-              _ProfileItem(
-                label: 'Department',
-                value: 'Waste Management',
-                icon: Icons.business_outlined,
-              ),
-              _ProfileItem(
-                label: 'Shift',
-                value: 'Morning (6:00 AM - 2:00 PM)',
-                icon: Icons.access_time_outlined,
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Appearance — Captain-wide light/dark toggle (persisted).
-          _ProfileSection(
-            title: 'Appearance',
-            icon: Icons.brightness_6_outlined,
-            children: [
-              ValueListenableBuilder<bool>(
-                valueListenable: CaptainThemeStore.isDark,
-                builder: (context, isDark, _) {
-                  return Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 4),
-                    child: Row(
+            // Vehicle card
+            if (vehicle != null)
+              CaptainGlassCard(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  children: [
+                    Row(
                       children: [
-                        Icon(
-                          isDark
-                              ? Icons.dark_mode_outlined
-                              : Icons.light_mode_outlined,
-                          size: 18,
-                          color: Colors.grey.shade600,
-                        ),
-                        const SizedBox(width: 12),
-                        const Expanded(
-                          child: Text(
-                            'Theme',
-                            style: TextStyle(
-                              fontSize: 14,
-                              color: Colors.black87,
-                              fontWeight: FontWeight.w600,
-                            ),
-                          ),
-                        ),
-                        Text(
-                          isDark ? 'Dark' : 'Light',
-                          style: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.grey.shade700,
-                          ),
-                        ),
+                        Icon(Icons.local_shipping_rounded,
+                            size: 18, color: CaptainTheme.accent),
                         const SizedBox(width: 8),
-                        Switch(
-                          value: isDark,
-                          activeColor: CaptainTheme.accent,
-                          onChanged: (value) =>
-                              CaptainThemeStore.setDark(value),
+                        Text(
+                          'VEHICLE',
+                          style: TextStyle(
+                            fontSize: 10.5,
+                            color: CaptainTheme.mutedText,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 0.5,
+                          ),
                         ),
                       ],
                     ),
+                    const SizedBox(height: 10),
+                    _SimpleRow(
+                      'Number',
+                      vehicle!.vehicleNumber ?? '—',
+                    ),
+                    const SizedBox(height: 8),
+                    _SimpleRow(
+                      'Type',
+                      vehicle!.vehicleType ?? '—',
+                    ),
+                    const SizedBox(height: 8),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _SimpleRow(
+                            'Status',
+                            (vehicle!.status ?? '').trim().isNotEmpty
+                                ? vehicle!.status!
+                                : '—',
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Container(
+                          width: 8,
+                          height: 8,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: (vehicle!.status ?? '')
+                                        .toLowerCase() ==
+                                    'running'
+                                ? CaptainTheme.success
+                                : CaptainTheme.warning,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+            if (vehicle != null) const SizedBox(height: 18),
+
+            // Theme toggle
+            CaptainGlassCard(
+              padding: const EdgeInsets.all(14),
+              child: ValueListenableBuilder<bool>(
+                valueListenable: CaptainThemeStore.isDark,
+                builder: (context, isDark, _) {
+                  return Row(
+                    children: [
+                      Icon(
+                        isDark
+                            ? Icons.dark_mode_rounded
+                            : Icons.light_mode_rounded,
+                        size: 18,
+                        color: CaptainTheme.accent,
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Text(
+                          'Theme',
+                          style: TextStyle(
+                            fontSize: 13,
+                            color: CaptainTheme.strongText,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
+                      ),
+                      Text(
+                        isDark ? 'Dark' : 'Light',
+                        style: TextStyle(
+                          fontSize: 11.5,
+                          fontWeight: FontWeight.w700,
+                          color: CaptainTheme.mutedText,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Switch(
+                        value: isDark,
+                        activeColor: CaptainTheme.accent,
+                        onChanged: (value) =>
+                            CaptainThemeStore.setDark(value),
+                      ),
+                    ],
                   );
                 },
               ),
-            ],
-          ),
-
-          const SizedBox(height: 16),
-
-          // Contact Information
-          _ProfileSection(
-            title: 'Contact Information',
-            icon: Icons.contact_phone_outlined,
-            children: [
-              _ProfileItem(
-                label: 'Phone',
-                value: '+91 XXXXX XXXXX',
-                icon: Icons.phone_outlined,
-              ),
-              _ProfileItem(
-                label: 'Emergency Contact',
-                value: '1800-XXX-XXXX',
-                icon: Icons.emergency_outlined,
-              ),
-            ],
-          ),
-
-          const SizedBox(height: 24),
-
-          // Logout Button
-          SizedBox(
-            width: double.infinity,
-            height: 50,
-            child: ElevatedButton.icon(
-              onPressed: onLogout,
-              icon: const Icon(Icons.logout_rounded),
-              label: const Text(
-                'Logout',
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700),
-              ),
-              style: ElevatedButton.styleFrom(
-                backgroundColor: Colors.red.shade600,
-                foregroundColor: Colors.white,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12),
-                ),
-              ),
             ),
-          ),
-        ],
-      ),
-    );
-  }
-}
 
-class _ProfileSection extends StatelessWidget {
-  const _ProfileSection({
-    required this.title,
-    required this.icon,
-    required this.children,
-  });
+            const SizedBox(height: 24),
 
-  final String title;
-  final IconData icon;
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withValues(alpha: 0.05),
-            blurRadius: 10,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(icon, color: _driverPrimary, size: 24),
-                const SizedBox(width: 8),
-                Text(
-                  title,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w800,
-                    color: _driverPrimary,
+            // Logout
+            SizedBox(
+              width: double.infinity,
+              height: 48,
+              child: ElevatedButton.icon(
+                onPressed: onLogout,
+                icon: const Icon(Icons.logout_rounded, size: 18),
+                label: const Text(
+                  'Logout',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.w800),
+                ),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: CaptainTheme.danger,
+                  foregroundColor: Colors.white,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
                   ),
                 ),
-              ],
+              ),
             ),
-          ),
-          const Divider(height: 1),
-          ...children,
-        ],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _ProfileItem extends StatelessWidget {
-  const _ProfileItem({
-    required this.label,
-    required this.value,
-    required this.icon,
-    this.valueColor,
-  });
-
+class _SimpleRow extends StatelessWidget {
+  const _SimpleRow(this.label, this.value);
   final String label;
   final String value;
-  final IconData icon;
-  final Color? valueColor;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-      child: Row(
-        children: [
-          Icon(icon, size: 20, color: Colors.grey.shade600),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  label,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: Colors.grey.shade600,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  value,
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w700,
-                    color: valueColor ?? Colors.black87,
-                  ),
-                ),
-              ],
-            ),
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 11,
+            color: CaptainTheme.mutedText,
+            fontWeight: FontWeight.w600,
           ),
-        ],
-      ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 13,
+            color: CaptainTheme.strongText,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ],
     );
   }
 }
+
 
 class _DriverMarker extends StatelessWidget {
   final bool isActive;
@@ -3590,13 +3493,20 @@ class _MapButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Material(
-      color: Colors.white,
+      color: CaptainTheme.surface,
       shape: const CircleBorder(),
-      elevation: 4,
-      child: IconButton(
-        icon: Icon(icon, color: _driverPrimary),
-        onPressed: onPressed,
-        tooltip: tooltip,
+      elevation: 0,
+      child: Container(
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: CaptainTheme.hairline),
+          boxShadow: CaptainTheme.softShadow,
+        ),
+        child: IconButton(
+          icon: Icon(icon, color: CaptainTheme.accent),
+          onPressed: onPressed,
+          tooltip: tooltip,
+        ),
       ),
     );
   }

@@ -1,17 +1,14 @@
 import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 
 import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:geolocator/geolocator.dart';
-import 'package:http/http.dart' as http;
 import 'package:intl/intl.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/core/theme/app_colors.dart';
-import 'package:iwms_citizen_app/core/theme/app_text_styles.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
@@ -169,8 +166,7 @@ class _AttendancePageDriverState extends State<AttendancePageDriver>
 
   bool _isCooldown() {
     if (_lastTripAt == null) return false;
-    return DateTime.now().difference(_lastTripAt!) <
-        kTripAttendanceCooldown;
+    return DateTime.now().difference(_lastTripAt!) < kTripAttendanceCooldown;
   }
 
   Duration _cooldownLeft() {
@@ -368,29 +364,10 @@ class _AttendancePageDriverState extends State<AttendancePageDriver>
       return;
     }
 
-    try {
-      final res = await http.post(
-        Uri.parse('https://zigma/api/attendance/sync.php'),
-        body: {
-          'timestamp': item['timestamp'],
-          'lat': item['lat'],
-          'long': item['long'],
-          'type': item['type'],
-        },
-      );
-
-      final data = jsonDecode(res.body);
-      if (!mounted) return;
-
-      if (data['status'] == 'success') {
-        _pendingSync.remove(item);
-        setState(() {});
-        _snack('Synced.');
-      } else {
-        _snack('Sync failed.');
-      }
-    } catch (_) {
-      if (mounted) _snack('Error syncing.');
+    _pendingSync.remove(item);
+    if (mounted) {
+      setState(() {});
+      _snack('Use camera attendance to submit to the government backend.');
     }
   }
 
@@ -673,9 +650,8 @@ class _CompactHeader extends StatelessWidget {
                       height: 7,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color: isOnline
-                            ? const Color(0xFF7EF59F)
-                            : Colors.white,
+                        color:
+                            isOnline ? const Color(0xFF7EF59F) : Colors.white,
                       ),
                     ),
                     const SizedBox(width: 5),

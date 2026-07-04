@@ -2,17 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/env.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/driver_theme.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/profile.dart';
 
-/// Driver header — same silhouette and information architecture as the
-/// operator header (avatar/Register button anchored LEFT, identity stack
-/// beside it, greeting pill + logout on the RIGHT, and a context strip
-/// underneath), recolored to the driver's green brand gradient.
+/// Captain header — a minimal identity bar.
 ///
-/// The bottom strip surfaces driver-relevant context — assigned vehicle and
-/// shift — in place of the operator's ward/zone strip, with a live "On Duty"
-/// indicator that doubles as a quick visual confirmation the shift is active.
+/// Redesigned to the Captain look: a slim royal-navy gradient strip carrying
+/// only the essentials — a tappable avatar (doubles as the face-registration
+/// entry point), the driver's name, and a logout affordance. The old
+/// "Good morning" greeting, designation line and ID badge were dropped to keep
+/// it clean and give the screen below more room.
+///
+/// On the Map tab the header tucks into a razor-thin bar ([collapsed] = true)
+/// so the map gets almost the full height; it animates back to full size on
+/// every other tab.
 class DriverHeader extends StatefulWidget {
   const DriverHeader({
     super.key,
@@ -22,6 +25,7 @@ class DriverHeader extends StatefulWidget {
     this.displayId,
     this.designation,
     this.onProfileTap,
+    this.collapsed = false,
   });
 
   final String name;
@@ -30,6 +34,10 @@ class DriverHeader extends StatefulWidget {
   final String? designation;
   final VoidCallback onLogout;
   final VoidCallback? onProfileTap;
+
+  /// When true the header renders as a slim tucked bar (used on the Map tab
+  /// to maximise map visibility).
+  final bool collapsed;
 
   @override
   State<DriverHeader> createState() => _DriverHeaderState();
@@ -100,179 +108,96 @@ class _DriverHeaderState extends State<DriverHeader> {
         .join(' ');
   }
 
-  String _greeting() {
-    final hour = DateTime.now().hour;
-    if (hour < 12) return 'Good morning';
-    if (hour < 17) return 'Good afternoon';
-    return 'Good evening';
-  }
-
   @override
   Widget build(BuildContext context) {
-    final designation = (widget.designation?.trim().isNotEmpty == true)
-        ? widget.designation!
-        : 'Captain • Vehicle crew lead';
-    // The ID badge shows the human-readable employee id (e.g. "13753223"),
-    // not the internal staff unique id ("STC-...") that backs the photo API.
-    final badgeId =
-        (widget.displayId != null && widget.displayId!.trim().isNotEmpty)
-            ? widget.displayId!.trim()
-            : widget.empId;
-
-    return Container(
+    return AnimatedContainer(
+      duration: const Duration(milliseconds: 280),
+      curve: Curves.easeInOutCubic,
       width: double.infinity,
       decoration: BoxDecoration(
-        gradient: DriverTheme.headerGradient,
+        gradient: CaptainTheme.headerGradient,
         borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(22),
           bottomRight: Radius.circular(22),
         ),
-        boxShadow: [
-          BoxShadow(
-            color: Color(0x29000000),
-            blurRadius: 16,
-            offset: Offset(0, 6),
-          ),
-        ],
+        boxShadow: CaptainTheme.softShadow,
       ),
       child: SafeArea(
         bottom: false,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.center,
-                children: [
-                  _buildAvatarButton(),
-                  const SizedBox(width: 11),
-                  Expanded(
-                      child: _buildIdentitySection(badgeId, designation)),
-                  const SizedBox(width: 8),
-                  _greetingPill(),
-                ],
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _greetingPill() {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.12),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.18)),
-          ),
+        child: AnimatedPadding(
+          duration: const Duration(milliseconds: 280),
+          curve: Curves.easeInOutCubic,
+          padding: widget.collapsed
+              ? const EdgeInsets.fromLTRB(14, 6, 12, 6)
+              : const EdgeInsets.fromLTRB(16, 12, 14, 14),
           child: Row(
-            mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.wb_sunny_rounded,
-                  color: DriverTheme.accent, size: 12),
-              const SizedBox(width: 4),
-              Text(
-                _greeting(),
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w700,
-                ),
-              ),
+              _buildAvatarButton(compact: widget.collapsed),
+              const SizedBox(width: 11),
+              Expanded(child: _buildIdentity(compact: widget.collapsed)),
+              const SizedBox(width: 8),
+              _logoutButton(compact: widget.collapsed),
             ],
           ),
         ),
-        const SizedBox(width: 8),
-        _logoutButton(),
-      ],
-    );
-  }
-
-  Widget _logoutButton() {
-    return SizedBox(
-      width: 36,
-      height: 36,
-      child: IconButton(
-        padding: EdgeInsets.zero,
-        icon: const Icon(Icons.logout_rounded, color: Colors.white, size: 18),
-        onPressed: widget.onLogout,
-        tooltip: 'Logout',
       ),
     );
   }
 
-  Widget _buildIdentitySection(String displayId, String designation) {
+  Widget _buildIdentity({required bool compact}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
+        if (!compact)
+          Text(
+            'Captain',
+            style: TextStyle(
+              fontSize: 10.5,
+              color: Colors.white.withValues(alpha: 0.7),
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.2,
+            ),
+          ),
+        if (!compact) const SizedBox(height: 2),
         Text(
           _toTitleCase(widget.name),
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: const TextStyle(
-            fontSize: 16,
+          style: TextStyle(
+            fontSize: compact ? 14 : 18,
             color: Colors.white,
             fontWeight: FontWeight.w800,
-            height: 1.12,
-          ),
-        ),
-        const SizedBox(height: 3),
-        Row(
-          children: [
-            const Icon(Icons.local_shipping_rounded,
-                color: Color(0xFFFFD27D), size: 11),
-            const SizedBox(width: 4),
-            Flexible(
-              child: Text(
-                designation,
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.85),
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 5),
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-          decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.16),
-            borderRadius: BorderRadius.circular(7),
-            border: Border.all(color: Colors.white.withValues(alpha: 0.28)),
-          ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              const Icon(Icons.badge_outlined, color: Colors.white, size: 10),
-              const SizedBox(width: 4),
-              Text(
-                displayId,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 0.2,
-                ),
-              ),
-            ],
+            height: 1.1,
           ),
         ),
       ],
     );
   }
 
-  Widget _buildAvatarButton() {
+  Widget _logoutButton({required bool compact}) {
+    final double d = compact ? 32 : 38;
+    return SizedBox(
+      width: d,
+      height: d,
+      child: Material(
+        color: Colors.white.withValues(alpha: 0.12),
+        shape: const CircleBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: IconButton(
+          padding: EdgeInsets.zero,
+          icon: Icon(Icons.logout_rounded,
+              color: Colors.white, size: compact ? 16 : 18),
+          onPressed: widget.onLogout,
+          tooltip: 'Logout',
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAvatarButton({required bool compact}) {
+    final double outer = compact ? 34 : 50;
+    final double radius = compact ? 15 : 23;
     return GestureDetector(
       onTap: () async {
         if (widget.onProfileTap != null) {
@@ -288,16 +213,18 @@ class _DriverHeaderState extends State<DriverHeader> {
         _fetchEmployeeImage();
       },
       child: Container(
+        width: outer,
+        height: outer,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           gradient: LinearGradient(
-            colors: [DriverTheme.accent, DriverTheme.accentDeep],
+            colors: [CaptainTheme.accent, CaptainTheme.accentDeep],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
           boxShadow: [
             BoxShadow(
-              color: DriverTheme.accent.withValues(alpha: 0.28),
+              color: CaptainTheme.accent.withValues(alpha: 0.28),
               blurRadius: 8,
               offset: const Offset(0, 3),
             ),
@@ -305,36 +232,39 @@ class _DriverHeaderState extends State<DriverHeader> {
         ),
         padding: const EdgeInsets.all(2),
         child: CircleAvatar(
-          radius: 23,
+          radius: radius,
           backgroundColor: Colors.white,
           backgroundImage: (hasProfile && imageName != null)
               ? NetworkImage(_convertToUrl(imageName!))
               : null,
           child: imageLoading
               ? SizedBox(
-                  width: 18,
-                  height: 18,
+                  width: 16,
+                  height: 16,
                   child: CircularProgressIndicator(
                     strokeWidth: 2,
-                    color: DriverTheme.primary,
+                    color: CaptainTheme.primary,
                   ),
                 )
               : (!hasProfile)
-                  ? Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.person_add_alt_1_rounded,
-                            size: 18, color: DriverTheme.primary),
-                        Text(
-                          'Register',
-                          style: TextStyle(
-                            fontSize: 7.5,
-                            fontWeight: FontWeight.w800,
-                            color: DriverTheme.primary,
-                          ),
-                        ),
-                      ],
-                    )
+                  ? (compact
+                      ? Icon(Icons.person_rounded,
+                          size: 16, color: CaptainTheme.primary)
+                      : Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(Icons.person_add_alt_1_rounded,
+                                size: 18, color: CaptainTheme.primary),
+                            Text(
+                              'Register',
+                              style: TextStyle(
+                                fontSize: 7.5,
+                                fontWeight: FontWeight.w800,
+                                color: CaptainTheme.primary,
+                              ),
+                            ),
+                          ],
+                        ))
                   : null,
         ),
       ),

@@ -6,8 +6,8 @@ import 'package:iwms_citizen_app/data/models/operator_trip_models.dart';
 import 'package:iwms_citizen_app/data/repositories/operator_trip_repository.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/captain_glass.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_history_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/widgets/bin_detail_sheet.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/operator_trip_history_screen.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/widgets/bin_detail_sheet.dart';
 
 /// Captain Home — the "today-first" dashboard of the merged driver app.
 ///
