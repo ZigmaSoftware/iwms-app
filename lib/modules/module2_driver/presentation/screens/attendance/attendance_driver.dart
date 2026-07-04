@@ -8,7 +8,6 @@ import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
@@ -17,11 +16,12 @@ import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/camerapage.dart';
 
 // ── Design tokens (same as operator attendance) ───────────────────────────
-const _kPrimary = AppColors.primary;
-const _kBg = Color(0xFFF4F6FA);
+const _kPrimary = Color.fromARGB(255, 20, 34, 74);
+const _kPrimaryDeep = Color.fromARGB(255, 22, 35, 96);
+const _kBg = Color(0xFFF7F9FF);
 const _kSurface = Colors.white;
-const _kGreen = Color(0xFF0F8A58);
-const _kGreenBg = Color(0xFFE7F6EE);
+const _kGreen = _kPrimary;
+const _kGreenBg = Color(0xFFE8EEFF);
 const _kAmber = Color(0xFFD97706);
 const _kAmberBg = Color(0xFFFFF8EB);
 const _kTextPri = Color(0xFF0B1F3A);
@@ -570,14 +570,14 @@ class _CompactHeader extends StatelessWidget {
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
-          colors: [Color(0xFF0D3B26), Color(0xFF175E3C)],
+          colors: [_kPrimary, _kPrimaryDeep],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
         borderRadius: BorderRadius.circular(22),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF0D3B26).withOpacity(0.22),
+            color: _kPrimary.withOpacity(0.24),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -650,8 +650,7 @@ class _CompactHeader extends StatelessWidget {
                       height: 7,
                       decoration: BoxDecoration(
                         shape: BoxShape.circle,
-                        color:
-                            isOnline ? const Color(0xFF7EF59F) : Colors.white,
+                        color: isOnline ? _kPrimary : Colors.white,
                       ),
                     ),
                     const SizedBox(width: 5),

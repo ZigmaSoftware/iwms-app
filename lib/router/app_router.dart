@@ -31,12 +31,12 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/alloted_vehicle
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/main_operator_tabbar.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_attendance_screen_integration.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_home_page.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_data_screen.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_home_screen.dart';
-import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/operator_trip_history_screen.dart';
 
 // Driver
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/driver_home_page.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/operator_data_screen.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/operator_trip_history_screen.dart';
 
 // Admin
 import 'package:iwms_citizen_app/modules/module4_admin/dashboard/presentation/screens/dashboard_screen.dart';
