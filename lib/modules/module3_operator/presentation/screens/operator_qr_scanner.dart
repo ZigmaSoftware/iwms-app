@@ -14,6 +14,7 @@ import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/locationservices.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/utils/assignment_status_store.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/operator_data_screen.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 
 class OperatorQRScanner extends StatefulWidget {
@@ -387,24 +388,34 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
                       label: const Text('Collect'),
                       onPressed: () {
                         Navigator.of(sheetContext).pop();
-                        context
+                        // Push the weight-entry screen imperatively on the SAME
+                        // navigator the scanner was launched on. Using GoRouter's
+                        // context.push here sent the request through the global
+                        // redirect, which — because the driver has no "operator"
+                        // surface — bounced /operator/data back to the driver
+                        // home page. The operator module is merged into the
+                        // driver ("Captain") shell, so the weighment screen now
+                        // lives in module2_driver and is reached directly.
+                        Navigator.of(context)
                             .push(
-                              AppRoutePaths.operatorData,
-                              extra: {
-                                'customerId': customerId,
-                                'customerName': customerName,
-                                'contactNo': contactNo,
-                                'latitude': latitude,
-                                'longitude': longitude,
-                                // Let the data screen initialise the Bluetooth
-                                // weighing scale (Android). Previously true,
-                                // which silently disabled the scale in the
-                                // household flow.
-                                'skipBluetoothInit': false,
-                                if (assignmentId != null &&
-                                    assignmentId.trim().isNotEmpty)
-                                  'assignmentId': assignmentId,
-                              },
+                              MaterialPageRoute(
+                                builder: (_) => OperatorDataScreen(
+                                  customerId: customerId,
+                                  customerName: customerName,
+                                  contactNo: contactNo,
+                                  latitude: latitude,
+                                  longitude: longitude,
+                                  // Let the data screen initialise the Bluetooth
+                                  // weighing scale (Android). Previously true,
+                                  // which silently disabled the scale in the
+                                  // household flow.
+                                  skipBluetoothInit: false,
+                                  assignmentId: (assignmentId != null &&
+                                          assignmentId.trim().isNotEmpty)
+                                      ? assignmentId
+                                      : null,
+                                ),
+                              ),
                             )
                             .then((_) {
                           if (widget.returnToAssignments && mounted) {

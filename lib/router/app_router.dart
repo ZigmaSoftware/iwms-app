@@ -474,6 +474,16 @@ class AppRouter {
     if (targetSurface == null) {
       return true;
     }
+    // The operator app was merged into the driver ("Captain") shell — one phone
+    // per vehicle, held by the driver — so the household weighment / trip-scan
+    // screens still living under /operator/* are part of the driver flow.
+    // A driver must therefore be allowed onto operator routes, otherwise the
+    // household scan → weight-entry navigation is bounced back to driver home.
+    if (targetSurface == 'operator' &&
+        accessibleSurfaces
+            .any((surface) => surface.key.toLowerCase() == 'driver')) {
+      return true;
+    }
     return accessibleSurfaces.any(
       (surface) => surface.key.toLowerCase() == targetSurface,
     );
