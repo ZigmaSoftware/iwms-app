@@ -21,6 +21,9 @@ import 'package:iwms_citizen_app/shared/models/collection_history.dart';
 import 'package:iwms_citizen_app/shared/services/collection_history_service.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finalize_dao.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_finalize_record.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_sync_service.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_record.dart';
+import 'package:iwms_citizen_app/modules/module3_operator/offline/pending_record_dao.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/bluetoothservices.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/generateunique_id.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/image_compress_service.dart';
@@ -28,9 +31,6 @@ import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/capta
 import 'package:iwms_citizen_app/core/network/authorized_dio.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
-import '../../offline/offline_sync_service.dart';
-import '../../offline/pending_record.dart';
-import '../../offline/pending_record_dao.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/utils/assignment_status_store.dart';
 
 const BorderRadius _kOperatorCardRadius = BorderRadius.all(Radius.circular(18));
@@ -1250,7 +1250,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
                     color: CaptainTheme.accentSoft,
                     borderRadius: BorderRadius.circular(12),
                   ),
-                  child: const Icon(
+                  child: Icon(
                     Icons.home_work_outlined,
                     color: CaptainTheme.accent,
                     size: 21,
@@ -1707,7 +1707,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
         appBar: AppBar(
           elevation: 0,
           backgroundColor: Colors.transparent,
-          flexibleSpace: const DecoratedBox(
+          flexibleSpace: DecoratedBox(
             decoration: BoxDecoration(gradient: CaptainTheme.headerGradient),
           ),
           leading: IconButton(
@@ -1799,7 +1799,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
           top: false,
           child: Container(
             padding: const EdgeInsets.fromLTRB(16, 12, 16, 14),
-            decoration: const BoxDecoration(
+            decoration: BoxDecoration(
               color: CaptainTheme.surface,
               border: Border(top: BorderSide(color: CaptainTheme.hairline)),
               boxShadow: CaptainTheme.softShadow,
