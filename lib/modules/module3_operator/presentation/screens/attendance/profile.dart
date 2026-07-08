@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'package:intl/intl.dart';
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:path/path.dart' as path;
 import 'package:flutter_image_compress/flutter_image_compress.dart';
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
 import 'package:iwms_citizen_app/core/env.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 
@@ -22,6 +23,8 @@ class ProfilePage extends StatefulWidget {
 class _ProfilePageState extends State<ProfilePage> {
   bool isLoading = true;
   bool isRegistered = false;
+  bool _submitting = false;
+  String? _error;
 
   XFile? _image;
   String? imageName;
@@ -46,6 +49,12 @@ class _ProfilePageState extends State<ProfilePage> {
   // FETCH PROFILE (READ ONLY)
   // ----------------------------------------------------------------------
   Future<void> _fetchProfile() async {
+    if (mounted) {
+      setState(() {
+        isLoading = true;
+        _error = null;
+      });
+    }
     try {
       final token = await _getAuthToken();
       final headers = <String, String>{};
@@ -67,23 +76,37 @@ class _ProfilePageState extends State<ProfilePage> {
 
         String? photo = data["photo"];
 
+        if (!mounted) return;
         setState(() {
-          employeeName = data["employee_name"] ?? "";
-          department = data["department"] ?? "";
-          designation = data["designation"] ?? "";
-          dob = data["personal"]?["dob"] ?? "";
-          bloodGroup = data["personal"]?["blood_group"] ?? "";
-          doj = data["doj"] ?? "";
+          employeeName = (data["employee_name"] ?? "").toString();
+          department = (data["department"] ?? "").toString();
+          designation = (data["designation"] ?? "").toString();
+          dob = (data["personal"]?["dob"] ?? "").toString();
+          bloodGroup = (data["personal"]?["blood_group"] ?? "").toString();
+          doj = (data["doj"] ?? "").toString();
 
           imageName = photo;
 
           // Registered ONLY if photo exists
           isRegistered = photo != null && photo.isNotEmpty;
+          isLoading = false;
         });
+        return;
       }
-    } catch (_) {}
 
-    setState(() => isLoading = false);
+      // Reached the server but it did not return a success payload.
+      if (!mounted) return;
+      setState(() {
+        _error = "We couldn't load your profile. Please try again.";
+        isLoading = false;
+      });
+    } catch (_) {
+      if (!mounted) return;
+      setState(() {
+        _error = "Couldn't reach the server. Check your connection and retry.";
+        isLoading = false;
+      });
+    }
   }
 
   // ----------------------------------------------------------------------
@@ -91,10 +114,12 @@ class _ProfilePageState extends State<ProfilePage> {
   // ----------------------------------------------------------------------
   Future<void> registerEmployee() async {
     if (_image == null) {
-      _toast("Please capture an image to register.");
+      _toast("Please capture a selfie to register.");
       return;
     }
+    if (_submitting) return;
 
+    setState(() => _submitting = true);
     try {
       final token = await _getAuthToken();
       final url = Uri.parse('${ApiConfig.desktopBase}register/');
@@ -134,6 +159,8 @@ class _ProfilePageState extends State<ProfilePage> {
       }
     } catch (e) {
       _toast("Error: $e");
+    } finally {
+      if (mounted) setState(() => _submitting = false);
     }
   }
 
@@ -173,7 +200,7 @@ class _ProfilePageState extends State<ProfilePage> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(msg),
-        backgroundColor: AppColors.primary,
+        backgroundColor: CaptainTheme.accentDeep,
         behavior: SnackBarBehavior.floating,
       ),
     );
@@ -192,10 +219,37 @@ class _ProfilePageState extends State<ProfilePage> {
   // ----------------------------------------------------------------------
   @override
   Widget build(BuildContext context) {
-    if (isLoading) {
-      return const Scaffold(body: Center(child: CircularProgressIndicator()));
-    }
+    return Scaffold(
+      backgroundColor: CaptainTheme.background,
+      appBar: AppBar(
+        backgroundColor: CaptainTheme.surface,
+        foregroundColor: CaptainTheme.strongText,
+        elevation: 0,
+        surfaceTintColor: Colors.transparent,
+        title: Text(
+          "Selfie Registration",
+          style: TextStyle(
+            color: CaptainTheme.strongText,
+            fontWeight: FontWeight.w700,
+          ),
+        ),
+      ),
+      body: CaptainBackground(
+        child: isLoading
+            ? Center(
+                child: CircularProgressIndicator(color: CaptainTheme.accent),
+              )
+            : _error != null
+                ? _errorView()
+                : _content(),
+      ),
+    );
+  }
 
+  // ----------------------------------------------------------------------
+  // CONTENT
+  // ----------------------------------------------------------------------
+  Widget _content() {
     ImageProvider? profileImage;
     if (_image != null) {
       profileImage = FileImage(File(_image!.path));
@@ -203,118 +257,260 @@ class _ProfilePageState extends State<ProfilePage> {
       profileImage = NetworkImage("$mediaBaseUrl/media/$imageName");
     }
 
-    return Scaffold(
-      appBar: AppBar(
-        backgroundColor: AppColors.primary,
-        elevation: 0,
-        title: const Text(
-          "Selfie Registration",
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+    return SingleChildScrollView(
+      padding: const EdgeInsets.fromLTRB(16, 16, 16, 28),
+      child: Column(
+        children: [
+          _heroCard(profileImage),
+          const SizedBox(height: 16),
+          _detailsCard(),
+          const SizedBox(height: 22),
+          if (!isRegistered) _registerButton(),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================
+  // HERO — avatar + name + designation + registration status
+  // ==========================================================
+  Widget _heroCard(ImageProvider? profileImage) {
+    final canCapture = imageName == null || imageName!.isEmpty;
+    final displayName = employeeName.trim().isEmpty ? '—' : employeeName.trim();
+    final subtitle = designation.trim().isNotEmpty
+        ? designation.trim()
+        : (department.trim().isNotEmpty ? department.trim() : 'Field staff');
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(18, 22, 18, 20),
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          Stack(
+            alignment: Alignment.bottomRight,
+            children: [
+              Container(
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  border: Border.all(color: CaptainTheme.accent, width: 2.5),
+                ),
+                padding: const EdgeInsets.all(3),
+                child: CircleAvatar(
+                  radius: 52,
+                  backgroundColor: CaptainTheme.surfaceMuted,
+                  backgroundImage: profileImage,
+                  child: profileImage == null
+                      ? Icon(Icons.person,
+                          size: 48, color: CaptainTheme.mutedText)
+                      : null,
+                ),
+              ),
+              if (canCapture)
+                GestureDetector(
+                  onTap: _captureImage,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      gradient: CaptainTheme.accentGradient,
+                      border: Border.all(color: CaptainTheme.surface, width: 3),
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    child: const Icon(Icons.camera_alt,
+                        size: 18, color: Colors.white),
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Text(
+            displayName,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 20,
+              fontWeight: FontWeight.w800,
+              color: CaptainTheme.strongText,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: CaptainTheme.mutedText,
+            ),
+          ),
+          const SizedBox(height: 14),
+          _statusChip(),
+        ],
+      ),
+    );
+  }
+
+  Widget _statusChip() {
+    final registered = isRegistered;
+    final Color color = registered ? CaptainTheme.success : CaptainTheme.accent;
+    final IconData icon =
+        registered ? Icons.verified_rounded : Icons.photo_camera_front_rounded;
+    final String label = registered
+        ? 'Face registered'
+        : (_image != null
+            ? 'Selfie ready — tap Register'
+            : 'Capture a selfie to register attendance');
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: color.withValues(alpha: 0.35)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 15, color: color),
+          const SizedBox(width: 7),
+          Flexible(
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: color,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ==========================================================
+  // DETAILS — read-only staff record
+  // ==========================================================
+  Widget _detailsCard() {
+    final rows = <Widget>[
+      _infoTile(Icons.badge_outlined, "Name", employeeName),
+      _infoTile(Icons.apartment_outlined, "Department", department),
+      _infoTile(Icons.work_outline_rounded, "Designation", designation),
+      _infoTile(Icons.cake_outlined, "Date of Birth", _formatDate(dob)),
+      _infoTile(Icons.bloodtype_outlined, "Blood Group", bloodGroup),
+      _infoTile(
+          Icons.event_available_outlined, "Date of Joining", _formatDate(doj)),
+    ];
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      decoration: _cardDecoration(),
+      child: Column(
+        children: [
+          for (int i = 0; i < rows.length; i++) ...[
+            rows[i],
+            if (i != rows.length - 1)
+              Divider(
+                height: 1,
+                thickness: 1,
+                color: CaptainTheme.hairline.withValues(alpha: 0.6),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _registerButton() {
+    return SizedBox(
+      width: double.infinity,
+      height: 52,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(24),
+          onTap: _submitting ? null : registerEmployee,
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: CaptainTheme.accentGradient,
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: CaptainTheme.softShadow,
+            ),
+            child: Center(
+              child: _submitting
+                  ? const SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(
+                        color: Colors.white,
+                        strokeWidth: 2.4,
+                      ),
+                    )
+                  : const Text(
+                      "Register Selfie",
+                      style: TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.bold,
+                          fontSize: 16),
+                    ),
+            ),
+          ),
         ),
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          children: [
-            // ==========================================================
-            // PROFILE IMAGE
-            // ==========================================================
-            // ==========================================================
-// PROFILE IMAGE
-// ==========================================================
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: _cardDecoration(),
-              child: Column(
-                children: [
-                  Stack(
-                    alignment: Alignment.bottomRight,
-                    children: [
-                      CircleAvatar(
-                        radius: 55,
-                        backgroundColor: Colors.grey.shade200,
-                        backgroundImage: profileImage,
-                        child: profileImage == null
-                            ? const Icon(Icons.person,
-                                size: 50, color: Colors.grey)
-                            : null,
-                      ),
+    );
+  }
 
-                      // ----------------------------------------------------------
-                      // SHOW CAMERA ICON ONLY IF NO IMAGE EXISTS
-                      // ----------------------------------------------------------
-                      if (imageName == null || imageName!.isEmpty)
-                        GestureDetector(
-                          onTap: _captureImage,
-                          child: CircleAvatar(
-                            radius: 18,
-                            backgroundColor: AppColors.primary,
-                            child: const Icon(Icons.camera_alt,
-                                size: 18, color: Colors.white),
-                          ),
-                        ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  if (!isRegistered)
-                    Column(
+  // ==========================================================
+  // ERROR STATE
+  // ==========================================================
+  Widget _errorView() {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(28),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.cloud_off_rounded,
+                size: 48, color: CaptainTheme.mutedText),
+            const SizedBox(height: 14),
+            Text(
+              _error ?? 'Something went wrong.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: CaptainTheme.strongText,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: 170,
+              height: 46,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: _fetchProfile,
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      gradient: CaptainTheme.accentGradient,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        const Text(
-                          "Capture a selfie to register attendance.",
-                          style: TextStyle(color: Colors.black54, fontSize: 13),
-                        ),
+                        Icon(Icons.refresh, color: Colors.white, size: 18),
+                        SizedBox(width: 8),
+                        Text('Retry',
+                            style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.w700)),
                       ],
                     ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 18),
-
-            // ==========================================================
-            // READ-ONLY EMPLOYEE DETAILS
-            // ==========================================================
-            Container(
-              padding: const EdgeInsets.all(18),
-              decoration: _cardDecoration(),
-              child: Column(
-                children: [
-                  _infoTile("Name", employeeName),
-                  _infoTile("Department", department),
-                  _infoTile("Designation", designation),
-                  _infoTile("Date of Birth", dob),
-                  _infoTile("Blood Group", bloodGroup),
-                  _infoTile("Date of Joining", doj),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 22),
-
-            // ==========================================================
-            // REGISTER BUTTON (only if not registered)
-            // ==========================================================
-            if (!isRegistered)
-              SizedBox(
-                width: double.infinity,
-                child: ElevatedButton(
-                  onPressed: registerEmployee,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    padding: const EdgeInsets.symmetric(vertical: 14),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(24),
-                    ),
-                  ),
-                  child: const Text(
-                    "Register Selfie",
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16),
                   ),
                 ),
               ),
+            ),
           ],
         ),
       ),
@@ -326,40 +522,66 @@ class _ProfilePageState extends State<ProfilePage> {
   // ----------------------------------------------------------------------
   BoxDecoration _cardDecoration() {
     return BoxDecoration(
-      color: Colors.white,
-      borderRadius: BorderRadius.circular(16),
-      boxShadow: [
-        BoxShadow(
-          color: Colors.black.withOpacity(0.06),
-          blurRadius: 10,
-          offset: const Offset(0, 4),
-        ),
-      ],
+      color: CaptainTheme.surface,
+      borderRadius: CaptainTheme.cardRadius,
+      border: Border.all(color: CaptainTheme.hairline),
+      boxShadow: CaptainTheme.softShadow,
     );
   }
 
-  Widget _infoTile(String label, String value) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      decoration: BoxDecoration(
-        color: Colors.grey.shade100,
-        borderRadius: BorderRadius.circular(14),
-      ),
+  /// Formats an ISO date string (e.g. "1992-05-20") as "20 May 1992".
+  /// Returns the raw value unchanged if it isn't a parseable date.
+  String _formatDate(String raw) {
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return '';
+    final parsed = DateTime.tryParse(trimmed);
+    if (parsed == null) return trimmed;
+    return DateFormat('d MMM yyyy').format(parsed);
+  }
+
+  Widget _infoTile(IconData icon, String label, String value) {
+    final hasValue = value.trim().isNotEmpty;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
       child: Row(
         children: [
-          Text(
-            "$label:",
-            style: const TextStyle(
-                fontWeight: FontWeight.w600,
-                fontSize: 14,
-                color: Colors.black87),
+          Container(
+            width: 38,
+            height: 38,
+            decoration: BoxDecoration(
+              color: CaptainTheme.accentSoft,
+              borderRadius: BorderRadius.circular(11),
+            ),
+            alignment: Alignment.center,
+            child: Icon(icon, size: 19, color: CaptainTheme.accent),
           ),
-          const SizedBox(width: 8),
+          const SizedBox(width: 14),
           Expanded(
-            child: Text(
-              value.isEmpty ? "-" : value,
-              style: const TextStyle(fontSize: 14, color: Colors.black54),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  label,
+                  style: TextStyle(
+                    fontSize: 11.5,
+                    fontWeight: FontWeight.w600,
+                    color: CaptainTheme.mutedText,
+                    letterSpacing: 0.3,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  hasValue ? value : 'Not provided',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                    fontStyle: hasValue ? FontStyle.normal : FontStyle.italic,
+                    color: hasValue
+                        ? CaptainTheme.strongText
+                        : CaptainTheme.mutedText.withValues(alpha: 0.7),
+                  ),
+                ),
+              ],
             ),
           ),
         ],

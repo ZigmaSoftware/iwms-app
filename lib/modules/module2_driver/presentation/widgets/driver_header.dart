@@ -200,6 +200,25 @@ class _DriverHeaderState extends State<DriverHeader> {
     final double radius = compact ? 15 : 23;
     return GestureDetector(
       onTap: () async {
+        // Not registered yet: the avatar reads "Register", so open the employee
+        // face-registration page — the same ProfilePage the (deprecated)
+        // operator module opens from its Register avatar, which shows the
+        // "Register Selfie" capture flow. Once a face/profile exists, continue
+        // to the driver profile.
+        if (!hasProfile && !imageLoading) {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => ProfilePage(empId: widget.empId),
+            ),
+          );
+          await _fetchEmployeeImage();
+          if (hasProfile && mounted && widget.onProfileTap != null) {
+            widget.onProfileTap!();
+          }
+          return;
+        }
+
         if (widget.onProfileTap != null) {
           widget.onProfileTap!();
           return;

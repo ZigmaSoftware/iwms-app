@@ -16,7 +16,6 @@ import 'package:iwms_citizen_app/presentation/staff_module_picker_screen.dart';
 // Citizen Modules
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/splashscreen.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/citizen_intro_slides.dart';
-import 'package:iwms_citizen_app/modules/module1_citizen/citizen/auth_intro.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/login.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/home.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/calender.dart';
@@ -48,7 +47,6 @@ import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens
 class AppRoutePaths {
   static const String splash = '/';
   static const String citizenIntroSlides = '/citizen/intro';
-  static const String citizenAuthIntro = '/citizen/auth';
   static const String citizenLogin = '/citizen/login';
   static const String citizenHome = '/citizen/home';
   static const String citizenHistory = '/citizen/history';
@@ -100,7 +98,7 @@ class AppRouter {
   }) {
     router = GoRouter(
       debugLogDiagnostics: true,
-      initialLocation: AppRoutePaths.citizenIntroSlides,
+      initialLocation: AppRoutePaths.citizenLogin, // TEMP: screenshot login
       refreshListenable: refreshListenable,
       observers: [routeObserver],
       redirect: _redirect,
@@ -115,10 +113,6 @@ class AppRouter {
         GoRoute(
           path: AppRoutePaths.citizenIntroSlides,
           builder: (context, state) => const CitizenIntroSlidesScreen(),
-        ),
-        GoRoute(
-          path: AppRoutePaths.citizenAuthIntro,
-          builder: (context, state) => const CitizenAuthIntroScreen(),
         ),
         GoRoute(
           path: AppRoutePaths.citizenLogin,
@@ -297,7 +291,7 @@ class AppRouter {
         GoRoute(
           path: AppRoutePaths.supervisorAssignments,
           builder: (context, state) => const MainSupervisorTabBar(
-              initialTab: SupervisorNavTab.assignments),
+              initialTab: SupervisorNavTab.attendance),
         ),
         GoRoute(
           path: AppRoutePaths.supervisorProfile,
@@ -338,7 +332,6 @@ class AppRouter {
     final publicRoutes = {
       AppRoutePaths.splash,
       AppRoutePaths.citizenLogin,
-      AppRoutePaths.citizenAuthIntro,
       AppRoutePaths.citizenIntroSlides,
       AppRoutePaths.operatorLogin,
       AppRoutePaths.driverLogin,

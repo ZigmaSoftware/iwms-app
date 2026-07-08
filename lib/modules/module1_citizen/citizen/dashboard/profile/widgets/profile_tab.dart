@@ -108,20 +108,20 @@ class ProfileTab extends StatelessWidget {
           child: ListView(
             padding: const EdgeInsets.fromLTRB(16, 20, 16, 32),
             children: [
-              _ProfileTile(
-                icon: Icons.description_outlined,
-                label: localizations.collectionDetails,
-                onTap: () => context.push(AppRoutePaths.citizenHistory),
-                textColor: textColor,
-                highlightColor: highlightColor,
-              ),
-              _ProfileTile(
-                icon: Icons.history,
-                label: localizations.collectionHistory,
-                onTap: () => context.push(AppRoutePaths.citizenHistory),
-                textColor: textColor,
-                highlightColor: highlightColor,
-              ),
+              // _ProfileTile(
+              //   icon: Icons.description_outlined,
+              //   label: localizations.collectionDetails,
+              //   onTap: () => context.push(AppRoutePaths.citizenHistory),
+              //   textColor: textColor,
+              //   highlightColor: highlightColor,
+              // ),
+              // _ProfileTile(
+              //   icon: Icons.history,
+              //   label: localizations.collectionHistory,
+              //   onTap: () => context.push(AppRoutePaths.citizenHistory),
+              //   textColor: textColor,
+              //   highlightColor: highlightColor,
+              // ),
               _ProfileTile(
                 icon: Icons.location_on_outlined,
                 label: localizations.trackWaste,

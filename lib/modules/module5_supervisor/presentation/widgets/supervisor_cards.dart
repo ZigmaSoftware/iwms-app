@@ -152,7 +152,9 @@ class _SupervisorKpiCardState extends State<SupervisorKpiCard>
                                         height: 1,
                                         shadows: [
                                           Shadow(
-                                            color: const ui.Color.fromARGB(255, 48, 48, 48).withValues(
+                                            color: const ui.Color.fromARGB(
+                                                    255, 48, 48, 48)
+                                                .withValues(
                                               alpha: 0.08 + t * 0.05,
                                             ),
                                             blurRadius: 7,
@@ -583,6 +585,290 @@ class SupervisorAlertTile extends StatelessWidget {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// A quick-action tile rendered on the SAME liquid-glass surface as
+/// [SupervisorKpiCard] (identical surface / sheen / shadow painters), holding
+/// a raster image icon and a label. Used in the dashboard "Quick actions" grid.
+class SupervisorGlassActionTile extends StatefulWidget {
+  const SupervisorGlassActionTile({
+    super.key,
+    required this.iconAsset,
+    required this.label,
+    this.onTap,
+  });
+
+  final String iconAsset;
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  State<SupervisorGlassActionTile> createState() =>
+      _SupervisorGlassActionTileState();
+}
+
+class _SupervisorGlassActionTileState extends State<SupervisorGlassActionTile>
+    with SingleTickerProviderStateMixin {
+  static const double _radius = 16;
+  static const Duration _pressHold = Duration(milliseconds: 200);
+
+  late final AnimationController _press = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 90),
+    reverseDuration: const Duration(milliseconds: 120),
+  );
+
+  late final Animation<double> _ease = CurvedAnimation(
+    parent: _press,
+    curve: Curves.easeOutCubic,
+    reverseCurve: Curves.easeOutCubic,
+  );
+
+  @override
+  void dispose() {
+    _press.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(_radius),
+        splashColor: Colors.white.withValues(alpha: 0.16),
+        highlightColor: Colors.white.withValues(alpha: 0.06),
+        onTap: _handleTap,
+        onTapDown: (_) => _press.forward(from: 0),
+        onTapCancel: () => _press.reverse(),
+        child: AnimatedBuilder(
+          animation: _ease,
+          builder: (context, child) {
+            final t = _ease.value;
+            final scale = ui.lerpDouble(1, 0.97, t)!;
+            final lift = ui.lerpDouble(6, 2, t)!;
+            const blur = 0.1;
+
+            return Transform.scale(
+              scale: scale,
+              child: SizedBox.expand(
+                child: Stack(
+                  fit: StackFit.expand,
+                  clipBehavior: Clip.none,
+                  children: [
+                    Positioned.fill(
+                      child: IgnorePointer(
+                        child: Transform.translate(
+                          offset: Offset(-3 + (1.5 * t), lift),
+                          child: CustomPaint(
+                            painter: _LiquidGlassShadowPainter(
+                              radius: _radius,
+                              progress: t,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(_radius),
+                      child: BackdropFilter(
+                        filter: ui.ImageFilter.blur(sigmaX: blur, sigmaY: blur),
+                        child: CustomPaint(
+                          painter: _LiquidGlassSurfacePainter(
+                            radius: _radius,
+                            progress: t,
+                            compact: false,
+                          ),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Positioned.fill(
+                                child: IgnorePointer(
+                                  child: CustomPaint(
+                                    painter: _LiquidGlassSheenPainter(
+                                      radius: _radius,
+                                      progress: t,
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              child!,
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 4),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Image.asset(
+                    widget.iconAsset,
+                    width: 34,
+                    height: 34,
+                    fit: BoxFit.contain,
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    widget.label,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                      color: SupervisorTheme.strongText,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _handleTap() async {
+    final onTap = widget.onTap;
+    if (onTap == null) return;
+
+    await Future.delayed(_pressHold);
+    if (!mounted) return;
+
+    onTap();
+    if (mounted) {
+      await _press.reverse();
+    }
+  }
+}
+
+/// A solid-WHITE "today at a glance" stat card. A tinted icon chip, big number
+/// and label sit at the left over an optional full-bleed illustration; a
+/// left→right white scrim keeps the text crisp while the artwork bleeds to the
+/// right edge. The base stays opaque white (deliberately NOT glass).
+class SupervisorGlanceCard extends StatelessWidget {
+  const SupervisorGlanceCard({
+    super.key,
+    required this.value,
+    required this.label,
+    required this.icon,
+    required this.color,
+    this.imageAsset,
+    this.onTap,
+  });
+
+  final String value;
+  final String label;
+  final IconData icon;
+  final Color color;
+  final String? imageAsset;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: SupervisorTheme.cardRadius,
+        onTap: onTap,
+        child: Container(
+          clipBehavior: Clip.antiAlias,
+          decoration: BoxDecoration(
+            color: SupervisorTheme.surface,
+            borderRadius: SupervisorTheme.cardRadius,
+            border: Border.all(
+              color: SupervisorTheme.hairline.withValues(alpha: 0.5),
+            ),
+            boxShadow: SupervisorTheme.softShadow,
+          ),
+          child: Stack(
+            children: [
+              if (imageAsset != null) ...[
+                Positioned.fill(
+                  child: Image.asset(
+                    imageAsset!,
+                    fit: BoxFit.cover,
+                    alignment: Alignment.centerRight,
+                  ),
+                ),
+                // Left→right white scrim so the number/label read cleanly over
+                // the artwork while it bleeds to the right edge.
+                Positioned.fill(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        begin: Alignment.centerLeft,
+                        end: Alignment.centerRight,
+                        colors: [
+                          Colors.white,
+                          Colors.white.withValues(alpha: 0.86),
+                          Colors.white.withValues(alpha: 0.0),
+                        ],
+                        stops: const [0.0, 0.34, 0.74],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(7),
+                      decoration: BoxDecoration(
+                        color: color.withValues(alpha: 0.12),
+                        borderRadius: SupervisorTheme.chipRadius,
+                      ),
+                      child: Icon(icon, color: color, size: 16),
+                    ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          value,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 26,
+                            fontWeight: FontWeight.w800,
+                            color: SupervisorTheme.strongText,
+                            height: 1,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          label,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 12.5,
+                            fontWeight: FontWeight.w700,
+                            color: SupervisorTheme.mutedText,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
       ),
     );
   }

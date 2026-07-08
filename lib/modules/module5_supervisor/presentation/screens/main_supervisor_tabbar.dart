@@ -7,6 +7,7 @@ import 'package:iwms_citizen_app/logic/auth/auth_event.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_repository.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/attendance/supervisor_attendance_page.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_assignments_screen.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_attendance_screen.dart'
     as attendance;
@@ -16,10 +17,9 @@ import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_animated_nav_bar.dart';
 
-/// Tabs surfaced in the supervisor shell. The center FAB is a "Today" refresh
-/// action (no QR scanning) docked in the bottom-app-bar notch. The 4 nav slots
-/// are: Dashboard / Trips / (FAB) / Assignments / Profile.
-enum SupervisorNavTab { dashboard, trips, assignments, profile }
+/// Tabs surfaced in the supervisor shell.
+/// The 4 nav slots are: Dashboard / Trips / Attendance / Profile.
+enum SupervisorNavTab { dashboard, trips, attendance, profile }
 
 class MainSupervisorTabBar extends StatelessWidget {
   const MainSupervisorTabBar({
@@ -52,7 +52,7 @@ class _SupervisorShellState extends State<_SupervisorShell> {
   static const _slotTabs = <SupervisorNavTab>[
     SupervisorNavTab.dashboard,
     SupervisorNavTab.trips,
-    SupervisorNavTab.assignments,
+    SupervisorNavTab.attendance,
     SupervisorNavTab.profile,
   ];
 
@@ -67,10 +67,28 @@ class _SupervisorShellState extends State<_SupervisorShell> {
     context.read<AuthBloc>().add(AuthLogoutRequested());
   }
 
-  void _onFabPressed() {
-    // "Today": refresh data and jump to the Trips tab.
-    context.read<SupervisorBloc>().add(const SupervisorRefreshRequested());
-    _setTab(SupervisorNavTab.trips);
+  void _openAssignments() {
+    // Review list is no longer a bottom-nav tab (Attendance took its slot), so
+    // the dashboard's "Review" affordance opens it as a pushed screen, sharing
+    // the existing SupervisorBloc.
+    final bloc = context.read<SupervisorBloc>();
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (_) => BlocProvider<SupervisorBloc>.value(
+          value: bloc,
+          child: Scaffold(
+            backgroundColor: SupervisorTheme.background,
+            appBar: AppBar(
+              backgroundColor: SupervisorTheme.primary,
+              foregroundColor: Colors.white,
+              elevation: 0,
+              title: const Text('Review'),
+            ),
+            body: const SupervisorAssignmentsScreen(),
+          ),
+        ),
+      ),
+    );
   }
 
   void _openTeam() {
@@ -117,12 +135,13 @@ class _SupervisorShellState extends State<_SupervisorShell> {
         label: 'Trips',
       ),
       const SupervisorNavItem(
-        icon: Icons.fact_check_rounded,
-        label: 'Review',
+        icon: Icons.fingerprint_rounded,
+        label: 'Attendance',
       ),
       const SupervisorNavItem(
         icon: Icons.person_rounded,
         label: 'Profile',
+        iconAsset: 'assets/icons/profile_s.png',
       ),
     ];
 
@@ -164,11 +183,6 @@ class _SupervisorShellState extends State<_SupervisorShell> {
             ),
           ),
         ),
-        floatingActionButtonLocation: FloatingActionButtonLocation.centerDocked,
-        floatingActionButton: SupervisorFab(
-          onPressed: _onFabPressed,
-          label: "Today's trips",
-        ),
         bottomNavigationBar: SupervisorAnimatedNavBar(
           activeIndex: activeSlot,
           items: navItems,
@@ -185,13 +199,13 @@ class _SupervisorShellState extends State<_SupervisorShell> {
           name: name,
           onLogout: _logout,
           onOpenTrips: () => _setTab(SupervisorNavTab.trips),
-          onOpenAssignments: () => _setTab(SupervisorNavTab.assignments),
+          onOpenAssignments: _openAssignments,
           onOpenTeam: _openTeam,
         );
       case SupervisorNavTab.trips:
         return const SupervisorTripsScreen();
-      case SupervisorNavTab.assignments:
-        return const SupervisorAssignmentsScreen();
+      case SupervisorNavTab.attendance:
+        return SupervisorAttendancePage(name: name);
       case SupervisorNavTab.profile:
         return SupervisorProfileScreen(
           name: name,

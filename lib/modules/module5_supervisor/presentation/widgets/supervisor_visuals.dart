@@ -1,4 +1,5 @@
 import 'dart:math' as math;
+import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_models.dart';
@@ -91,66 +92,73 @@ class SupervisorKpiAreaChart extends StatelessWidget {
     final completedRatio = kpis.completed / total;
     final progressRatio = kpis.inProgress / total;
 
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-      decoration: BoxDecoration(
-        color: SupervisorTheme.surface,
-        borderRadius: SupervisorTheme.cardRadius,
-        boxShadow: SupervisorTheme.softShadow,
-        border:
-            Border.all(color: SupervisorTheme.hairline.withValues(alpha: 0.55)),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              const Text(
-                'Trips today',
-                style: TextStyle(
-                  color: SupervisorTheme.strongText,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  height: 1,
-                ),
-              ),
-              const Spacer(),
-              _miniBadge(
-                icon: Icons.check_rounded,
-                label: '${kpis.completed}',
-                color: SupervisorTheme.success,
-              ),
-              const SizedBox(width: 8),
-              _miniBadge(
-                icon: Icons.timelapse_rounded,
-                label: '${kpis.pendingReview}',
-                color: SupervisorTheme.warning,
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          SizedBox(
-            height: 148,
-            width: double.infinity,
-            child: CustomPaint(
-              painter: _SupervisorAreaChartPainter(
-                completedRatio: completedRatio,
-                progressRatio: progressRatio,
-                pending: kpis.pendingReview,
-              ),
+    return ClipRRect(
+      borderRadius: SupervisorTheme.cardRadius,
+      child: BackdropFilter(
+        filter: ui.ImageFilter.blur(sigmaX: 14, sigmaY: 14),
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
+          decoration: BoxDecoration(
+            color: const Color(0xFFFDFCF9).withValues(alpha: 0.72),
+            borderRadius: SupervisorTheme.cardRadius,
+            boxShadow: SupervisorTheme.elevatedShadow,
+            border: Border.all(
+              color: Colors.white.withValues(alpha: 0.5),
             ),
           ),
-          const SizedBox(height: 6),
-          const Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              _AxisLabel('Start'),
-              _AxisLabel('Midday'),
-              _AxisLabel('Now'),
+              Row(
+                children: [
+                  const Text(
+                    'Trips today',
+                    style: TextStyle(
+                      color: SupervisorTheme.strongText,
+                      fontSize: 18,
+                      fontWeight: FontWeight.w700,
+                      height: 1,
+                    ),
+                  ),
+                  const Spacer(),
+                  _miniBadge(
+                    icon: Icons.check_rounded,
+                    label: '${kpis.completed}',
+                    color: SupervisorTheme.success,
+                  ),
+                  const SizedBox(width: 8),
+                  _miniBadge(
+                    icon: Icons.timelapse_rounded,
+                    label: '${kpis.pendingReview}',
+                    color: SupervisorTheme.warning,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+              SizedBox(
+                height: 148,
+                width: double.infinity,
+                child: CustomPaint(
+                  painter: _SupervisorAreaChartPainter(
+                    completedRatio: completedRatio,
+                    progressRatio: progressRatio,
+                    pending: kpis.pendingReview,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 6),
+              const Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  _AxisLabel('Start'),
+                  _AxisLabel('Midday'),
+                  _AxisLabel('Now'),
+                ],
+              ),
             ],
           ),
-        ],
+        ),
       ),
     );
   }

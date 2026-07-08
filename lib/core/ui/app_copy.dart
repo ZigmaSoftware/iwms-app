@@ -6,7 +6,7 @@ class AppCopy {
   static const String authIntroSubtitle =
       'Join our eco community and stay on top of your daily collections.';
   static const String signIn = 'Sign in';
-  static const String loginWelcomeTitle = 'Welcome Back';
+  static const String loginWelcomeTitle = 'Welcome';
   static const String loginWelcomeSubtitle = 'Login to your account.';
   static const String login = 'Login';
 

@@ -1,52 +1,102 @@
+import 'dart:math' as math;
+import 'dart:ui' as ui;
+
 import 'package:flutter/material.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
 
-/// PhonePe-style notched bottom navigation bar with 4 tabs (icon + label
-/// stacked vertically, always visible) and a floating green action button
-/// docked in the notch at the center. Mirrors OperatorAnimatedNavBar exactly
-/// so the supervisor shell is indistinguishable from operator/driver.
+/// Supervisor bottom navigation — a FLOATING rounded-rectangle bar (App Store
+/// style: detached from the screen edges, big corner radius, soft shadow, and
+/// a frosted-glass fill) with 4 evenly-spaced tabs. Mirrors the driver's
+/// [CaptainNavBar] visual treatment exactly — the glass card, 28px radius,
+/// backdrop blur, animated indicator pill, scaled icon and always-visible
+/// label — adapted to the supervisor's light theme tokens.
 ///
-/// Slot layout: [tab0][tab1] (FAB notch) [tab2][tab3].
+/// There is no centered FAB (the supervisor has no scan/today action), so the
+/// four slots are simply distributed evenly across the width.
+/// Layout: [tab0][tab1][tab2][tab3].
 class SupervisorAnimatedNavBar extends StatelessWidget {
   const SupervisorAnimatedNavBar({
     super.key,
     required this.activeIndex,
     required this.onTabSelected,
     required this.items,
-    this.height = 72,
-    this.notchMargin = 8,
+    this.height = 68,
   });
 
   final int activeIndex;
   final ValueChanged<int> onTabSelected;
   final List<SupervisorNavItem> items;
   final double height;
-  final double notchMargin;
+
+  static const double _radius = 28;
 
   @override
   Widget build(BuildContext context) {
-    assert(items.length == 4,
-        'SupervisorAnimatedNavBar expects exactly 4 side tabs');
-    final bottomInset = MediaQuery.viewPaddingOf(context).bottom;
+    assert(
+        items.length == 4, 'SupervisorAnimatedNavBar expects exactly 4 tabs');
 
-    return BottomAppBar(
-      color: SupervisorTheme.primary,
-      elevation: 0,
-      shape: const CircularNotchedRectangle(),
-      notchMargin: notchMargin,
-      padding: EdgeInsets.zero,
-      height: height + bottomInset,
+    return SafeArea(
+      top: false,
+      minimum: const EdgeInsets.only(bottom: 10),
       child: Padding(
-        padding:
-            EdgeInsets.only(bottom: bottomInset > 0 ? bottomInset * .35 : 0),
-        child: Row(
-          children: [
-            Expanded(child: _slot(0)),
-            Expanded(child: _slot(1)),
-            const SizedBox(width: 64), // reserved gap for the FAB notch
-            Expanded(child: _slot(2)),
-            Expanded(child: _slot(3)),
-          ],
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        child: SizedBox(
+          height: height,
+          child: Stack(
+            fit: StackFit.expand,
+            clipBehavior: Clip.none,
+            children: [
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: Transform.translate(
+                    offset: const Offset(-3, 6),
+                    child: CustomPaint(
+                      painter: const _NavLiquidGlassShadowPainter(
+                        radius: _radius,
+                        progress: 0,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(_radius),
+                child: BackdropFilter(
+                  filter: ui.ImageFilter.blur(sigmaX: 0.1, sigmaY: 0.1),
+                  child: CustomPaint(
+                    painter: const _NavLiquidGlassSurfacePainter(
+                      radius: _radius,
+                      progress: 0,
+                    ),
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        const Positioned.fill(
+                          child: IgnorePointer(
+                            child: CustomPaint(
+                              painter: _NavLiquidGlassSheenPainter(
+                                radius: _radius,
+                                progress: 0,
+                              ),
+                            ),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          child: Row(
+                            children: [
+                              for (var i = 0; i < items.length; i++)
+                                Expanded(child: _slot(i)),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -63,10 +113,15 @@ class SupervisorNavItem {
   const SupervisorNavItem({
     required this.icon,
     required this.label,
+    this.iconAsset,
   });
 
   final IconData icon;
   final String label;
+
+  /// Optional raster icon. When set, the image is rendered in place of [icon]
+  /// (used for the Profile tab's avatar).
+  final String? iconAsset;
 }
 
 class _AnimatedNavTab extends StatelessWidget {
@@ -82,13 +137,14 @@ class _AnimatedNavTab extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final color = selected ? SupervisorTheme.accent : Colors.white70;
+    final color =
+        selected ? const ui.Color.fromARGB(255, 0, 94, 175) : SupervisorTheme.strongText;
 
     return InkResponse(
       onTap: onTap,
       radius: 38,
-      highlightColor: Colors.white.withValues(alpha: 0.08),
-      splashColor: Colors.white.withValues(alpha: 0.08),
+      highlightColor: Colors.white.withValues(alpha: 0.12),
+      splashColor: SupervisorTheme.accent.withValues(alpha: 0.12),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         mainAxisSize: MainAxisSize.min,
@@ -101,7 +157,7 @@ class _AnimatedNavTab extends StatelessWidget {
             height: 3,
             margin: const EdgeInsets.only(bottom: 4),
             decoration: BoxDecoration(
-              color: selected ? SupervisorTheme.accent : Colors.transparent,
+              color: SupervisorTheme.accent,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -109,7 +165,17 @@ class _AnimatedNavTab extends StatelessWidget {
             scale: selected ? 1.12 : 1,
             duration: const Duration(milliseconds: 240),
             curve: Curves.easeOutBack,
-            child: Icon(item.icon, color: color, size: 22),
+            child: item.iconAsset != null
+                ? Opacity(
+                    opacity: selected ? 1 : 0.86,
+                    child: Image.asset(
+                      item.iconAsset!,
+                      width: 26,
+                      height: 26,
+                      fit: BoxFit.contain,
+                    ),
+                  )
+                : Icon(item.icon, color: color, size: 24),
           ),
           const SizedBox(height: 3),
           Text(
@@ -118,9 +184,9 @@ class _AnimatedNavTab extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: color,
-              fontSize: 10.5,
-              fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
-              letterSpacing: 0,
+              fontSize: 11,
+              fontWeight: selected ? FontWeight.w800 : FontWeight.w700,
+              letterSpacing: 0.2,
               height: 1,
             ),
           ),
@@ -130,102 +196,194 @@ class _AnimatedNavTab extends StatelessWidget {
   }
 }
 
-/// Green pulsing action button docked in the BottomAppBar notch via
-/// centerDocked. For the supervisor this is a "Today" refresh-and-jump action
-/// (no QR scanning) — preserving the identical notched silhouette.
-class SupervisorFab extends StatefulWidget {
-  const SupervisorFab({
-    super.key,
-    required this.onPressed,
-    required this.label,
-    this.icon = Icons.today_rounded,
+class _NavLiquidGlassSurfacePainter extends CustomPainter {
+  const _NavLiquidGlassSurfacePainter({
+    required this.radius,
+    required this.progress,
   });
 
-  final VoidCallback onPressed;
-  final String label;
-  final IconData icon;
+  final double radius;
+  final double progress;
 
   @override
-  State<SupervisorFab> createState() => _SupervisorFabState();
-}
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(0.5),
+      Radius.circular(radius),
+    );
 
-class _SupervisorFabState extends State<SupervisorFab>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1800),
-  )..repeat(reverse: true);
+    final press = progress.clamp(0.0, 1.0);
 
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
+    // Mostly-opaque frosted base — enough tint to keep icons/labels sharp,
+    // while still reading as translucent glass (not a flat white bar).
+    final base = Paint()
+      ..color = const Color(0xFFFBFAF7).withValues(alpha: 0.82);
+    canvas.drawRRect(rrect, base);
+
+    final fill = Paint()
+      ..shader = LinearGradient(
+        begin: const Alignment(-0.95, 0.95),
+        end: const Alignment(0.95, -0.95),
+        colors: [
+          Colors.white.withValues(alpha: 0.05),
+          Colors.white.withValues(alpha: 0.16),
+          Colors.white.withValues(alpha: 0.05),
+        ],
+        stops: const [0.0, 0.5, 1.0],
+      ).createShader(rect);
+    canvas.drawRRect(rrect, fill);
+
+    final rim = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.black.withValues(alpha: 0.06),
+          Colors.white.withValues(alpha: 0.0),
+          Colors.white.withValues(alpha: 0.5 - press * 0.14),
+        ],
+        stops: const [0.0, 0.45, 1.0],
+      ).createShader(rect);
+    canvas.drawRRect(rrect.deflate(0.7), rim);
+
+    final innerRing = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1
+      ..color = Colors.white.withValues(alpha: 0.18);
+    canvas.drawRRect(rrect.deflate(1.8), innerRing);
+
+    final borderPaint = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.15
+      ..shader = SweepGradient(
+        colors: [
+          Colors.black.withValues(alpha: 0.48),
+          Colors.transparent,
+          Colors.white.withValues(alpha: 0.82),
+          Colors.transparent,
+          Colors.black.withValues(alpha: 0.48),
+        ],
+        stops: const [0.0, 0.18, 0.5, 0.82, 1.0],
+        startAngle: -math.pi * (0.42 + press * 0.28),
+        endAngle: math.pi * (1.58 + press * 0.28),
+      ).createShader(rect);
+
+    canvas.drawRRect(rrect, borderPaint);
   }
 
   @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      width: 64,
-      height: 64,
-      child: AnimatedBuilder(
-        animation: _pulse,
-        builder: (context, child) {
-          final t = Curves.easeInOut.transform(_pulse.value);
-          return Stack(
-            alignment: Alignment.center,
-            clipBehavior: Clip.none,
-            children: [
-              Container(
-                width: 64 + (12 * t),
-                height: 64 + (12 * t),
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  color:
-                      SupervisorTheme.accent.withValues(alpha: 0.22 * (1 - t)),
-                ),
-              ),
-              child!,
-            ],
-          );
-        },
-        child: Material(
-          color: SupervisorTheme.primary,
-          shape: const CircleBorder(),
-          elevation: 8,
-          shadowColor: SupervisorTheme.primary.withValues(alpha: 0.45),
-          child: InkWell(
-            customBorder: const CircleBorder(),
-            onTap: widget.onPressed,
-            child: Tooltip(
-              message: widget.label,
-              child: Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  shape: BoxShape.circle,
-                  gradient: const LinearGradient(
-                    colors: [
-                      SupervisorTheme.primary,
-                      SupervisorTheme.primarySoft,
-                    ],
-                    begin: Alignment.topLeft,
-                    end: Alignment.bottomRight,
-                  ),
-                  border: Border.all(
-                    color: SupervisorTheme.accent,
-                    width: 2,
-                  ),
-                ),
-                child: Icon(
-                  widget.icon,
-                  color: Colors.white,
-                  size: 28,
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
+  bool shouldRepaint(covariant _NavLiquidGlassSurfacePainter oldDelegate) {
+    return oldDelegate.radius != radius || oldDelegate.progress != progress;
+  }
+}
+
+class _NavLiquidGlassSheenPainter extends CustomPainter {
+  const _NavLiquidGlassSheenPainter({
+    required this.radius,
+    required this.progress,
+  });
+
+  final double radius;
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(1),
+      Radius.circular(radius),
     );
+
+    canvas.save();
+    canvas.clipRRect(rrect);
+
+    final travel = ui.lerpDouble(-0.35, 0.45, progress)!;
+    final sheenRect = Rect.fromLTWH(
+      -size.width * 0.35 + size.width * travel,
+      -size.height * 0.25,
+      size.width * 1.35,
+      size.height * 1.55,
+    );
+
+    final sheen = Paint()
+      ..blendMode = BlendMode.screen
+      ..shader = LinearGradient(
+        begin: const Alignment(-1, -1),
+        end: const Alignment(1, 1),
+        colors: [
+          Colors.transparent,
+          Colors.white.withValues(alpha: 0.04),
+          Colors.white.withValues(alpha: 0.42 + progress * 0.12),
+          Colors.white.withValues(alpha: 0.04),
+          Colors.transparent,
+        ],
+        stops: const [0.0, 0.4, 0.5, 0.55, 1.0],
+        transform: const GradientRotation(-math.pi / 4),
+      ).createShader(sheenRect);
+
+    canvas.drawRect(sheenRect, sheen);
+    canvas.restore();
+  }
+
+  @override
+  bool shouldRepaint(covariant _NavLiquidGlassSheenPainter oldDelegate) {
+    return oldDelegate.radius != radius || oldDelegate.progress != progress;
+  }
+}
+
+class _NavLiquidGlassShadowPainter extends CustomPainter {
+  const _NavLiquidGlassShadowPainter({
+    required this.radius,
+    required this.progress,
+  });
+
+  final double radius;
+  final double progress;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rect = Offset.zero & size;
+    final rrect = RRect.fromRectAndRadius(
+      rect.deflate(1),
+      Radius.circular(radius),
+    );
+
+    final shadow = Paint()
+      ..maskFilter = MaskFilter.blur(
+        BlurStyle.normal,
+        ui.lerpDouble(12, 6, progress)!,
+      )
+      ..shader = LinearGradient(
+        begin: Alignment.topCenter,
+        end: Alignment.bottomCenter,
+        colors: [
+          Colors.black.withValues(alpha: 0.10),
+          Colors.black.withValues(alpha: 0.18 - progress * 0.06),
+        ],
+      ).createShader(rect);
+
+    canvas.drawRRect(
+      rrect.shift(Offset(0, 5 - (3 * progress))),
+      shadow,
+    );
+
+    final rimShadow = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.6
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, 3)
+      ..color = Colors.black.withValues(alpha: 0.16 - progress * 0.05);
+
+    canvas.drawRRect(
+      rrect.shift(const Offset(1, 1)),
+      rimShadow,
+    );
+  }
+
+  @override
+  bool shouldRepaint(covariant _NavLiquidGlassShadowPainter oldDelegate) {
+    return oldDelegate.radius != radius || oldDelegate.progress != progress;
   }
 }

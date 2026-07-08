@@ -128,7 +128,10 @@ class SupervisorBloc extends Bloc<SupervisorEvent, SupervisorState> {
     SupervisorZoneScope scope,
     Emitter<SupervisorState> emit,
   ) async {
-    final assignments = await _repo.fetchAssignments(zoneIds: scope.zoneIds);
+    // Show only THIS supervisor's assignments (trip plans they supervise),
+    // scoped to today, not everything in their zones.
+    final assignments =
+        await _repo.fetchAssignments(mine: true, date: DateTime.now());
     final kpis = SupervisorKpis.fromAssignments(assignments);
     final alerts = SupervisorAlert.fromAssignments(assignments);
 

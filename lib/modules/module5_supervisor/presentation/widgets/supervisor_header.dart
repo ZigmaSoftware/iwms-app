@@ -32,13 +32,6 @@ class SupervisorHeader extends StatelessWidget {
     return 'Good evening';
   }
 
-  String _initials(String value) {
-    final parts = value.trim().split(' ').where((p) => p.isNotEmpty).toList();
-    if (parts.isEmpty) return 'S';
-    if (parts.length == 1) return parts.first[0].toUpperCase();
-    return (parts.first[0] + parts.last[0]).toUpperCase();
-  }
-
   @override
   Widget build(BuildContext context) {
     return Container(
@@ -73,22 +66,15 @@ class SupervisorHeader extends StatelessWidget {
   }
 
   Widget _avatar() {
-    return Container(
-      decoration: const BoxDecoration(
-        shape: BoxShape.circle,
-        color: SupervisorTheme.accent,
-      ),
-      padding: const EdgeInsets.all(2),
-      child: CircleAvatar(
-        radius: 23,
-        backgroundColor: SupervisorTheme.surface,
-        child: Text(
-          _initials(name),
-          style: const TextStyle(
-            fontSize: 16,
-            fontWeight: FontWeight.w700,
-            color: SupervisorTheme.primary,
-          ),
+    return CircleAvatar(
+      radius: 23,
+      backgroundColor: SupervisorTheme.surface,
+      child: ClipOval(
+        child: Image.asset(
+          'assets/icons/profile_s.png',
+          width: 46,
+          height: 46,
+          fit: BoxFit.cover,
         ),
       ),
     );
@@ -138,15 +124,33 @@ class SupervisorHeader extends StatelessWidget {
     return SizedBox(
       width: 40,
       height: 40,
-      child: IconButton(
+      child: PopupMenuButton<_HeaderMenuAction>(
         padding: EdgeInsets.zero,
         icon: const Icon(
           Icons.more_vert_rounded,
           color: SupervisorTheme.strongText,
           size: 22,
         ),
-        onPressed: onLogout,
-        tooltip: 'Logout',
+        tooltip: 'More options',
+        onSelected: (action) {
+          switch (action) {
+            case _HeaderMenuAction.logout:
+              onLogout();
+          }
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem(
+            value: _HeaderMenuAction.logout,
+            child: Row(
+              children: [
+                Icon(Icons.logout_rounded,
+                    size: 18, color: SupervisorTheme.strongText),
+                SizedBox(width: 10),
+                Text('Logout'),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -195,3 +199,5 @@ class SupervisorHeader extends StatelessWidget {
     );
   }
 }
+
+enum _HeaderMenuAction { logout }

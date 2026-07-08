@@ -2,7 +2,6 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:flutter_map/flutter_map.dart';
-import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
 
@@ -11,7 +10,6 @@ import '../../../core/geofence_config.dart';
 import '../../../data/models/vehicle_model.dart';
 import '../../../logic/vehicle_tracking/vehicle_bloc.dart';
 import '../../../logic/vehicle_tracking/vehicle_event.dart';
-import '../../../router/app_router.dart';
 import '../../../shared/widgets/home_base_marker.dart';
 import '../../../shared/widgets/tracking_view_shell.dart';
 
@@ -46,6 +44,7 @@ class _CitizenAllotedVehicleMapScreenState
 
   // Hybrid auto-fit logic
   Timer? _idleTimer;
+  StreamSubscription<MapEvent>? _mapEventSubscription;
   bool _userHasInteracted = false; // disables auto-fit for 30 sec after pan
 
   // New: track if auto-fit has already been done once
@@ -95,6 +94,8 @@ class _CitizenAllotedVehicleMapScreenState
   @override
   void dispose() {
     _idleTimer?.cancel();
+    _mapEventSubscription?.cancel();
+    _mapController.dispose();
     super.dispose();
   }
 
@@ -104,7 +105,7 @@ class _CitizenAllotedVehicleMapScreenState
   // ---------------------------------------------------------------------------
 
   void _attachMapInteractionTracker() {
-    _mapController.mapEventStream.listen((event) {
+    _mapEventSubscription = _mapController.mapEventStream.listen((event) {
       if (_programmaticCameraMove) {
         // Ignore events triggered by code
         return;
@@ -379,13 +380,6 @@ class _CitizenAllotedVehicleMapScreenState
                       statusPrimary: statusPrimary,
                       statusSecondary: statusSecondary,
                       statusContent: const SizedBox.shrink(),
-                      onBack: () {
-                        if (context.canPop()) {
-                          context.pop();
-                        } else {
-                          context.go(AppRoutePaths.citizenHome);
-                        }
-                      },
                       onRefresh: () => context
                           .read<VehicleBloc>()
                           .add(const VehicleFetchRequested(showLoading: true)),
@@ -569,6 +563,7 @@ class _CitizenAllotedVehicleMapScreenState
         TileLayer(
           urlTemplate: themeConfig.urlTemplate,
           subdomains: themeConfig.subdomains,
+          userAgentPackageName: 'com.zigma.iwmsapp',
         ),
 
         // Gamma polygon

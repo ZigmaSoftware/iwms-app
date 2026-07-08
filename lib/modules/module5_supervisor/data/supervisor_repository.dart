@@ -24,6 +24,12 @@ class SupervisorRepository {
       '${ApiConfig.desktopBase}user-creations/supervisor-zone-map/me/';
   static const String _assignments =
       '${ApiConfig.desktopBase}schedule-masters/daily-trip-assignments/';
+  static const String _staff =
+      '${ApiConfig.desktopBase}user-creations/staffcreation/';
+  static const String _staffTemplates =
+      '${ApiConfig.desktopBase}schedule-masters/staff-templates/';
+  static const String _tripLogs =
+      '${ApiConfig.desktopBase}schedule-masters/daily-trip-logs/';
 
   /// Fetch the requesting supervisor's authorised zone scope.
   Future<SupervisorZoneScope> fetchMyZoneScope() async {
@@ -53,12 +59,17 @@ class SupervisorRepository {
     DateTime? date,
     List<String> zoneIds = const [],
     String? status,
+    bool mine = false,
   }) async {
     final dio = await authorizedDio();
-    final dateStr = _formatDate(date ?? DateTime.now());
+    final dateStr = date == null ? null : _formatDate(date);
 
     Future<List<SupervisorAssignment>> fetchFor(String? zoneId) async {
-      final query = <String, dynamic>{'date': dateStr};
+      final query = <String, dynamic>{};
+      if (dateStr != null) query['date'] = dateStr;
+      // `mine=true` scopes to assignments whose trip plan this supervisor owns
+      // (TripPlan.supervisor_id == me), replacing zone-based scoping.
+      if (mine) query['mine'] = 'true';
       if (zoneId != null && zoneId.isNotEmpty) query['zone_id'] = zoneId;
       if (status != null && status.isNotEmpty) query['status'] = status;
 
@@ -67,7 +78,9 @@ class SupervisorRepository {
     }
 
     try {
-      if (zoneIds.isEmpty) {
+      // Supervisor-scoped or unscoped fetches are a single call; only
+      // zone-scoped fan-out needs the per-zone merge.
+      if (mine || zoneIds.isEmpty) {
         return await fetchFor(null);
       }
 
@@ -87,6 +100,101 @@ class SupervisorRepository {
     } catch (e) {
       throw SupervisorException(e.toString());
     }
+  }
+
+  /// This supervisor's trip history, sourced from the daily trip log
+  /// (actuals recorded during/after each trip), newest first. Adapted into
+  /// the same [SupervisorAssignment] shape as `fetchAssignments` so the UI
+  /// (`SupervisorAssignmentCard`) matches exactly.
+  Future<List<SupervisorAssignment>> fetchAssignmentHistory() async {
+    try {
+      final dio = await authorizedDio();
+      final res = await dio.get(_tripLogs, queryParameters: {'mine': 'true'});
+      final list = _rawList(res.data)
+          .map((e) => SupervisorAssignment.fromTripLogJson(e))
+          .toList();
+      list.sort((a, b) {
+        final ad = a.tripDate, bd = b.tripDate;
+        if (ad == null && bd == null) return 0;
+        if (ad == null) return 1;
+        if (bd == null) return -1;
+        return bd.compareTo(ad);
+      });
+      return list;
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e));
+    } catch (e) {
+      throw SupervisorException(e.toString());
+    }
+  }
+
+  /// The supervisor's collected-waste time series (one entry per trip log),
+  /// sourced from the daily trip log's bin + household weights. Bucketing by
+  /// day/week/month is done in the chart widget.
+  Future<List<SupervisorWastePoint>> fetchWasteSeries() async {
+    try {
+      final dio = await authorizedDio();
+      final res = await dio.get(
+        _tripLogs,
+        queryParameters: {'mine': 'true', 'limit': '1000'},
+      );
+      return _rawList(res.data)
+          .map((e) => SupervisorWastePoint.fromLogJson(e))
+          .where((p) => p.hasValidDate)
+          .toList();
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e));
+    } catch (e) {
+      throw SupervisorException(e.toString());
+    }
+  }
+
+  /// Staff list (company-scoped by the backend), used by the Staffs screen
+  /// which groups by designation.
+  Future<List<SupervisorStaff>> fetchStaff() async {
+    try {
+      final dio = await authorizedDio();
+      final res = await dio.get(_staff);
+      return _rawList(res.data)
+          .map((e) => SupervisorStaff.fromJson(e))
+          .toList();
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e));
+    } catch (e) {
+      throw SupervisorException(e.toString());
+    }
+  }
+
+  /// Staff templates (the "Teams" list).
+  Future<List<SupervisorTeam>> fetchTeams() async {
+    try {
+      final dio = await authorizedDio();
+      final res = await dio.get(_staffTemplates);
+      return _rawList(res.data)
+          .map((e) => SupervisorTeam.fromJson(e))
+          .toList();
+    } on DioException catch (e) {
+      throw SupervisorException(_message(e));
+    } catch (e) {
+      throw SupervisorException(e.toString());
+    }
+  }
+
+  List<Map<String, dynamic>> _rawList(dynamic data) {
+    final List raw;
+    if (data is List) {
+      raw = data;
+    } else if (data is Map && data['results'] is List) {
+      raw = data['results'] as List;
+    } else if (data is Map && data['data'] is List) {
+      raw = data['data'] as List;
+    } else {
+      raw = const [];
+    }
+    return raw
+        .whereType<Map>()
+        .map((e) => Map<String, dynamic>.from(e))
+        .toList();
   }
 
   List<SupervisorAssignment> _parseList(dynamic data) {

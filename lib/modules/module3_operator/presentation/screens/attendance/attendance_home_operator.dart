@@ -394,7 +394,7 @@ class _AttendancePageState extends State<AttendancePage>
   }
 
   String get _punchLabel {
-    if (_tripWindow) return 'Trip Punch';
+    if (_tripWindow) return 'Attendance Punch';
     if (_isCheckedIn && !_isCheckedOut) return 'Punch Out';
     if (_isCheckedOut) return 'Camera';
     return 'Punch In';

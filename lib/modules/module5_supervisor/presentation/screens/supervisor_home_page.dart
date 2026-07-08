@@ -1,7 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/data/supervisor_models.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_history_screen.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_staff_attendance_screen.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_staff_screen.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_teams_screen.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/logic/supervisor_bloc.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/supervisor_grievance_screen.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/theme/supervisor_theme.dart';
@@ -9,9 +14,10 @@ import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_header.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_state_views.dart';
 import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_visuals.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/widgets/supervisor_waste_chart.dart';
 
 /// Dashboard tab — header + zone KPIs + activity/alerts feed.
-class SupervisorHomePage extends StatelessWidget {
+class SupervisorHomePage extends StatefulWidget {
   const SupervisorHomePage({
     super.key,
     required this.name,
@@ -28,6 +34,15 @@ class SupervisorHomePage extends StatelessWidget {
   final VoidCallback? onOpenTeam;
 
   @override
+  State<SupervisorHomePage> createState() => _SupervisorHomePageState();
+}
+
+enum _QuickActionFilter { actions, approvals, explore }
+
+class _SupervisorHomePageState extends State<SupervisorHomePage> {
+  _QuickActionFilter _selectedQuickActionFilter = _QuickActionFilter.actions;
+
+  @override
   Widget build(BuildContext context) {
     return BlocBuilder<SupervisorBloc, SupervisorState>(
       builder: (context, state) {
@@ -37,8 +52,8 @@ class SupervisorHomePage extends StatelessWidget {
           child: Column(
             children: [
               SupervisorHeader(
-                name: name,
-                onLogout: onLogout,
+                name: widget.name,
+                onLogout: widget.onLogout,
                 zoneCount: state.scope.zoneIds.length,
               ),
               Expanded(
@@ -87,69 +102,64 @@ class SupervisorHomePage extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-          SupervisorKpiAreaChart(kpis: kpis),
-          const SizedBox(height: 10),
-          const Row(
-            children: [
-              Expanded(child: SupervisorTimeChip(label: 'Trips')),
-              SizedBox(width: 8),
-              Expanded(child: SupervisorTimeChip(label: 'Review')),
-              SizedBox(width: 8),
-              Expanded(
-                child: SupervisorTimeChip(label: 'Today', selected: true),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          const Text(
-            'Today at a glance',
-            style: TextStyle(
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              color: SupervisorTheme.strongText,
-            ),
-          ),
-          const SizedBox(height: 10),
-          _kpiGrid(kpis),
-          const SizedBox(height: 12),
-          _grievanceTile(context),
-          if (onOpenTeam != null) ...[
-            const SizedBox(height: 12),
-            _teamTile(),
-          ],
-          const SizedBox(height: 22),
-          Row(
-            children: [
-              Text(
-                'Activity & alerts',
-                style: const TextStyle(
+              const SupervisorWasteChart(),
+              const SizedBox(height: 18),
+              const Text(
+                'Quick actions',
+                style: TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.w800,
                   color: SupervisorTheme.strongText,
                 ),
               ),
-              const Spacer(),
-              if (onOpenAssignments != null)
-                TextButton(
-                  onPressed: onOpenAssignments,
-                  child: const Text('Review',
-                      style: TextStyle(
-                        color: SupervisorTheme.accent,
-                        fontWeight: FontWeight.w700,
-                      )),
+              const SizedBox(height: 10),
+              _quickActionFilters(),
+              const SizedBox(height: 12),
+              _quickActions(context),
+              const SizedBox(height: 20),
+              const Text(
+                'Today at a glance',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: SupervisorTheme.strongText,
                 ),
-            ],
-          ),
-          const SizedBox(height: 8),
-          if (state.alerts.isEmpty)
-            _allClearTile()
-          else
-            ...state.alerts.map(
-              (a) => Padding(
-                padding: const EdgeInsets.only(bottom: 12),
-                child: SupervisorAlertTile(alert: a),
               ),
-            ),
+              const SizedBox(height: 10),
+              _glanceGrid(kpis),
+              const SizedBox(height: 22),
+              Row(
+                children: [
+                  Text(
+                    'Activity & alerts',
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w800,
+                      color: SupervisorTheme.strongText,
+                    ),
+                  ),
+                  const Spacer(),
+                  if (widget.onOpenAssignments != null)
+                    TextButton(
+                      onPressed: widget.onOpenAssignments,
+                      child: const Text('Review',
+                          style: TextStyle(
+                            color: SupervisorTheme.accent,
+                            fontWeight: FontWeight.w700,
+                          )),
+                    ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              if (state.alerts.isEmpty)
+                _allClearTile()
+              else
+                ...state.alerts.map(
+                  (a) => Padding(
+                    padding: const EdgeInsets.only(bottom: 12),
+                    child: SupervisorAlertTile(alert: a),
+                  ),
+                ),
             ],
           ),
         ),
@@ -157,47 +167,208 @@ class SupervisorHomePage extends StatelessWidget {
     );
   }
 
-  Widget _kpiGrid(SupervisorKpis kpis) {
-    final cards = [
-      SupervisorKpiCard(
+  Widget _quickActionFilters() {
+    return Row(
+      children: [
+        Expanded(
+          child: SupervisorTimeChip(
+            label: 'Actions',
+            selected: _selectedQuickActionFilter == _QuickActionFilter.actions,
+            onTap: () => setState(
+                () => _selectedQuickActionFilter = _QuickActionFilter.actions),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SupervisorTimeChip(
+            label: 'Approvals',
+            selected:
+                _selectedQuickActionFilter == _QuickActionFilter.approvals,
+            onTap: () => setState(() =>
+                _selectedQuickActionFilter = _QuickActionFilter.approvals),
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: SupervisorTimeChip(
+            label: 'explore',
+            selected: _selectedQuickActionFilter == _QuickActionFilter.explore,
+            onTap: () => setState(
+                () => _selectedQuickActionFilter = _QuickActionFilter.explore),
+          ),
+        ),
+      ],
+    );
+  }
+
+  /// Glassmorphism quick-action grid filtered by the pill row above. Each tile
+  /// uses the same liquid-glass surface as the KPI cards
+  /// ([SupervisorGlassActionTile]) with a raster icon + label.
+  Widget _quickActions(BuildContext context) {
+    void soon(String name) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('$name — coming soon'),
+          duration: const Duration(seconds: 2),
+        ),
+      );
+    }
+
+    final tiles = <_QuickActionSpec>[
+      _QuickActionSpec(
+        filter: _QuickActionFilter.actions,
+        tile: SupervisorGlassActionTile(
+          iconAsset: 'assets/icons/attendance.png',
+          label: 'Attendance',
+          // Read-only oversight: staff directory → each staff's punch records
+          // from app_recognized (NOT a punch screen).
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const SupervisorStaffAttendanceScreen(),
+            ),
+          ),
+        ),
+      ),
+      _QuickActionSpec(
+        filter: _QuickActionFilter.actions,
+        tile: SupervisorGlassActionTile(
+          iconAsset: 'assets/icons/staff.png',
+          label: 'Staffs',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SupervisorStaffScreen()),
+          ),
+        ),
+      ),
+      _QuickActionSpec(
+        filter: _QuickActionFilter.actions,
+        tile: SupervisorGlassActionTile(
+          iconAsset: 'assets/icons/garbage-truck.png',
+          label: 'Trips',
+          onTap: widget.onOpenTrips,
+        ),
+      ),
+      _QuickActionSpec(
+        filter: _QuickActionFilter.actions,
+        tile: SupervisorGlassActionTile(
+          iconAsset: 'assets/icons/teams.png',
+          label: 'Teams',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SupervisorTeamsScreen()),
+          ),
+        ),
+      ),
+      _QuickActionSpec(
+        filter: _QuickActionFilter.actions,
+        tile: SupervisorGlassActionTile(
+          iconAsset: 'assets/icons/grievance.png',
+          label: 'Grievances',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const SupervisorGrievanceScreen(),
+            ),
+          ),
+        ),
+      ),
+      _QuickActionSpec(
+        filter: _QuickActionFilter.actions,
+        tile: SupervisorGlassActionTile(
+          iconAsset: 'assets/icons/navigate.png',
+          label: 'Navigate',
+          // Opens the citizen live-tracking map (all vehicles) — MapScreen
+          // self-provides its VehicleBloc, so it works from any context.
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const MapScreen()),
+          ),
+        ),
+      ),
+      _QuickActionSpec(
+        filter: _QuickActionFilter.actions,
+        tile: SupervisorGlassActionTile(
+          iconAsset: 'assets/icons/history (1).png',
+          label: 'History',
+          onTap: () => Navigator.of(context).push(
+            MaterialPageRoute(builder: (_) => const SupervisorHistoryScreen()),
+          ),
+        ),
+      ),
+      _QuickActionSpec(
+        filter: _QuickActionFilter.actions,
+        tile: SupervisorGlassActionTile(
+          iconAsset: 'assets/icons/reports.png',
+          label: 'Reports',
+          onTap: () => soon('Reports'),
+        ),
+      ),
+    ];
+
+    const spacing = 10.0;
+    final visibleTiles = tiles
+        .where((item) => item.filter == _selectedQuickActionFilter)
+        .toList();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final tileSize = (constraints.maxWidth - (spacing * 3)) / 4;
+
+        return Wrap(
+          spacing: spacing,
+          runSpacing: spacing,
+          children: [
+            for (final item in visibleTiles)
+              SizedBox.square(
+                dimension: tileSize,
+                child: item.tile,
+              ),
+          ],
+        );
+      },
+    );
+  }
+
+  /// "Today at a glance" grid (2×2) of solid-white illustrated stat cards.
+  /// The first two carry artwork; the last two stay image-less until their
+  /// illustrations are supplied.
+  Widget _glanceGrid(SupervisorKpis kpis) {
+    final cards = <SupervisorGlanceCard>[
+      SupervisorGlanceCard(
         value: '${kpis.total}',
         label: 'Trips today',
         icon: Icons.route_rounded,
         color: SupervisorTheme.info,
-        onTap: onOpenTrips,
+        imageAsset: 'assets/images/trips_today.png',
+        onTap: widget.onOpenTrips,
       ),
-      SupervisorKpiCard(
+      SupervisorGlanceCard(
         value: '${kpis.inProgress}',
         label: 'In progress',
         icon: Icons.directions_run_rounded,
         color: const Color(0xFF0EA5E9),
-        onTap: onOpenTrips,
+        imageAsset: 'assets/images/in_progress.png',
+        onTap: widget.onOpenTrips,
       ),
-      SupervisorKpiCard(
+      SupervisorGlanceCard(
         value: '${kpis.completed}',
         label: 'Completed',
         icon: Icons.check_circle_rounded,
         color: SupervisorTheme.success,
-        onTap: onOpenTrips,
+        imageAsset: 'assets/images/completed_trip.png',
+        onTap: widget.onOpenTrips,
       ),
-      SupervisorKpiCard(
+      SupervisorGlanceCard(
         value: '${kpis.pendingReview}',
         label: 'Pending review',
         icon: Icons.hourglass_bottom_rounded,
         color: SupervisorTheme.warning,
-        onTap: onOpenAssignments,
+        imageAsset: 'assets/images/pending_trip.png',
+        onTap: widget.onOpenAssignments,
       ),
     ];
-    // Laid out as plain Rows rather than a nested GridView on purpose: a
-    // GridView is itself a scroll viewport (its own compositing layer), which
-    // would isolate the cards from the dotted background and stop their
-    // BackdropFilter from frosting it. Keeping the cards in the same layer as
-    // the background makes the liquid-glass effect consistent at all times.
+
     const spacing = 12.0;
-    const aspect = 1.02;
+    const height = 116.0;
 
     Widget cell(Widget card) =>
-        Expanded(child: AspectRatio(aspectRatio: aspect, child: card));
+        Expanded(child: SizedBox(height: height, child: card));
 
     Widget row(Widget a, Widget b) => Row(
           children: [
@@ -213,111 +384,6 @@ class SupervisorHomePage extends StatelessWidget {
         const SizedBox(height: spacing),
         row(cards[2], cards[3]),
       ],
-    );
-  }
-
-  Widget _grievanceTile(BuildContext context) {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: SupervisorTheme.cardRadius,
-        onTap: () => Navigator.of(context).push(
-          MaterialPageRoute(
-            builder: (_) => const SupervisorGrievanceScreen(),
-          ),
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: SupervisorTheme.primary,
-            borderRadius: SupervisorTheme.cardRadius,
-            boxShadow: SupervisorTheme.softShadow,
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.2),
-                  borderRadius: SupervisorTheme.chipRadius,
-                ),
-                child: const Icon(Icons.report_problem_rounded,
-                    color: Colors.white, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      'Grievances',
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
-                      ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      'View & act on citizen complaints for your department',
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        color: Colors.white70,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded, color: Colors.white),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _teamTile() {
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        borderRadius: SupervisorTheme.cardRadius,
-        onTap: onOpenTeam,
-        child: Container(
-          padding: const EdgeInsets.all(14),
-          decoration: BoxDecoration(
-            color: SupervisorTheme.surface,
-            borderRadius: SupervisorTheme.cardRadius,
-            border: Border.all(color: SupervisorTheme.hairline),
-            boxShadow: SupervisorTheme.softShadow,
-          ),
-          child: Row(
-            children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: SupervisorTheme.accent.withValues(alpha: 0.12),
-                  borderRadius: SupervisorTheme.chipRadius,
-                ),
-                child: const Icon(Icons.groups_rounded,
-                    color: SupervisorTheme.accent, size: 18),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Team on duty',
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: SupervisorTheme.strongText,
-                  ),
-                ),
-              ),
-              const Icon(Icons.chevron_right_rounded,
-                  color: SupervisorTheme.mutedText),
-            ],
-          ),
-        ),
-      ),
     );
   }
 
@@ -352,4 +418,14 @@ class SupervisorHomePage extends StatelessWidget {
       ),
     );
   }
+}
+
+class _QuickActionSpec {
+  const _QuickActionSpec({
+    required this.filter,
+    required this.tile,
+  });
+
+  final _QuickActionFilter filter;
+  final SupervisorGlassActionTile tile;
 }

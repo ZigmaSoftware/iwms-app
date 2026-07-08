@@ -1,203 +1,359 @@
-flutter: *** Request ***
-flutter: uri: https://api.vamosys.com/mobile/getGrpDataForTrustedClients?providerName=BLUEPLANET&fcode=VAM
-flutter: method: GET
-flutter: responseType: ResponseType.json
-flutter: followRedirects: true
-flutter: persistentConnection: true
-flutter: connectTimeout: 0:00:10.000000
-flutter: sendTimeout: null
-flutter: receiveTimeout: 0:00:10.000000
-flutter: receiveDataWhenStatusError: true
-flutter: extra: {}
-flutter: headers:
-flutter: data:
-flutter: null
-flutter: 
-flutter: 📍 Location ready: 0.0, 0.0
-flutter: *** Response ***
-flutter: uri: https://api.vamosys.com/mobile/getGrpDataForTrustedClients?providerName=BLUEPLANET&fcode=VAM
-flutter: statusCode: 200
-flutter: headers:
-flutter:  access-control-allow-credentials: true
-flutter:  access-control-allow-headers: Origin, X-Requested-With, Content-Type, Accept, Key, Authorization
-flutter:  transfer-encoding: chunked
-flutter:  date: Sat, 04 Jul 2026 05:30:59 GMT
-flutter:  access-control-allow-origin: *
-flutter:  access-control-allow-methods: ACL, CANCELUPLOAD, CHECKIN, CHECKOUT, COPY, DELETE, GET, HEAD, LOCK, MKCALENDAR, MKCOL, MOVE, OPTIONS, POST, PROPFIND, PROPPATCH, PUT, REPORT, SEARCH, UNCHECKOUT, UNLOCK, UPDATE, VERSION-CONTROL
-flutter:  access-control-max-age: 3600
-flutter:  content-type: application/json;charset=UTF-8
-flutter:  server: Jetty(8.1.15.v20140411)
-flutter:  x-application-context: application:9000
-flutter: Response Text:
-flutter: [{rowId: 0, latitude: 28.48643778, longitude: 77.50672, speed: 26, date: 1783143057000, alert: N, direction: SE, position: M, distanceCovered: 16.96, odoDistance: 22731.66, odoMeterDevice: 0.0, tankSize: 0.0, deviceVolt: 0.0, status: ON, altitude: null, color: G, lastSeen: 04-7-2026 11:00:57, ignitionStatus: ON, insideGeoFence: N, isOverSpeed: N, address: 0.53 km away from GAMMA 1, parkedTime: 0, movingTime: 351000, idleTime: 0, noDataTime: 0, alertDateTime: A, latLngOld: null, loadTruck: nill, loadTrailer: nill, totalTruck: nill, totalTrailer: nill, vehicleBusy: no, fuelLitre: 0.0, temperature: 0.0, powerStatus: 12.0 V, deviceStatus: 12, gsmLevel: 15, startParkedTime: 0, endParkedTime: 0, maxSpeed: 0, averageSpeed: 32, lastComunicationTime: 1783143059176, isOutOfOrder: no, tripName: no, forwardOrBackward: no, enableLog: no, dateSec: 1783143057, digitalInput3: no, fuelSensorVolt: 0, nTankSize: 0.0, noOfTank: 1, sensorCount: 1, gpsSimICCID: 8991940912969331392, madeIn: India, manufacturingDate: , cha
-flutter: 
-Another exception was thrown: Exception:
-You need to have the FlutterMap widget
-rendered at least once before using the
-MapController.
-flutter: *** Request ***
-flutter: uri: https://api.vamosys.com/mobile/getGrpDataForTrustedClients?providerName=BLUEPLANET&fcode=VAM
-flutter: method: GET
-flutter: responseType: ResponseType.json
-flutter: followRedirects: true
-flutter: persistentConnection: true
-flutter: connectTimeout: 0:00:10.000000
-flutter: sendTimeout: null
-flutter: receiveTimeout: 0:00:10.000000
-flutter: receiveDataWhenStatusError: true
-flutter: extra: {}
-flutter: headers:
-flutter: data:
-flutter: null
-flutter: 
-flutter: *** Request ***
-flutter: uri: http://192.168.3.120:8000/api/v1/operator-mobile/my-trip-today/
-flutter: method: GET
-flutter: responseType: ResponseType.json
-flutter: followRedirects: true
-flutter: persistentConnection: true
-flutter: connectTimeout: 0:00:10.000000
-flutter: sendTimeout: null
-flutter: receiveTimeout: 0:00:10.000000
-flutter: receiveDataWhenStatusError: true
-flutter: extra: {}
-flutter: headers:
-flutter:  Content-Type: application/json
-flutter:  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzMTU5MzkyLCJpYXQiOjE3ODMxNDEzOTIsImp0aSI6ImQ1NzljYTQ1NjVhZjQ0N2M4MWU3Y2VkZDI1OGY5ZDliIiwidXNlcl9pZCI6IlNUQy02NTU2MGJlZGE4ZGNmODg1NTciLCJ1bmlxdWVfaWQiOiJTVEMtNjU1NjBiZWRhOGRjZjg4NTU3IiwidXNlcl90eXBlIjoic3RhZmYiLCJuYW1lIjoiZHJpdmVyX3VzZXIiLCJyb2xlIjoiQ29tcGFueSBEcml2ZXIiLCJlbWFpbCI6ImRyaXZlcl91c2VyQGV4YW1wbGUuY29tIiwiZW1wX2lkIjoiU1RDLTY1NTYwYmVkYThkY2Y4ODU1NyIsImVtcGxveWVlX2lkIjoiMTg0MTEyMjAiLCJjb21wYW55X3VuaXF1ZV9pZCI6IkNNUC02NTU2MGI4YjRkM2ZlMjY5NDciLCJjb21wYW55X25hbWUiOiJCbHVlIFBsYW5ldCIsInByb2plY3RzIjpbeyJ1bmlxdWVfaWQiOiJQUk9KLTY1NTYwYjhiNGRhNzUzMTY0MiIsIm5hbWUiOiJOb2lkYSBCUCIsImdwc19hcGlfdXJsIjoiaHR0cHM6Ly9hcGkudmFtb3N5cy5jb20vZ2V0VmVoaWNsZUhpc3RvcnkiLCJncHNfdXNlcl9pZCI6IkJMVUVQTEFORVQiLCJncHNfZ3JvdXBfbmFtZSI6IkJMVUVQTEFORVQ6VkFNIiwiZ3BzX3Byb3ZpZGVyX25hbWUiOiJCTFVFUExBTkVUIiwiZ3BzX2Zjb2RlIjoiVkFNIiwiZ3BzX3RyaXBfdXNlcl9pZCI6Ik5NQ1AyRElTUE9TQUwiLCJ3ZWlnaG1lbnRfYXBpX3VybCI6Imh0dHBzOi8vemlnbWEuaW4vZD
-flutter: data:
-flutter: null
-flutter: 
-flutter: *** Request ***
-flutter: uri: http://192.168.3.120:8000/api/v1/staff-profile/?staff_id_id=STC-65560beda8dcf88557
-flutter: method: GET
-flutter: responseType: ResponseType.json
-flutter: followRedirects: true
-flutter: persistentConnection: true
-flutter: connectTimeout: 0:00:10.000000
-flutter: sendTimeout: null
-flutter: receiveTimeout: 0:00:10.000000
-flutter: receiveDataWhenStatusError: true
-flutter: extra: {}
-flutter: headers:
-flutter:  Content-Type: application/json
-flutter:  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzMTU5MzkyLCJpYXQiOjE3ODMxNDEzOTIsImp0aSI6ImQ1NzljYTQ1NjVhZjQ0N2M4MWU3Y2VkZDI1OGY5ZDliIiwidXNlcl9pZCI6IlNUQy02NTU2MGJlZGE4ZGNmODg1NTciLCJ1bmlxdWVfaWQiOiJTVEMtNjU1NjBiZWRhOGRjZjg4NTU3IiwidXNlcl90eXBlIjoic3RhZmYiLCJuYW1lIjoiZHJpdmVyX3VzZXIiLCJyb2xlIjoiQ29tcGFueSBEcml2ZXIiLCJlbWFpbCI6ImRyaXZlcl91c2VyQGV4YW1wbGUuY29tIiwiZW1wX2lkIjoiU1RDLTY1NTYwYmVkYThkY2Y4ODU1NyIsImVtcGxveWVlX2lkIjoiMTg0MTEyMjAiLCJjb21wYW55X3VuaXF1ZV9pZCI6IkNNUC02NTU2MGI4YjRkM2ZlMjY5NDciLCJjb21wYW55X25hbWUiOiJCbHVlIFBsYW5ldCIsInByb2plY3RzIjpbeyJ1bmlxdWVfaWQiOiJQUk9KLTY1NTYwYjhiNGRhNzUzMTY0MiIsIm5hbWUiOiJOb2lkYSBCUCIsImdwc19hcGlfdXJsIjoiaHR0cHM6Ly9hcGkudmFtb3N5cy5jb20vZ2V0VmVoaWNsZUhpc3RvcnkiLCJncHNfdXNlcl9pZCI6IkJMVUVQTEFORVQiLCJncHNfZ3JvdXBfbmFtZSI6IkJMVUVQTEFORVQ6VkFNIiwiZ3BzX3Byb3ZpZGVyX25hbWUiOiJCTFVFUExBTkVUIiwiZ3BzX2Zjb2RlIjoiVkFNIiwiZ3BzX3RyaXBfdXNlcl9pZCI6Ik5NQ1AyRElTUE9TQUwiLCJ3ZWlnaG1lbnRfYXBpX3VybCI6Imh0dHBzOi8vemlnbWEuaW4vZD
-flutter: data:
-flutter: null
-flutter: 
-flutter: *** Response ***
-flutter: uri: http://192.168.3.120:8000/api/v1/staff-profile/?staff_id_id=STC-65560beda8dcf88557
-flutter: statusCode: 200
-flutter: headers:
-flutter:  date: Sat, 04 Jul 2026 05:31:02 GMT
-flutter:  vary: Accept, origin
-flutter:  content-length: 593
-flutter:  referrer-policy: same-origin
-flutter:  cross-origin-opener-policy: same-origin
-flutter:  content-type: application/json
-flutter:  x-frame-options: DENY
-flutter:  x-content-type-options: nosniff
-flutter:  server: WSGIServer/0.2 CPython/3.14.3
-flutter:  allow: GET, HEAD, OPTIONS
-flutter: Response Text:
-flutter: {"status":"success","data":{"company_id":"CMP-65560b8b4d3fe26947","company_name":"Blue Planet","project_id":"PROJ-65560b8b4da7531642","project_name":"Noida BP","staff_unique_id":"STC-65560beda8dcf88557","emp_id":"18411220","employee_name":"driver_user","department":null,"designation":null,"site_name":null,"doj":null,"photo":null,"personal":{"company_id":"CMP-65560b8b4d3fe26947","company_name":"Blue Planet","project_id":"PROJ-65560b8b4da7531642","project_name":"Noida BP","dob":null,"blood_group":"O+","marital_status":null,"gender":"Male","present_address":null,"permanent_address":null}}}
-flutter: 
-flutter: *** Response ***
-flutter: uri: http://192.168.3.120:8000/api/v1/operator-mobile/my-trip-today/
-flutter: statusCode: 200
-flutter: headers:
-flutter:  date: Sat, 04 Jul 2026 05:31:02 GMT
-flutter:  vary: Accept, Cookie, origin
-flutter:  content-length: 1526
-flutter:  referrer-policy: same-origin
-flutter:  cross-origin-opener-policy: same-origin
-flutter:  content-type: application/json
-flutter:  x-frame-options: DENY
-flutter:  x-content-type-options: nosniff
-flutter:  server: WSGIServer/0.2 CPython/3.14.3
-flutter:  allow: GET, HEAD, OPTIONS
-flutter: Response Text:
-flutter: {"assignment_unique_id":"TRIP-2026-07-109","trip_date":"2026-07-04","status":"Scheduled","scheduled_time":"07:00:00","actual_start_time":null,"actual_end_time":null,"panchayat":{"unique_id":"PANCHAYAT-65560bdc953dc24066","name":"Panchayat 11","latitude":"13.250000","longitude":"80.300000"},"waste_type":{"unique_id":"wst-20269x20d0v5vw44","name":"Wet Waste"},"vehicle":{"unique_id":"VEHCRE-65560bee0e39978053","vehicle_no":"WET-VEHICLE-01","capacity":"1000.00"},"trip_plan":{"unique_id":"TPLAN-65560c23ebea071501","display_code":"DRIVER-WET-VEHICLE-01-02"},"progress":{"collected":0,"total":1,"completed":false},"collection_points":[{"unique_id":"DTCP-6ab4320262","sequence":1,"is_collected":false,"status":"Pending","collected_at":null,"collected_weight_kg":null,"collection_point":{"unique_id":"CP-65560bee1936092449","name":"CP-PAN11-01","latitude":"13.250500","longitude":"80.300500"},"bin":{"unique_id":"BIN-65560bee43e1845370","bin_name":"CP-PAN11-01 Wet Bin","bin_qr":"BIN-65560bee43e1845370","bin_qr_image
-flutter: 
-flutter: *** Request ***
-flutter: uri: http://192.168.3.120:8000/api/v1/operator-mobile/trip-history/?from=2026-05-20&to=2026-07-05
-flutter: method: GET
-flutter: responseType: ResponseType.json
-flutter: followRedirects: true
-flutter: persistentConnection: true
-flutter: connectTimeout: 0:00:10.000000
-flutter: sendTimeout: null
-flutter: receiveTimeout: 0:00:10.000000
-flutter: receiveDataWhenStatusError: true
-flutter: extra: {}
-flutter: headers:
-flutter:  Content-Type: application/json
-flutter:  Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ0b2tlbl90eXBlIjoiYWNjZXNzIiwiZXhwIjoxNzgzMTU5MzkyLCJpYXQiOjE3ODMxNDEzOTIsImp0aSI6ImQ1NzljYTQ1NjVhZjQ0N2M4MWU3Y2VkZDI1OGY5ZDliIiwidXNlcl9pZCI6IlNUQy02NTU2MGJlZGE4ZGNmODg1NTciLCJ1bmlxdWVfaWQiOiJTVEMtNjU1NjBiZWRhOGRjZjg4NTU3IiwidXNlcl90eXBlIjoic3RhZmYiLCJuYW1lIjoiZHJpdmVyX3VzZXIiLCJyb2xlIjoiQ29tcGFueSBEcml2ZXIiLCJlbWFpbCI6ImRyaXZlcl91c2VyQGV4YW1wbGUuY29tIiwiZW1wX2lkIjoiU1RDLTY1NTYwYmVkYThkY2Y4ODU1NyIsImVtcGxveWVlX2lkIjoiMTg0MTEyMjAiLCJjb21wYW55X3VuaXF1ZV9pZCI6IkNNUC02NTU2MGI4YjRkM2ZlMjY5NDciLCJjb21wYW55X25hbWUiOiJCbHVlIFBsYW5ldCIsInByb2plY3RzIjpbeyJ1bmlxdWVfaWQiOiJQUk9KLTY1NTYwYjhiNGRhNzUzMTY0MiIsIm5hbWUiOiJOb2lkYSBCUCIsImdwc19hcGlfdXJsIjoiaHR0cHM6Ly9hcGkudmFtb3N5cy5jb20vZ2V0VmVoaWNsZUhpc3RvcnkiLCJncHNfdXNlcl9pZCI6IkJMVUVQTEFORVQiLCJncHNfZ3JvdXBfbmFtZSI6IkJMVUVQTEFORVQ6VkFNIiwiZ3BzX3Byb3ZpZGVyX25hbWUiOiJCTFVFUExBTkVUIiwiZ3BzX2Zjb2RlIjoiVkFNIiwiZ3BzX3RyaXBfdXNlcl9pZCI6Ik5NQ1AyRElTUE9TQUwiLCJ3ZWlnaG1lbnRfYXBpX3VybCI6Imh0dHBzOi8vemlnbWEuaW4vZD
-flutter: data:
-flutter: null
-flutter: 
-flutter: *** Response ***
-flutter: uri: http://192.168.3.120:8000/api/v1/operator-mobile/trip-history/?from=2026-05-20&to=2026-07-05
-flutter: statusCode: 200
-flutter: headers:
-flutter:  date: Sat, 04 Jul 2026 05:31:02 GMT
-flutter:  vary: Accept, Cookie, origin
-flutter:  content-length: 12767
-flutter:  referrer-policy: same-origin
-flutter:  cross-origin-opener-policy: same-origin
-flutter:  content-type: application/json
-flutter:  x-frame-options: DENY
-flutter:  x-content-type-options: nosniff
-flutter:  server: WSGIServer/0.2 CPython/3.14.3
-flutter:  allow: GET, HEAD, OPTIONS
-flutter: Response Text:
-flutter: {"results":[{"assignment_unique_id":"TRIP-2026-07-109","trip_date":"2026-07-04","status":"Scheduled","approval_status":"Pending","scheduled_time":"07:00:00","actual_start_time":null,"actual_end_time":null,"panchayat":{"unique_id":"PANCHAYAT-65560bdc953dc24066","name":"Panchayat 11"},"ward":null,"waste_type":{"unique_id":"wst-20269x20d0v5vw44","name":"Wet Waste"},"vehicle":{"unique_id":"VEHCRE-65560bee0e39978053","vehicle_no":"WET-VEHICLE-01","capacity":"1000.00"},"staff":{"driver":{"unique_id":"STC-65560beda8dcf88557","name":"driver_user","emp_id":"18411220","role":"Company Driver","phone":"9008411220","photo_url":null,"username":"driver_user"},"operator":{"unique_id":"STC-65560bedab55e53498","name":"operator_user","emp_id":"84047437","role":"Company Operator","phone":"9004047437","photo_url":null,"username":"operator_user"},"is_alt_active":false,"template_code":"DRIV-OPER-01","alt_template_code":null},"trip_plan":{"unique_id":"TPLAN-65560c23ebea071501","display_code":"DRIVER-WET-VEHICLE-01-02"},"pr
-flutter: 
-flutter: *** Response ***
-flutter: uri: https://api.vamosys.com/mobile/getGrpDataForTrustedClients?providerName=BLUEPLANET&fcode=VAM
-flutter: statusCode: 200
-flutter: headers:
-flutter:  access-control-allow-credentials: true
-flutter:  access-control-allow-headers: Origin, X-Requested-With, Content-Type, Accept, Key, Authorization
-flutter:  transfer-encoding: chunked
-flutter:  date: Sat, 04 Jul 2026 05:31:02 GMT
-flutter:  access-control-allow-origin: *
-flutter:  access-control-allow-methods: ACL, CANCELUPLOAD, CHECKIN, CHECKOUT, COPY, DELETE, GET, HEAD, LOCK, MKCALENDAR, MKCOL, MOVE, OPTIONS, POST, PROPFIND, PROPPATCH, PUT, REPORT, SEARCH, UNCHECKOUT, UNLOCK, UPDATE, VERSION-CONTROL
-flutter:  access-control-max-age: 3600
-flutter:  content-type: application/json;charset=UTF-8
-flutter:  server: Jetty(8.1.15.v20140411)
-flutter:  x-application-context: application:9000
-flutter: Response Text:
-flutter: [{rowId: 0, latitude: 28.48643778, longitude: 77.50672, speed: 26, date: 1783143057000, alert: N, direction: SE, position: M, distanceCovered: 16.96, odoDistance: 22731.66, odoMeterDevice: 0.0, tankSize: 0.0, deviceVolt: 0.0, status: ON, altitude: null, color: G, lastSeen: 04-7-2026 11:00:57, ignitionStatus: ON, insideGeoFence: N, isOverSpeed: N, address: 0.53 km away from GAMMA 1, parkedTime: 0, movingTime: 351000, idleTime: 0, noDataTime: 0, alertDateTime: A, latLngOld: null, loadTruck: nill, loadTrailer: nill, totalTruck: nill, totalTrailer: nill, vehicleBusy: no, fuelLitre: 0.0, temperature: 0.0, powerStatus: 12.0 V, deviceStatus: 12, gsmLevel: 15, startParkedTime: 0, endParkedTime: 0, maxSpeed: 0, averageSpeed: 32, lastComunicationTime: 1783143059176, isOutOfOrder: no, tripName: no, forwardOrBackward: no, enableLog: no, dateSec: 1783143057, digitalInput3: no, fuelSensorVolt: 0, nTankSize: 0.0, noOfTank: 1, sensorCount: 1, gpsSimICCID: 8991940912969331392, madeIn: India, manufacturingDate: , cha
-flutter: 
-flutter: *** Request ***
-flutter: uri: https://api.vamosys.com/mobile/getGrpDataForTrustedClients?providerName=BLUEPLANET&fcode=VAM
-flutter: method: GET
-flutter: responseType: ResponseType.json
-flutter: followRedirects: true
-flutter: persistentConnection: true
-flutter: connectTimeout: 0:00:10.000000
-flutter: sendTimeout: null
-flutter: receiveTimeout: 0:00:10.000000
-flutter: receiveDataWhenStatusError: true
-flutter: extra: {}
-flutter: headers:
-flutter: data:
-flutter: null
-flutter: 
-flutter: *** Response ***
-flutter: uri: https://api.vamosys.com/mobile/getGrpDataForTrustedClients?providerName=BLUEPLANET&fcode=VAM
-flutter: statusCode: 200
-flutter: headers:
-flutter:  access-control-allow-credentials: true
-flutter:  access-control-allow-headers: Origin, X-Requested-With, Content-Type, Accept, Key, Authorization
-flutter:  transfer-encoding: chunked
-flutter:  date: Sat, 04 Jul 2026 05:31:04 GMT
-flutter:  access-control-allow-origin: *
-flutter:  access-control-allow-methods: ACL, CANCELUPLOAD, CHECKIN, CHECKOUT, COPY, DELETE, GET, HEAD, LOCK, MKCALENDAR, MKCOL, MOVE, OPTIONS, POST, PROPFIND, PROPPATCH, PUT, REPORT, SEARCH, UNCHECKOUT, UNLOCK, UPDATE, VERSION-CONTROL
-flutter:  access-control-max-age: 3600
-flutter:  content-type: application/json;charset=UTF-8
-flutter:  server: Jetty(8.1.15.v20140411)
-flutter:  x-application-context: application:9000
-flutter: Response Text:
-flutter: [{rowId: 0, latitude: 28.48633111, longitude: 77.50699556, speed: 28, date: 1783143061000, alert: N, direction: SE, position: M, distanceCovered: 16.99, odoDistance: 22731.69, odoMeterDevice: 0.0, tankSize: 0.0, deviceVolt: 0.0, status: ON, altitude: null, color: G, lastSeen: 04-7-2026 11:01:01, ignitionStatus: ON, insideGeoFence: N, isOverSpeed: N, address: 0.56 km away from GAMMA 1, parkedTime: 0, movingTime: 355000, idleTime: 0, noDataTime: 0, alertDateTime: A, latLngOld: null, loadTruck: nill, loadTrailer: nill, totalTruck: nill, totalTrailer: nill, vehicleBusy: no, fuelLitre: 0.0, temperature: 0.0, powerStatus: 12.0 V, deviceStatus: 12, gsmLevel: 15, startParkedTime: 0, endParkedTime: 0, maxSpeed: 0, averageSpeed: 32, lastComunicationTime: 1783143063777, isOutOfOrder: no, tripName: no, forwardOrBackward: no, enableLog: no, dateSec: 1783143061, digitalInput3: no, fuelSensorVolt: 0, nTankSize: 0.0, noOfTank: 1, sensorCount: 1, gpsSimICCID: 8991940912969331392, madeIn: India, manufacturingDate: , 
-flutter: 
+html:
+<div class="container container--mobile">
+  <div class="glass-container glass-container--rounded glass-container--large">
+    <div class="glass-filter"></div>
+    <div class="glass-overlay"></div>
+    <div class="glass-specular"></div>
+    <div class="glass-content">
+      <div class="player">
+        <div class="player__thumb">
+          <img class="player__img" src="https://images.unsplash.com/photo-1619983081593-e2ba5b543168?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3wzMjM4NDZ8MHwxfHJhbmRvbXx8fHx8fHx8fDE3NDk1NzAwNDV8&ixlib=rb-4.1.0&q=80&w=400" alt="">
+          <div class="player__legend">
+            <h3 class="player__legend__title">All Of Me</h3>
+            <span class="player__legend__sub-title">Nao</span>
+          </div>
+        </div>
+        <div class="player__controls">
+          <svg viewBox="0 0 448 512" width="24">
+            <path fill="black" d="M424.4 214.7L72.4 6.6C43.8-10.3 0 6.1 0 47.9V464c0 37.5 40.7 60.1 72.4 41.3l352-208c31.4-18.5 31.5-64.1 0-82.6z" />
+          </svg>
+          <svg viewBox="0 0 448 512" width="24">
+            <path fill="black" d="M424.4 214.7L72.4 6.6C43.8-10.3 0 6.1 0 47.9V464c0 37.5 40.7 60.1 72.4 41.3l352-208c31.4-18.5 31.5-64.1 0-82.6z" />
+          </svg>
+          <svg viewBox="0 0 448 512" width="24">
+            <path fill="black" d="M424.4 214.7L72.4 6.6C43.8-10.3 0 6.1 0 47.9V464c0 37.5 40.7 60.1 72.4 41.3l352-208c31.4-18.5 31.5-64.1 0-82.6z" />
+          </svg>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container container--mobile container--inline">
+    <div class="glass-container glass-container--rounded glass-container--medium">
+      <div class="glass-filter"></div>
+      <div class="glass-overlay"></div>
+      <div class="glass-specular"></div>
+      <div class="glass-content">
+        <div class="glass-item glass-item--active">
+          <svg viewBox="0 0 576 512" width="40" title="home">
+            <path d="M280.37 148.26L96 300.11V464a16 16 0 0 0 16 16l112.06-.29a16 16 0 0 0 15.92-16V368a16 16 0 0 1 16-16h64a16 16 0 0 1 16 16v95.64a16 16 0 0 0 16 16.05L464 480a16 16 0 0 0 16-16V300L295.67 148.26a12.19 12.19 0 0 0-15.3 0zM571.6 251.47L488 182.56V44.05a12 12 0 0 0-12-12h-56a12 12 0 0 0-12 12v72.61L318.47 43a48 48 0 0 0-61 0L4.34 251.47a12 12 0 0 0-1.6 16.9l25.5 31A12 12 0 0 0 45.15 301l235.22-193.74a12.19 12.19 0 0 1 15.3 0L530.9 301a12 12 0 0 0 16.9-1.6l25.5-31a12 12 0 0 0-1.7-16.93z" />
+          </svg>
+          Home
+        </div>
+        <div class="glass-item">
+          <svg viewBox="0 0 512 512" width="30" title="layer-group">
+            <path d="M12.41 148.02l232.94 105.67c6.8 3.09 14.49 3.09 21.29 0l232.94-105.67c16.55-7.51 16.55-32.52 0-40.03L266.65 2.31a25.607 25.607 0 0 0-21.29 0L12.41 107.98c-16.55 7.51-16.55 32.53 0 40.04zm487.18 88.28l-58.09-26.33-161.64 73.27c-7.56 3.43-15.59 5.17-23.86 5.17s-16.29-1.74-23.86-5.17L70.51 209.97l-58.1 26.33c-16.55 7.5-16.55 32.5 0 40l232.94 105.59c6.8 3.08 14.49 3.08 21.29 0L499.59 276.3c16.55-7.5 16.55-32.5 0-40zm0 127.8l-57.87-26.23-161.86 73.37c-7.56 3.43-15.59 5.17-23.86 5.17s-16.29-1.74-23.86-5.17L70.29 337.87 12.41 364.1c-16.55 7.5-16.55 32.5 0 40l232.94 105.59c6.8 3.08 14.49 3.08 21.29 0L499.59 404.1c16.55-7.5 16.55-32.5 0-40z" />
+          </svg>
+          New
+        </div>
+        <div class="glass-item">
+          <svg viewBox="0 0 640 512" width="40" title="wifi">
+            <path d="M634.91 154.88C457.74-8.99 182.19-8.93 5.09 154.88c-6.66 6.16-6.79 16.59-.35 22.98l34.24 33.97c6.14 6.1 16.02 6.23 22.4.38 145.92-133.68 371.3-133.71 517.25 0 6.38 5.85 16.26 5.71 22.4-.38l34.24-33.97c6.43-6.39 6.3-16.82-.36-22.98zM320 352c-35.35 0-64 28.65-64 64s28.65 64 64 64 64-28.65 64-64-28.65-64-64-64zm202.67-83.59c-115.26-101.93-290.21-101.82-405.34 0-6.9 6.1-7.12 16.69-.57 23.15l34.44 33.99c6 5.92 15.66 6.32 22.05.8 83.95-72.57 209.74-72.41 293.49 0 6.39 5.52 16.05 5.13 22.05-.8l34.44-33.99c6.56-6.46 6.33-17.06-.56-23.15z" />
+          </svg>
+          Wifi
+        </div>
+        <div class="glass-item">
+          <svg viewBox="0 0 512 512" width="30" title="music">
+            <path d="M470.38 1.51L150.41 96A32 32 0 0 0 128 126.51v261.41A139 139 0 0 0 96 384c-53 0-96 28.66-96 64s43 64 96 64 96-28.66 96-64V214.32l256-75v184.61a138.4 138.4 0 0 0-32-3.93c-53 0-96 28.66-96 64s43 64 96 64 96-28.65 96-64V32a32 32 0 0 0-41.62-30.49z" />
+          </svg>
+          Library
+        </div>
+      </div>
+    </div>
+
+    <div class="glass-container glass-container--rounded glass-container--small">
+      <div class="glass-filter"></div>
+      <div class="glass-overlay"></div>
+      <div class="glass-specular"></div>
+      <div class="glass-content glass-content--alone">
+
+        <div class="glass-item">
+          <svg viewBox="0 0 512 512" width="40" title="search">
+            <path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z" />
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container container--small">
+  <div class="glass-container glass-container--small">
+    <div class="glass-filter"></div>
+    <div class="glass-overlay"></div>
+    <div class="glass-specular"></div>
+    <div class="glass-content">
+      <svg viewBox="0 0 512 512" width="22" title="search">
+        <path d="M505 442.7L405.3 343c-4.5-4.5-10.6-7-17-7H372c27.6-35.3 44-79.7 44-128C416 93.1 322.9 0 208 0S0 93.1 0 208s93.1 208 208 208c48.3 0 92.7-16.4 128-44v16.3c0 6.4 2.5 12.5 7 17l99.7 99.7c9.4 9.4 24.6 9.4 33.9 0l28.3-28.3c9.4-9.4 9.4-24.6.1-34zM208 336c-70.7 0-128-57.2-128-128 0-70.7 57.2-128 128-128 70.7 0 128 57.2 128 128 0 70.7-57.2 128-128 128z" />
+      </svg>
+      Search
+    </div>
+  </div>
+</div>
+  
+<div class="container">
+  <div class="glass-container">
+    <div class="glass-filter"></div>
+    <div class="glass-overlay"></div>
+    <div class="glass-specular"></div>
+    <div class="glass-content">
+      <a class="glass-content__link" href="#">
+        <img src="https://assets.codepen.io/923404/finder.png" alt="Finder" />
+      </a>
+      <a class="glass-content__link" href="#">
+        <img src="https://assets.codepen.io/923404/map.png" alt="Maps" />
+      </a>
+      <a class="glass-content__link" href="#">
+        <img src="https://assets.codepen.io/923404/messages.png" alt="Messages" />
+      </a>
+      <a class="glass-content__link" href="#">
+        <img src="https://assets.codepen.io/923404/safari.png" alt="Safari" />
+      </a>
+      <a class="glass-content__link" href="#">
+        <img src="https://assets.codepen.io/923404/books.png" alt="Books" />
+      </a>
+    </div>
+
+    <svg xmlns="http://www.w3.org/2000/svg" style="display: none;">
+      <filter id="lensFilter" x="0%" y="0%" width="100%" height="100%" filterUnits="objectBoundingBox">
+        <feComponentTransfer in="SourceAlpha" result="alpha">
+          <feFuncA type="identity" />
+        </feComponentTransfer>
+
+        <feGaussianBlur in="alpha" stdDeviation="50" result="blur" />
+
+        <feDisplacementMap in="SourceGraphic" in2="blur" scale="50" xChannelSelector="A" yChannelSelector="A" />
+      </filter>
+    </svg>
+
+  </div>
+</div>
+css:
+:root {
+  --lg-bg-color: rgba(255, 255, 255, 0.25);
+  --lg-highlight: rgba(255, 255, 255, 0.75);
+  --lg-text: #ffffff;
+  --lg-red: #fb4268;
+  --lg-grey: #444739;
+}
+
+body {
+  margin: 0;
+  padding: 2rem 0;
+  min-height: calc(100vh - 4rem);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  font-family: sans-serif;
+  background: url("https://images.unsplash.com/photo-1588943211346-0908a1fb0b01?crop=entropy&cs=srgb&fm=jpg&ixid=M3wzMjM4NDZ8MHwxfHJhbmRvbXx8fHx8fHx8fDE3NDk1MzU4MDV8&ixlib=rb-4.1.0&q=85")
+    center/cover;
+  animation: bg-move 5s ease-in-out infinite alternate;
+}
+
+@keyframes bg-move {
+  from {
+    background-position: center center;
+  }
+  to {
+    background-position: center top;
+  }
+}
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.container--mobile {
+  min-width: 32rem;
+}
+
+.container--small {
+  max-width: 10rem;
+  margin: 5rem 1rem 1rem;
+
+  svg {
+    fill: white;
+  }
+}
+
+.container--inline {
+  display: flex;
+  flex-direction: row;
+}
+
+.glass-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  background: transparent;
+  border-radius: 2rem;
+  overflow: hidden;
+  flex: 1 1 auto;
+  box-shadow: 0 6px 6px rgba(0, 0, 0, 0.2), 0 0 20px rgba(0, 0, 0, 0.1);
+  color: var(--lg-text);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 2.2);
+}
+
+.glass-container--rounded {
+  border-radius: 3rem;
+}
+
+.glass-container--large {
+  flex: 1 1 auto;
+}
+
+.glass-container--medium {
+  flex: 1 1 auto;
+}
+
+.glass-container--small {
+  flex: 0 1 auto;
+}
+
+.glass-filter,
+.glass-overlay,
+.glass-specular {
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+}
+
+.glass-filter {
+  z-index: 0;
+  backdrop-filter: blur(4px);
+  filter: url(#lensFilter) saturate(120%) brightness(1.15);
+}
+
+.glass-overlay {
+  z-index: 1;
+  background: var(--lg-bg-color);
+}
+
+.glass-specular {
+  z-index: 2;
+  box-shadow: inset 1px 1px 0 var(--lg-highlight),
+    inset 0 0 5px var(--lg-highlight);
+}
+
+.glass-content {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  justify-content: space-around;
+  padding: 12px 28px;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.glass-content__link {
+  margin-bottom: -1px;
+  margin-top: 6px;
+  transition: transform 0.2s ease-out;
+
+  img {
+    width: 78px;
+  }
+
+  &:hover {
+    transform: scale(1.1);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.player {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+}
+
+.player__thumb {
+  display: flex;
+  align-items: center;
+}
+
+.player__img {
+  width: 5rem;
+  height: auto;
+  border-radius: 0.5rem;
+  margin-right: 1rem;
+  transition: transform 0.25s ease-out;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.player__legend {
+  color: black;
+}
+
+.player__legend__title,
+.player__legend__sub-title {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.player__legend__sub-title {
+  opacity: 0.6;
+}
+
+.player__controls {
+  display: flex;
+  align-items: center;
+}
+
+.player__controls > :first-child {
+  margin-right: 2rem;
+}
+
+.glass-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  color: var(--lg-grey);
+  transition: color 0.3s ease;
+  cursor: pointer;
+}
+
+.glass-item svg {
+  fill: var(--lg-grey);
+  height: 50px;
+  margin-bottom: 0.25rem;
+  filter: drop-shadow(0 0 3px rgba(255 255 255 / 0.25));
+  transition: transform 0.25s ease-out;
+
+  &:hover {
+    transform: scale(1.1);
+  }
+
+  &:active {
+    transform: scale(0.95);
+  }
+}
+
+.glass-item--active {
+  background: rgba(0, 0, 0, 0.25);
+  color: var(--lg-red);
+  margin: -8px -40px;
+  padding: 0.5rem 2.5rem;
+  border-radius: 3rem;
+}
+
+.glass-item--active svg {
+  fill: var(--lg-red);
+}

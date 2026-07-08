@@ -44,6 +44,12 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
     _loadSites();
   }
 
+  @override
+  void dispose() {
+    _mapController.dispose();
+    super.dispose();
+  }
+
   Future<void> _loadSites() async {
     try {
       final repo = getIt<SiteRepository>();
@@ -214,14 +220,16 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
       ),
       children: [
         TileLayer(
-          urlTemplate: 'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
-          subdomains: const ['a', 'b', 'c'],
+          urlTemplate:
+              'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png',
+          subdomains: const ['a', 'b', 'c', 'd'],
+          userAgentPackageName: 'com.zigma.iwmsapp',
         ),
         PolygonLayer(polygons: polygons),
         if (markers.isNotEmpty) MarkerLayer(markers: markers),
         RichAttributionWidget(
           attributions: const [
-            TextSourceAttribution('© OpenStreetMap contributors'),
+            TextSourceAttribution('© OpenStreetMap, © CARTO'),
           ],
         ),
       ],

@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import 'package:iwms_citizen_app/core/api_config.dart';
 import 'package:iwms_citizen_app/core/di.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/offline/offline_attendance.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:camera/camera.dart';
@@ -304,11 +305,7 @@ class _CameraScreenState extends State<CameraScreen>
 
       setState(() => _image = compressedImage);
 
-      if (widget.isTripAttendance) {
-        await _sendTripAttendance();
-      } else {
-        await _sendDataToBackend();
-      }
+      await _sendDataToBackend();
     } catch (e) {
       print('❌ Error capturing image: $e');
       if (mounted) {
@@ -509,75 +506,6 @@ class _CameraScreenState extends State<CameraScreen>
     }
   }
 
-  Future<void> _sendTripAttendance() async {
-    if (_image == null) return;
-
-    if (mounted) {
-      setState(() => _isLoading = true);
-    }
-
-    try {
-      final request = http.MultipartRequest(
-        'POST',
-        Uri.parse('${ApiConfig.desktopBase}transport-masters/trip-attendance/'),
-      );
-
-      final token = await _getAuthToken();
-      if (token != null && token.isNotEmpty) {
-        request.headers['Authorization'] = 'Bearer $token';
-      }
-
-      request.fields["latitude"] = latitude;
-      request.fields["longitude"] = longitude;
-      request.fields["source"] = "MOBILE";
-
-      request.files.add(await http.MultipartFile.fromPath(
-        "photo",
-        _image!.path,
-      ));
-
-      final response = await request.send();
-      final responseBody = await response.stream.bytesToString();
-
-      if (response.statusCode == 200 || response.statusCode == 201) {
-        _speak("Trip attendance recorded");
-        if (mounted) Navigator.pop(context, true);
-        return;
-      }
-
-      String message = "Trip attendance failed.";
-      try {
-        final data = json.decode(responseBody);
-        if (data is Map) {
-          if (data["detail"] != null) {
-            message = data["detail"].toString();
-          } else if (data["non_field_errors"] is List &&
-              data["non_field_errors"].isNotEmpty) {
-            message = data["non_field_errors"].first.toString();
-          }
-        }
-      } catch (_) {}
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(message), backgroundColor: Colors.red),
-        );
-      }
-      _speak(message);
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text("Trip attendance failed.")),
-        );
-      }
-      _speak("Trip attendance failed");
-    } finally {
-      if (mounted) {
-        setState(() => _isLoading = false);
-      }
-    }
-  }
-
   Future<String?> _getAuthToken() async {
     final authRepo = getIt<AuthRepository>();
     final user = await authRepo.getAuthenticatedUser();
@@ -682,46 +610,44 @@ class _CameraScreenState extends State<CameraScreen>
           Positioned(
             top: 36,
             left: 16,
-            child: IconButton(
-              icon: const Icon(Icons.close, color: Colors.white),
-              onPressed:
-                  _isLoading ? null : () => Navigator.of(context).pop(false),
+            child: Container(
+              decoration: BoxDecoration(
+                color: Colors.black45,
+                shape: BoxShape.circle,
+                border: Border.all(color: Colors.white24),
+              ),
+              child: IconButton(
+                icon: const Icon(Icons.close, color: Colors.white),
+                onPressed:
+                    _isLoading ? null : () => Navigator.of(context).pop(false),
+              ),
             ),
           ),
           Positioned(
             bottom: 30,
             left: 20,
             right: 20,
-            child: ElevatedButton.icon(
-              onPressed: _isLoading ||
+            child: _CaptureButton(
+              label: "Capture Attendance",
+              onTap: _isLoading ||
                       _isProcessingCapture ||
                       _cameraController == null ||
                       !_cameraController!.value.isInitialized
                   ? null
                   : _takePicture,
-              icon: const Icon(Icons.camera_alt_outlined),
-              label: Text(
-                widget.isTripAttendance
-                    ? "Capture Trip Attendance"
-                    : "Capture Attendance",
-              ),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(double.infinity, 54),
-                backgroundColor: Colors.green.shade700,
-              ),
             ),
           ),
           if (_isProcessingCapture || _isLoading)
             Positioned.fill(
               child: Container(
                 color: Colors.black54,
-                child: const Center(
+                child: Center(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      CircularProgressIndicator(),
-                      SizedBox(height: 12),
-                      Text(
+                      CircularProgressIndicator(color: CaptainTheme.accent),
+                      const SizedBox(height: 12),
+                      const Text(
                         "Hold still, recognizing face...",
                         style: TextStyle(color: Colors.white),
                       ),
@@ -772,17 +698,88 @@ class _CameraAccessView extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
-            ElevatedButton.icon(
-              onPressed: onAction,
-              icon: const Icon(Icons.refresh),
-              label: Text(actionLabel),
-              style: ElevatedButton.styleFrom(
-                minimumSize: const Size(180, 46),
-                backgroundColor: Colors.green,
-                foregroundColor: Colors.white,
+            SizedBox(
+              width: 180,
+              child: Material(
+                color: Colors.transparent,
+                child: InkWell(
+                  borderRadius: BorderRadius.circular(14),
+                  onTap: onAction,
+                  child: Ink(
+                    decoration: BoxDecoration(
+                      gradient: CaptainTheme.accentGradient,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.refresh,
+                              color: Colors.white, size: 18),
+                          const SizedBox(width: 8),
+                          Text(
+                            actionLabel,
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _CaptureButton extends StatelessWidget {
+  const _CaptureButton({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: double.infinity,
+      height: 54,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: onTap,
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: onTap == null
+                  ? const LinearGradient(
+                      colors: [Color(0xFF9CA3AF), Color(0xFF6B7280)],
+                    )
+                  : CaptainTheme.accentGradient,
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: onTap == null ? null : CaptainTheme.softShadow,
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                const Icon(Icons.camera_alt_outlined, color: Colors.white),
+                const SizedBox(width: 8),
+                Text(
+                  label,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ],
+            ),
+          ),
         ),
       ),
     );

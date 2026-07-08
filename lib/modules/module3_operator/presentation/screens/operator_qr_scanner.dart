@@ -12,6 +12,7 @@ import 'package:iwms_citizen_app/data/repositories/assignment_service.dart';
 import 'package:iwms_citizen_app/data/repositories/auth_repository.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_bloc.dart';
 import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/services/locationservices.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/utils/assignment_status_store.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/operator_data_screen.dart';
@@ -342,7 +343,7 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
     await showModalBottomSheet(
       context: context,
       showDragHandle: true,
-      backgroundColor: Colors.white,
+      backgroundColor: CaptainTheme.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
@@ -355,22 +356,31 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
             children: [
               Text(
                 'Confirm customer',
-                style: Theme.of(context)
-                    .textTheme
-                    .titleMedium
-                    ?.copyWith(fontWeight: FontWeight.w800),
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w800,
+                  color: CaptainTheme.strongText,
+                ),
               ),
               const SizedBox(height: 6),
-              Text("ID: $customerId"),
+              Text(
+                "ID: $customerId",
+                style: TextStyle(color: CaptainTheme.mutedText),
+              ),
               const SizedBox(height: 4),
               Text(
                 customerName,
-                style: Theme.of(context)
-                    .textTheme
-                    .titleLarge
-                    ?.copyWith(fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
+                  color: CaptainTheme.strongText,
+                ),
               ),
-              if (contactNo.isNotEmpty) Text("Contact: $contactNo"),
+              if (contactNo.isNotEmpty)
+                Text(
+                  "Contact: $contactNo",
+                  style: TextStyle(color: CaptainTheme.mutedText),
+                ),
               const SizedBox(height: 16),
 
               /// BUTTONS
@@ -378,57 +388,91 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
                 children: [
                   SizedBox(
                     width: double.infinity,
-                    child: ElevatedButton.icon(
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.green.shade700,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                      icon: const Icon(Icons.check_circle_outline),
-                      label: const Text('Collect'),
-                      onPressed: () {
-                        Navigator.of(sheetContext).pop();
-                        // Push the weight-entry screen imperatively on the SAME
-                        // navigator the scanner was launched on. Using GoRouter's
-                        // context.push here sent the request through the global
-                        // redirect, which — because the driver has no "operator"
-                        // surface — bounced /operator/data back to the driver
-                        // home page. The operator module is merged into the
-                        // driver ("Captain") shell, so the weighment screen now
-                        // lives in module2_driver and is reached directly.
-                        Navigator.of(context)
-                            .push(
-                              MaterialPageRoute(
-                                builder: (_) => OperatorDataScreen(
-                                  customerId: customerId,
-                                  customerName: customerName,
-                                  contactNo: contactNo,
-                                  latitude: latitude,
-                                  longitude: longitude,
-                                  // Let the data screen initialise the Bluetooth
-                                  // weighing scale (Android). Previously true,
-                                  // which silently disabled the scale in the
-                                  // household flow.
-                                  skipBluetoothInit: false,
-                                  assignmentId: (assignmentId != null &&
-                                          assignmentId.trim().isNotEmpty)
-                                      ? assignmentId
-                                      : null,
+                    height: 50,
+                    child: Material(
+                      color: Colors.transparent,
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(14),
+                        onTap: () {
+                          Navigator.of(sheetContext).pop();
+                          // Push the weight-entry screen imperatively on the
+                          // SAME navigator the scanner was launched on. Using
+                          // GoRouter's context.push here sent the request
+                          // through the global redirect, which — because the
+                          // driver has no "operator" surface — bounced
+                          // /operator/data back to the driver home page. The
+                          // operator module is merged into the driver
+                          // ("Captain") shell, so the weighment screen now
+                          // lives in module2_driver and is reached directly.
+                          Navigator.of(context)
+                              .push(
+                                MaterialPageRoute(
+                                  builder: (_) => OperatorDataScreen(
+                                    customerId: customerId,
+                                    customerName: customerName,
+                                    contactNo: contactNo,
+                                    latitude: latitude,
+                                    longitude: longitude,
+                                    // Let the data screen initialise the
+                                    // Bluetooth weighing scale (Android).
+                                    // Previously true, which silently
+                                    // disabled the scale in the household
+                                    // flow.
+                                    skipBluetoothInit: false,
+                                    assignmentId: (assignmentId != null &&
+                                            assignmentId.trim().isNotEmpty)
+                                        ? assignmentId
+                                        : null,
+                                  ),
+                                ),
+                              )
+                              .then((_) {
+                            if (!mounted) return;
+                            if (widget.returnToAssignments) {
+                              Navigator.of(context).pop(true);
+                            } else {
+                              // Household-from-home flow: once the
+                              // weight-entry screen closes (whether submitted
+                              // or backed out), close the scanner too so the
+                              // back button returns to the driver home page
+                              // instead of the camera.
+                              Navigator.of(context).pop();
+                            }
+                          });
+                        },
+                        child: Ink(
+                          decoration: BoxDecoration(
+                            gradient: CaptainTheme.accentGradient,
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.check_circle_outline,
+                                  color: Colors.white),
+                              SizedBox(width: 8),
+                              Text(
+                                'Collect',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.w700,
                                 ),
                               ),
-                            )
-                            .then((_) {
-                          if (widget.returnToAssignments && mounted) {
-                            Navigator.of(context).pop(true);
-                          }
-                        });
-                      },
+                            ],
+                          ),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 10),
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: CaptainTheme.strongText,
+                        side: BorderSide(color: CaptainTheme.hairline),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
                       onPressed: () {
                         Navigator.of(sheetContext).pop();
                         _showMessage("Marked as not available");
@@ -441,6 +485,11 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton(
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: CaptainTheme.strongText,
+                        side: BorderSide(color: CaptainTheme.hairline),
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
                       onPressed: () {
                         Navigator.of(sheetContext).pop();
                         _showMessage("Collect later");

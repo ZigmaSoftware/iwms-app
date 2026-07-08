@@ -312,18 +312,23 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       QuickAction(
         label: localizations.quickActionTrackVehicles,
         assetPath: 'assets/icons/track_vehicles.png',
-        onTap: () => context.push(AppRoutePaths.citizenMap),
+        // Switches to the bottom nav bar's "Map" tab in place (same as
+        // tapping the nav item) instead of pushing the personal map screen
+        // as its own route — that screen crashes with a framework assertion
+        // on back-navigation, and pushing the map-tab screen as a route
+        // would reintroduce the same pop-transition risk.
+        onTap: () => _navController.setItem(BottomNavItem.map),
       ),
-      QuickAction(
-        label: localizations.quickActionCollectionDetails,
-        assetPath: 'assets/icons/collection_details.png',
-        onTap: () => context.push(AppRoutePaths.citizenHistory),
-      ),
-      QuickAction(
-        label: localizations.quickActionCollectionHistory,
-        assetPath: 'assets/icons/collectionhistory.png',
-        onTap: () => context.push(AppRoutePaths.citizenHistory),
-      ),
+      // QuickAction(
+      //   label: localizations.quickActionCollectionDetails,
+      //   assetPath: 'assets/icons/collection_details.png',
+      //   onTap: () => context.push(AppRoutePaths.citizenHistory),
+      // ),
+      // QuickAction(
+      //   label: localizations.quickActionCollectionHistory,
+      //   assetPath: 'assets/icons/collectionhistory.png',
+      //   onTap: () => context.push(AppRoutePaths.citizenHistory),
+      // ),
       QuickAction(
         label: localizations.quickActionRaiseGrievance,
         assetPath: 'assets/icons/raise_grievance.png',
@@ -339,11 +344,11 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
         assetPath: 'assets/icons/qr.png',
         onTap: () => _showQrDialog(context, localizations),
       ),
-      QuickAction(
-        label: localizations.quickActionUpcomingCollection,
-        assetPath: 'assets/icons/upcoming_collection.png',
-        onTap: () => _showComingSoon(context, 'Upcoming collection schedule'),
-      ),
+      // QuickAction(
+      //   label: localizations.quickActionUpcomingCollection,
+      //   assetPath: 'assets/icons/upcoming_collection.png',
+      //   onTap: () => _showComingSoon(context, 'Upcoming collection schedule'),
+      // ),
     ];
   }
 
@@ -362,7 +367,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
           'Please segregate your dry, wet and mixed waste for pickup.';
       _notificationController.addAlert(
         CitizenAlert(
-          title: 'Collector arriving soon',
+          title: 'Waste collection truck arriving soon',
           message: message,
           timestamp: DateTime.now(),
         ),

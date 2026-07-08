@@ -13,20 +13,27 @@ import 'package:iwms_citizen_app/logic/auth/auth_state.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/attendancehistory.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/utils/attendance_blink_store.dart';
 
+import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/captain_theme.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/attendance/camerapage.dart';
+import 'package:iwms_citizen_app/modules/module5_supervisor/presentation/screens/attendance/supervisor_face_register.dart';
 
-// ── Design tokens (same as operator attendance) ───────────────────────────
-const _kPrimary = Color.fromARGB(255, 20, 34, 74);
-const _kPrimaryDeep = Color.fromARGB(255, 22, 35, 96);
-const _kBg = Color(0xFFF7F9FF);
-const _kSurface = Colors.white;
-const _kGreen = _kPrimary;
-const _kGreenBg = Color(0xFFE8EEFF);
-const _kAmber = Color(0xFFD97706);
-const _kAmberBg = Color(0xFFFFF8EB);
-const _kTextPri = Color(0xFF0B1F3A);
-const _kTextSec = Color(0xFF6B7C93);
-const _kBorder = Color(0xFFE8ECF4);
+// ── Design tokens ──────────────────────────────────────────────────────────
+// Repointed to CaptainTheme so this screen matches the rest of the driver
+// ("Captain") module and follows its light/dark mode, instead of the old
+// hardcoded operator-era navy/light palette. Getters (not const) because the
+// CaptainTheme tokens re-resolve against the current mode.
+Color get _kPrimary => CaptainTheme.primary;
+Color get _kPrimaryDeep => CaptainTheme.primaryAccent;
+Color get _kBg => CaptainTheme.background;
+Color get _kSurface => CaptainTheme.surface;
+Color get _kSurfaceMuted => CaptainTheme.surfaceMuted;
+Color get _kGreen => CaptainTheme.success;
+Color get _kGreenBg => CaptainTheme.success.withValues(alpha: 0.14);
+Color get _kAmber => CaptainTheme.gold;
+Color get _kAmberBg => CaptainTheme.goldSoft;
+Color get _kTextPri => CaptainTheme.strongText;
+Color get _kTextSec => CaptainTheme.mutedText;
+Color get _kBorder => CaptainTheme.hairline;
 
 const Duration kTripBlinkInterval = Duration(minutes: 2);
 const Duration kTripBlinkDuration = Duration(minutes: 2);
@@ -371,6 +378,27 @@ class _AttendancePageDriverState extends State<AttendancePageDriver>
     }
   }
 
+  Future<void> _registerFace({
+    required String name,
+    required String? id,
+  }) async {
+    if (id == null || id.trim().isEmpty) {
+      _snack('Employee ID missing.');
+      return;
+    }
+    final registered = await Navigator.of(context).push<bool>(
+      MaterialPageRoute(
+        builder: (_) => SupervisorFaceRegisterScreen(
+          employeeName: name,
+          employeeId: id,
+        ),
+      ),
+    );
+    if (registered == true && mounted) {
+      _snack('Face registered. You can now punch attendance.');
+    }
+  }
+
   void _openHistory(String? id) {
     if (id == null || id.trim().isEmpty) {
       _snack('Employee ID missing.');
@@ -426,7 +454,7 @@ class _AttendancePageDriverState extends State<AttendancePageDriver>
   }
 
   String get _punchLabel {
-    if (_tripWindow) return 'Trip Punch';
+    if (_tripWindow) return 'Attendance Punch';
     if (_isCheckedIn && !_isCheckedOut) return 'Punch Out';
     if (_isCheckedOut) return 'Camera';
     return 'Punch In';
@@ -527,8 +555,12 @@ class _AttendancePageDriverState extends State<AttendancePageDriver>
                   hasLoc: _hasLoc,
                   lat: _lat,
                   lng: _lng,
+                  onRegister: () => _registerFace(
+                    name: displayName,
+                    id: employeeId,
+                  ),
                   onHistory: () => _openHistory(employeeId),
-                  primaryActionTitle: 'Visit',
+                  primaryActionTitle: 'Face ID',
                   secondaryActionTitle: 'Summary',
                 ),
                 if (_pendingSync.isNotEmpty) ...[
@@ -569,7 +601,7 @@ class _CompactHeader extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           colors: [_kPrimary, _kPrimaryDeep],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
@@ -820,7 +852,7 @@ class _TimeCell extends StatelessWidget {
         children: [
           Text(
             label,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 10.5,
               color: _kTextSec,
               fontWeight: FontWeight.w600,
@@ -915,7 +947,7 @@ class _PunchCard extends StatelessWidget {
                     color: _kAmberBg,
                     borderRadius: BorderRadius.circular(8),
                   ),
-                  child: const Text(
+                  child: Text(
                     'TRIP',
                     style: TextStyle(
                       fontSize: 10,
@@ -1022,6 +1054,7 @@ class _SummaryCard extends StatelessWidget {
     required this.hasLoc,
     required this.lat,
     required this.lng,
+    required this.onRegister,
     required this.onHistory,
     required this.primaryActionTitle,
     required this.secondaryActionTitle,
@@ -1033,6 +1066,7 @@ class _SummaryCard extends StatelessWidget {
   final bool hasLoc;
   final String lat;
   final String lng;
+  final VoidCallback onRegister;
   final VoidCallback onHistory;
   final String primaryActionTitle;
   final String secondaryActionTitle;
@@ -1086,19 +1120,18 @@ class _SummaryCard extends StatelessWidget {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFF8FAFD),
+              color: _kSurfaceMuted,
               borderRadius: BorderRadius.circular(16),
               border: Border.all(color: _kBorder),
             ),
             child: Row(
               children: [
-                const Icon(Icons.location_on_rounded,
-                    color: _kPrimary, size: 18),
+                Icon(Icons.location_on_rounded, color: _kPrimary, size: 18),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
                     hasLoc ? 'Lat: $lat  •  Lng: $lng' : 'Location unavailable',
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12.5,
                       color: _kTextSec,
                       fontWeight: FontWeight.w600,
@@ -1114,9 +1147,9 @@ class _SummaryCard extends StatelessWidget {
               Expanded(
                 child: _ActionBtn(
                   title: primaryActionTitle,
-                  icon: Icons.place_rounded,
+                  icon: Icons.face_retouching_natural_rounded,
                   filled: false,
-                  onTap: () {},
+                  onTap: onRegister,
                 ),
               ),
               const SizedBox(width: 10),
@@ -1161,7 +1194,7 @@ class _MiniStat extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 10),
       decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFD),
+        color: _kSurfaceMuted,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: _kBorder),
       ),
@@ -1171,7 +1204,7 @@ class _MiniStat extends StatelessWidget {
           const SizedBox(height: 8),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.w800,
               color: _kTextPri,
@@ -1181,7 +1214,7 @@ class _MiniStat extends StatelessWidget {
           Text(
             title,
             textAlign: TextAlign.center,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 11,
               color: _kTextSec,
               fontWeight: FontWeight.w600,
@@ -1269,9 +1302,9 @@ class _PendingSyncCard extends StatelessWidget {
       child: Column(
         children: [
           Row(
-            children: const [
+            children: [
               Icon(Icons.sync_problem_rounded, color: _kAmber, size: 18),
-              SizedBox(width: 8),
+              const SizedBox(width: 8),
               Text(
                 'Pending Sync',
                 style: TextStyle(
@@ -1305,8 +1338,8 @@ class _PendingSyncCard extends StatelessWidget {
                           color: _kAmber.withOpacity(0.12),
                           borderRadius: BorderRadius.circular(10),
                         ),
-                        child: const Icon(Icons.sync_rounded,
-                            color: _kAmber, size: 18),
+                        child:
+                            Icon(Icons.sync_rounded, color: _kAmber, size: 18),
                       ),
                       const SizedBox(width: 10),
                       Expanded(
@@ -1315,7 +1348,7 @@ class _PendingSyncCard extends StatelessWidget {
                           children: [
                             Text(
                               (item['type'] ?? '').toString(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 13,
                                 fontWeight: FontWeight.w700,
                                 color: _kTextPri,
@@ -1324,7 +1357,7 @@ class _PendingSyncCard extends StatelessWidget {
                             const SizedBox(height: 2),
                             Text(
                               (item['timestamp'] ?? '').toString(),
-                              style: const TextStyle(
+                              style: TextStyle(
                                 fontSize: 11.5,
                                 color: _kTextSec,
                                 fontWeight: FontWeight.w600,
@@ -1333,7 +1366,7 @@ class _PendingSyncCard extends StatelessWidget {
                           ],
                         ),
                       ),
-                      const Icon(Icons.arrow_forward_ios_rounded,
+                      Icon(Icons.arrow_forward_ios_rounded,
                           size: 14, color: _kAmber),
                     ],
                   ),

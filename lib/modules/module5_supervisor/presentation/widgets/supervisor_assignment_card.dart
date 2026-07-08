@@ -11,10 +11,15 @@ class SupervisorAssignmentCard extends StatelessWidget {
     super.key,
     required this.assignment,
     this.onTap,
+    this.onNavigate,
   });
 
   final SupervisorAssignment assignment;
   final VoidCallback? onTap;
+
+  /// When provided, renders a "Navigate" button that opens the driver's live
+  /// route map (remaining collection points + ORS routing).
+  final VoidCallback? onNavigate;
 
   @override
   Widget build(BuildContext context) {
@@ -100,7 +105,33 @@ class SupervisorAssignmentCard extends StatelessWidget {
                   ],
                 ),
               ),
+              if (onNavigate != null) _navigateButton(),
             ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _navigateButton() {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(14, 0, 14, 14),
+      child: SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: onNavigate,
+          icon: const Icon(Icons.navigation_rounded, size: 18),
+          label: const Text('Navigate'),
+          style: OutlinedButton.styleFrom(
+            foregroundColor: SupervisorTheme.accent,
+            side: BorderSide(
+                color: SupervisorTheme.accent.withValues(alpha: 0.4)),
+            padding: const EdgeInsets.symmetric(vertical: 11),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+            ),
+            textStyle:
+                const TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
           ),
         ),
       ),

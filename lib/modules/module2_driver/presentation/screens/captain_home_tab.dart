@@ -294,9 +294,8 @@ class _QuickActionsRow extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     Widget action({
-      required IconData icon,
+      required String iconAsset,
       required String label,
-      required Color color,
       required VoidCallback onTap,
     }) {
       return Expanded(
@@ -309,7 +308,13 @@ class _QuickActionsRow extends StatelessWidget {
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
-                CaptainGlassChip(icon: icon, color: color),
+                // Image icon sits directly on the glass card — no inner plate.
+                Image.asset(
+                  iconAsset,
+                  width: 60,
+                  height: 60,
+                  fit: BoxFit.contain,
+                ),
                 const SizedBox(height: 8),
                 Text(
                   label,
@@ -329,23 +334,20 @@ class _QuickActionsRow extends StatelessWidget {
     return Row(
       children: [
         action(
-          icon: Icons.navigation_rounded,
+          iconAsset: 'assets/icons/navigate.png',
           label: 'Navigate',
-          color: CaptainTheme.success,
           onTap: onOpenMap,
         ),
         const SizedBox(width: 10),
         action(
-          icon: Icons.qr_code_scanner_rounded,
+          iconAsset: 'assets/icons/scan.png',
           label: 'Scan',
-          color: CaptainTheme.accent,
           onTap: onScan,
         ),
         const SizedBox(width: 10),
         action(
-          icon: Icons.history_rounded,
+          iconAsset: 'assets/icons/history.png',
           label: 'History',
-          color: CaptainTheme.gold,
           onTap: onHistory,
         ),
       ],

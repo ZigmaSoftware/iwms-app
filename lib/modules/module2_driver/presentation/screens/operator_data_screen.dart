@@ -1694,40 +1694,32 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
     return WillPopScope(
       onWillPop: () async {
-        final navigator = Navigator.of(context);
-        if (navigator.canPop()) {
-          navigator.pop(_collectionSubmitted);
-        } else {
-          context.go(AppRoutePaths.operatorHome);
-        }
+        Navigator.of(context).pop(_collectionSubmitted);
         return false;
       },
       child: Scaffold(
         backgroundColor: CaptainTheme.background,
         appBar: AppBar(
           elevation: 0,
-          backgroundColor: Colors.transparent,
+          backgroundColor: CaptainTheme.primary,
+          foregroundColor: Colors.white,
+          iconTheme: const IconThemeData(color: Colors.white),
           flexibleSpace: DecoratedBox(
             decoration: BoxDecoration(gradient: CaptainTheme.headerGradient),
           ),
           leading: IconButton(
             icon: const Icon(Icons.arrow_back, color: Colors.white),
-            onPressed: () {
-              final navigator = Navigator.of(context);
-              if (navigator.canPop()) {
-                navigator.pop(_collectionSubmitted);
-              } else {
-                context.go(AppRoutePaths.operatorHome);
-              }
-            },
+            onPressed: () => Navigator.of(context).pop(_collectionSubmitted),
           ),
-          title: Text(
+          title: const Text(
             "Household Collection",
-            style: AppTextStyles.heading2.copyWith(
-              color: Colors.white,
+            style: TextStyle(
+              fontSize: 17,
               fontWeight: FontWeight.w800,
+              color: Colors.white,
             ),
           ),
+          centerTitle: false,
         ),
         body: Column(
           children: [

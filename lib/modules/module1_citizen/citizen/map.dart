@@ -34,6 +34,9 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
+const Color _mapAccent = Color.fromARGB(255, 0, 61, 126);
+const Color _mapAccentDeep = Color.fromARGB(255, 31, 91, 231);
+
 class _MapScreenState extends State<MapScreen> {
   final MapController _mapController = MapController();
   final LatLng _gammaCenter = GammaGeofenceConfig.center;
@@ -164,7 +167,10 @@ class _MapScreenState extends State<MapScreen> {
   }
 
   Widget _buildGammaFacilityMarker() {
-    return const HomeBaseMarker(size: 18);
+    return const HomeBaseMarker(
+      size: 18,
+      gradientColors: [_mapAccent, _mapAccentDeep],
+    );
   }
 
   Iterable<Marker> _buildArcMarkers(LatLng start, LatLng end) sync* {
@@ -183,7 +189,7 @@ class _MapScreenState extends State<MapScreen> {
             shape: BoxShape.circle,
             color: Colors.white.withValues(alpha: 0.85),
             border: Border.all(
-              color: const Color(0xFF0B5721).withValues(alpha: 0.7),
+              color: _mapAccentDeep.withValues(alpha: 0.7),
               width: 1,
             ),
           ),
@@ -226,26 +232,6 @@ class _MapScreenState extends State<MapScreen> {
     }
 
     return pts;
-  }
-
-  Color _polygonFillFor(String name) {
-    final up = name.toUpperCase();
-
-    if (up.startsWith('GAMMA')) return Colors.blue.withValues(alpha: 0.10);
-    if (up.startsWith('ALPHA')) return Colors.green.withValues(alpha: 0.10);
-    if (up.startsWith('BETA')) return Colors.orange.withValues(alpha: 0.10);
-
-    return kPrimaryColor.withValues(alpha: 0.08);
-  }
-
-  Color _polygonStrokeFor(String name) {
-    final up = name.toUpperCase();
-
-    if (up.startsWith('GAMMA')) return Colors.blue;
-    if (up.startsWith('ALPHA')) return Colors.green;
-    if (up.startsWith('BETA')) return Colors.deepOrange;
-
-    return kPrimaryColor;
   }
 
   @override
@@ -298,6 +284,10 @@ class _MapScreenState extends State<MapScreen> {
                       headline: headline,
                       statusPrimary: statusPrimary,
                       statusSecondary: statusSecondary,
+                      gradientColors: const [
+                        Color.fromARGB(255, 0, 79, 162),
+                        Color.fromARGB(255, 0, 50, 119),
+                      ],
                       statusContent: Padding(
                         padding: const EdgeInsets.only(top: 8.0),
                         child: _buildSearchBar(localizations),
@@ -366,6 +356,7 @@ class _MapScreenState extends State<MapScreen> {
                                                 localizations.mapUnknownVehicle,
                                           ),
                                           icon: Icons.local_shipping_rounded,
+                                          iconColor: _mapAccentDeep,
                                         ),
                                       )
                                     : const SizedBox.shrink(),
@@ -536,9 +527,18 @@ class _MapScreenState extends State<MapScreen> {
                 .map(
                   (s) => Polygon(
                     points: s.points,
-                    color: _polygonFillFor(s.name),
-                    borderColor: _polygonStrokeFor(s.name),
-                    borderStrokeWidth: 2.2,
+                    color: const Color(0xFFF2A93B).withValues(alpha: 0.12),
+                    borderColor: const Color(0xFFE08E1D),
+                    borderStrokeWidth: 3,
+                    pattern: StrokePattern.dashed(segments: const [14, 10]),
+                    strokeCap: StrokeCap.round,
+                    label: s.name,
+                    labelStyle: const TextStyle(
+                      color: Color(0xFF8A5A0B),
+                      fontWeight: FontWeight.w800,
+                      fontSize: 11,
+                      letterSpacing: 0.2,
+                    ),
                   ),
                 )
                 .toList(),
@@ -548,9 +548,18 @@ class _MapScreenState extends State<MapScreen> {
             polygons: [
               Polygon(
                 points: GammaGeofenceConfig.polygon,
-                color: kPrimaryColor.withValues(alpha: 0.08),
-                borderColor: kPrimaryColor.withValues(alpha: 0.55),
-                borderStrokeWidth: 2.5,
+                color: const Color(0xFFF2A93B).withValues(alpha: 0.12),
+                borderColor: const Color(0xFFE08E1D),
+                borderStrokeWidth: 3,
+                pattern: StrokePattern.dashed(segments: const [14, 10]),
+                strokeCap: StrokeCap.round,
+                label: 'Gamma Collection Zone',
+                labelStyle: const TextStyle(
+                  color: Color(0xFF8A5A0B),
+                  fontWeight: FontWeight.w800,
+                  fontSize: 11,
+                  letterSpacing: 0.2,
+                ),
               ),
             ],
           ),
@@ -755,7 +764,7 @@ class _MapScreenState extends State<MapScreen> {
                     _setTheme(option);
                   }
                 },
-                selectedColor: theme.colorScheme.primary,
+                selectedColor: _mapAccent,
                 labelStyle: theme.textTheme.bodyMedium?.copyWith(
                   color:
                       isSelected ? Colors.white : theme.colorScheme.onSurface,
@@ -907,7 +916,7 @@ class _MapScreenState extends State<MapScreen> {
                   children: [
                     Icon(
                       Icons.place_outlined,
-                      color: theme.colorScheme.primary.withValues(alpha: 0.8),
+                      color: _mapAccent.withValues(alpha: 0.8),
                       size: 18,
                     ),
                     const SizedBox(width: 6),
@@ -1026,7 +1035,7 @@ class _MapControlButton extends StatelessWidget {
           height: 48,
           child: Icon(
             icon,
-            color: theme.colorScheme.primary,
+            color: _mapAccent,
           ),
         ),
       ),

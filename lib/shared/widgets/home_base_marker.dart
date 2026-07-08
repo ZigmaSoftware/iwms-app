@@ -4,9 +4,11 @@ class HomeBaseMarker extends StatelessWidget {
   const HomeBaseMarker({
     super.key,
     this.size = 52,
+    this.gradientColors = const [Color(0xFF0B7A32), Color(0xFF0A5C24)],
   });
 
   final double size;
+  final List<Color> gradientColors;
 
   @override
   Widget build(BuildContext context) {
@@ -15,8 +17,8 @@ class HomeBaseMarker extends StatelessWidget {
       height: size,
       decoration: BoxDecoration(
         shape: BoxShape.circle,
-        gradient: const LinearGradient(
-          colors: [Color(0xFF0B7A32), Color(0xFF0A5C24)],
+        gradient: LinearGradient(
+          colors: gradientColors,
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),

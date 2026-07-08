@@ -43,7 +43,7 @@ class _CitizenIntroSlidesScreenState extends State<CitizenIntroSlidesScreen> {
     );
   }
 
-  void _openAuthLanding() => context.go(AppRoutePaths.citizenAuthIntro);
+  void _openAuthLanding() => context.go(AppRoutePaths.citizenLogin);
 
   @override
   void dispose() {

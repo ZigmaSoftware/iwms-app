@@ -11,6 +11,7 @@ class TrackingHeroHeader extends StatelessWidget {
     this.onRefresh,
     this.onShare,
     this.statusContent,
+    this.gradientColors = const [Color(0xFF0F742B), Color(0xFF0B5721)],
   });
 
   final String headline;
@@ -21,6 +22,7 @@ class TrackingHeroHeader extends StatelessWidget {
   final VoidCallback? onRefresh;
   final VoidCallback? onShare;
   final Widget? statusContent;
+  final List<Color> gradientColors;
 
   @override
   Widget build(BuildContext context) {
@@ -34,13 +36,13 @@ class TrackingHeroHeader extends StatelessWidget {
           )
         : const SizedBox(width: 48, height: 48);
     return Container(
-      decoration: const BoxDecoration(
+      decoration: BoxDecoration(
         gradient: LinearGradient(
-          colors: [Color(0xFF0F742B), Color(0xFF0B5721)],
+          colors: gradientColors,
           begin: Alignment.topCenter,
           end: Alignment.bottomCenter,
         ),
-        borderRadius: BorderRadius.vertical(
+        borderRadius: const BorderRadius.vertical(
           bottom: Radius.circular(26),
         ),
       ),
@@ -152,10 +154,12 @@ class TrackingSpeechBubble extends StatelessWidget {
     super.key,
     required this.message,
     this.icon = Icons.eco_rounded,
+    this.iconColor = const Color(0xFF1B5E20),
   });
 
   final String message;
   final IconData icon;
+  final Color iconColor;
 
   @override
   Widget build(BuildContext context) {
@@ -168,7 +172,7 @@ class TrackingSpeechBubble extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, color: const Color(0xFF1B5E20), size: 18),
+            Icon(icon, color: iconColor, size: 18),
             const SizedBox(width: 8),
             Text(
               message,
