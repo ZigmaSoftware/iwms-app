@@ -63,7 +63,7 @@ class BannerService {
             final String chipLabel =
                 (item['chipLabel'] as String?)?.trim().toUpperCase() ?? 'TIP';
             final List<Color> colors = _parseColorList(item['colors']) ??
-                const [Color(0xFF1B5E20), Color(0xFF43A047)];
+                const [Color(0xFF25408F), Color(0xFF3B5FD9)];
             final IconData icon =
                 _iconFromName(item['icon'] as String?) ?? Icons.eco_outlined;
             final String? imageUrl = (item['imageUrl'] as String?)?.trim();

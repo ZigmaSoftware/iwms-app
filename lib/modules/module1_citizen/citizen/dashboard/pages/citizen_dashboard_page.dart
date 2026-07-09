@@ -29,6 +29,7 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/models/waste_period.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/services/track_service.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/widgets/track_tab.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
@@ -37,8 +38,8 @@ class CitizenDashboardPage extends StatefulWidget {
 
   final String userName;
 
-  static const Color darkBackground = Color(0xFF04120A);
-  static const Color darkSurface = Color(0xFF0B2716);
+  static const Color darkBackground = Color(0xFF060A1C);
+  static const Color darkSurface = Color(0xFF10193B);
 
   @override
   State<CitizenDashboardPage> createState() => _CitizenDashboardPageState();
@@ -151,7 +152,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
 
     final backgroundColor = isDarkMode
         ? CitizenDashboardPage.darkBackground
-        : const Color.fromRGBO(235, 248, 239, 1);
+        : const Color.fromRGBO(235, 240, 252, 1);
     final surfaceColor =
         isDarkMode ? CitizenDashboardPage.darkSurface : Colors.white;
     final outlineColor = isDarkMode
@@ -179,8 +180,8 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
     );
 
     final List<Color> sectionHeaderGradientColors = isDarkMode
-        ? const [Color(0xFF0D3A16), Color(0xFF43A047)]
-        : const [Color(0xFF1B5E20), Color(0xFF66BB6A)];
+        ? const [Color(0xFF15275F), Color(0xFF3B5FD9)]
+        : const [Color(0xFF25408F), Color(0xFF5B84EF)];
 
     final responsive = MediaQuery.of(context).size;
     final double headerHeight = math.min(responsive.height * 0.36, 360);
@@ -253,11 +254,12 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
           builder: (context, _) {
             final isMapTab = _navController.active == BottomNavItem.map;
             final body = buildTabBody(_navController.active);
+            final decoratedBody = isMapTab
+                ? body
+                : CitizenPatternBackground(child: SafeArea(child: body));
             return Stack(
               children: [
-                Positioned.fill(
-                  child: isMapTab ? body : SafeArea(child: body),
-                ),
+                Positioned.fill(child: decoratedBody),
               ],
             );
           },
@@ -501,7 +503,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       chipLabel: 'Support',
       title: 'Report missed pickups instantly',
       subtitle: 'Our support desk responds within 10 mins.',
-      colors: [Color(0xFF1B5E20), Color(0xFF43A047)],
+      colors: [Color(0xFF25408F), Color(0xFF3B5FD9)],
       icon: Icons.support_agent,
       backgroundImage: 'assets/banner/banner1.jpg',
       subtitleFontSize: 10,
@@ -510,7 +512,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       chipLabel: 'Pickups',
       title: 'Track your collector live on map',
       subtitle: 'Stay ready before the vehicle arrives.',
-      colors: [Color(0xFF1B5E20), Color(0xFF2E7D5A)],
+      colors: [Color(0xFF25408F), Color(0xFF3556B5)],
       icon: Icons.map_outlined,
       backgroundImage: 'assets/banner/banner3.jpg',
       subtitleFontSize: 10,
@@ -519,7 +521,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       chipLabel: 'Segregation',
       title: 'Smart sorting keeps trucks faster',
       subtitle: 'Separate dry, wet & mixed waste every morning.',
-      colors: [Color(0xFF1B5E20), Color(0xFF66BB6A)],
+      colors: [Color(0xFF25408F), Color(0xFF5B84EF)],
       icon: Icons.auto_awesome,
       backgroundImage: 'assets/banner/banner2.jpg',
       subtitleFontSize: 10,
@@ -528,7 +530,7 @@ class _CitizenDashboardPageState extends State<CitizenDashboardPage>
       chipLabel: 'Rewards',
       title: 'Earn green points every recycle',
       subtitle: 'Redeem perks from trusted partners.',
-      colors: [Color(0xFF2E7D5A), Color(0xFF66BB6A)],
+      colors: [Color(0xFF3556B5), Color(0xFF5B84EF)],
       icon: Icons.star_rate_outlined,
     ),
   ];

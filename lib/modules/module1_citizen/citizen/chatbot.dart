@@ -569,7 +569,7 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final brand = Colors.green;
+    final brand = const Color(0xFF25408F);
     return Scaffold(
       appBar: AppBar(
         leading: IconButton(
@@ -577,7 +577,7 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
           onPressed: () => context.go(AppRoutePaths.citizenHome),
         ),
         title: const Text("Assistant 🤖"),
-        backgroundColor: Colors.green,
+        backgroundColor: const Color(0xFF25408F),
       ),
       body: SafeArea(
         child: Column(
@@ -686,7 +686,7 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
                   IconButton(
                     icon: Icon(
                       Icons.send,
-                      color: _inputEnabled ? Colors.green : Colors.grey,
+                      color: _inputEnabled ? const Color(0xFF25408F) : Colors.grey,
                     ),
                     onPressed: _inputEnabled ? _sendMessage : null,
                   ),

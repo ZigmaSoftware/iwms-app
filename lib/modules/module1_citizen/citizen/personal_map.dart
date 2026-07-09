@@ -4,7 +4,7 @@ import 'package:flutter_map/flutter_map.dart';
 import 'package:go_router/go_router.dart';
 import 'package:latlong2/latlong.dart';
 
-import '../../../core/constants.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
 import '../../../core/di.dart';
 import '../../../core/geofence_config.dart';
 import '../../../data/models/site_polygon.dart';
@@ -73,7 +73,7 @@ class _CitizenPersonalMapScreenState extends State<CitizenPersonalMapScreen> {
       create: (_) => getIt<VehicleBloc>(),
       child: Scaffold(
         appBar: AppBar(
-          backgroundColor: kPrimaryColor,
+          backgroundColor: CitizenColors.primary,
           title: const Text(
             'My Vehicle Map',
             style: TextStyle(color: Colors.white),

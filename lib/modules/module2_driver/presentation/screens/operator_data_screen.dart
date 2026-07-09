@@ -1863,6 +1863,45 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
 
   // ==================== BLUETOOTH INIT ====================
 
+  /// Small, non-alarming floating banner reminding the operator to connect the
+  /// Bluetooth scale. Replaces the verbose red error snackbars.
+  void _showBluetoothNotice([
+    String message = 'Connect the Bluetooth scale to record weight.',
+  ]) {
+    if (!mounted) return;
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.hideCurrentSnackBar();
+    messenger.showSnackBar(
+      SnackBar(
+        behavior: SnackBarBehavior.floating,
+        backgroundColor: CaptainTheme.surface,
+        elevation: 6,
+        margin: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+          side: BorderSide(color: CaptainTheme.hairline),
+        ),
+        duration: const Duration(seconds: 3),
+        content: Row(
+          children: [
+            const Icon(Icons.bluetooth_searching,
+                color: AppColors.primary, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: const TextStyle(
+                  color: Colors.black87,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Future<bool> _ensureBluetoothPermissions() async {
     final statuses = await [
       Permission.bluetooth,
@@ -1872,12 +1911,9 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     ].request();
 
     final granted = statuses.values.every((status) => status.isGranted);
-    if (!granted && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content:
-              Text('Bluetooth permissions are required to capture weight.'),
-        ),
+    if (!granted) {
+      _showBluetoothNotice(
+        'Bluetooth permission is needed to connect the scale.',
       );
     }
     return granted;
@@ -1920,16 +1956,9 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     final devices = await FlutterBluetoothSerial.instance.getBondedDevices();
     if (devices.isEmpty) {
       debugPrint("⚠️ No bonded Bluetooth devices found.");
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'No paired Bluetooth scale found. Pair the weighing machine in '
-              'phone Settings, then tap Connect.',
-            ),
-          ),
-        );
-      }
+      _showBluetoothNotice(
+        'No paired scale found. Pair the weighing machine, then tap Connect.',
+      );
       return;
     }
 
@@ -2046,11 +2075,7 @@ class _OperatorDataScreenState extends State<OperatorDataScreen>
     } catch (e) {
       debugPrint("⚠️ Bluetooth connection error: $e");
       _safeSetState(() => _btConnecting = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Could not connect to ${device.name}. $e')),
-        );
-      }
+      _showBluetoothNotice('Couldn\'t connect to the scale. Tap Connect to retry.');
     }
   }
 }

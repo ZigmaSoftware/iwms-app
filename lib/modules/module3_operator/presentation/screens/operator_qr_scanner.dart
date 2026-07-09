@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:mobile_scanner/mobile_scanner.dart';
 
@@ -16,7 +15,6 @@ import 'package:iwms_citizen_app/modules/module2_driver/presentation/theme/capta
 import 'package:iwms_citizen_app/modules/module3_operator/services/locationservices.dart';
 import 'package:iwms_citizen_app/modules/module3_operator/utils/assignment_status_store.dart';
 import 'package:iwms_citizen_app/modules/module2_driver/presentation/screens/operator_data_screen.dart';
-import 'package:iwms_citizen_app/router/app_router.dart';
 
 class OperatorQRScanner extends StatefulWidget {
   const OperatorQRScanner({
@@ -105,7 +103,7 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
 
     if (!widget.returnToAssignments) {
       final hasAssignmentId = effectiveAssignmentId != null &&
-          effectiveAssignmentId!.trim().isNotEmpty;
+          effectiveAssignmentId.trim().isNotEmpty;
       if (!hasAssignmentId) {
         resolvedAssignment = await _resolveActiveAssignment();
         effectiveAssignmentId = resolvedAssignment?.uniqueId;
@@ -116,8 +114,8 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
           normalizedAssignmentId,
           {uid, canonicalId},
         );
-        final status =
-            statuses[canonicalId]?.toLowerCase() ?? statuses[uid]?.toLowerCase();
+        final status = statuses[canonicalId]?.toLowerCase() ??
+            statuses[uid]?.toLowerCase();
         if (status == 'collected') {
           _showMessage('Already collected for this assignment.');
           _restartScanner();
@@ -184,9 +182,7 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
       final normalizedPreferred =
           preferred.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase();
       for (final candidate in candidates) {
-        if (candidate
-                .replaceAll(RegExp(r'[^A-Za-z0-9]'), '')
-                .toUpperCase() ==
+        if (candidate.replaceAll(RegExp(r'[^A-Za-z0-9]'), '').toUpperCase() ==
             normalizedPreferred) {
           return candidate;
         }
@@ -296,6 +292,43 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
     }
   }
 
+  Future<void> _markHouseholdStatus({
+    required String customerId,
+    required String status,
+    required String reason,
+  }) async {
+    final headers = {
+      'Content-Type': 'application/json',
+      ...await _authHeaders(),
+    };
+    final response = await http
+        .post(
+          Uri.parse(ApiConfig.householdCollectionMarkStatus),
+          headers: headers,
+          body: jsonEncode({
+            'customer_id': customerId,
+            'status': status,
+            'reason': reason,
+            'latitude': LocationService.latitude.toString(),
+            'longitude': LocationService.longitude.toString(),
+          }),
+        )
+        .timeout(const Duration(seconds: 12));
+
+    if (response.statusCode >= 200 && response.statusCode < 300) return;
+
+    String message = 'Unable to update household collection status.';
+    try {
+      final payload = jsonDecode(response.body);
+      if (payload is Map && payload['detail'] != null) {
+        message = payload['detail'].toString();
+      } else if (payload is Map && payload['message'] != null) {
+        message = payload['message'].toString();
+      }
+    } catch (_) {}
+    throw Exception(message);
+  }
+
   Future<DailyAssignmentModel?> _resolveActiveAssignment() async {
     try {
       final authState = context.read<AuthBloc>().state;
@@ -340,7 +373,7 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
   }) async {
     if (!mounted) return;
 
-    await showModalBottomSheet(
+    final action = await showModalBottomSheet<String>(
       context: context,
       showDragHandle: true,
       backgroundColor: CaptainTheme.surface,
@@ -394,51 +427,7 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
                       child: InkWell(
                         borderRadius: BorderRadius.circular(14),
                         onTap: () {
-                          Navigator.of(sheetContext).pop();
-                          // Push the weight-entry screen imperatively on the
-                          // SAME navigator the scanner was launched on. Using
-                          // GoRouter's context.push here sent the request
-                          // through the global redirect, which — because the
-                          // driver has no "operator" surface — bounced
-                          // /operator/data back to the driver home page. The
-                          // operator module is merged into the driver
-                          // ("Captain") shell, so the weighment screen now
-                          // lives in module2_driver and is reached directly.
-                          Navigator.of(context)
-                              .push(
-                                MaterialPageRoute(
-                                  builder: (_) => OperatorDataScreen(
-                                    customerId: customerId,
-                                    customerName: customerName,
-                                    contactNo: contactNo,
-                                    latitude: latitude,
-                                    longitude: longitude,
-                                    // Let the data screen initialise the
-                                    // Bluetooth weighing scale (Android).
-                                    // Previously true, which silently
-                                    // disabled the scale in the household
-                                    // flow.
-                                    skipBluetoothInit: false,
-                                    assignmentId: (assignmentId != null &&
-                                            assignmentId.trim().isNotEmpty)
-                                        ? assignmentId
-                                        : null,
-                                  ),
-                                ),
-                              )
-                              .then((_) {
-                            if (!mounted) return;
-                            if (widget.returnToAssignments) {
-                              Navigator.of(context).pop(true);
-                            } else {
-                              // Household-from-home flow: once the
-                              // weight-entry screen closes (whether submitted
-                              // or backed out), close the scanner too so the
-                              // back button returns to the driver home page
-                              // instead of the camera.
-                              Navigator.of(context).pop();
-                            }
-                          });
+                          Navigator.of(sheetContext).pop('collect');
                         },
                         child: Ink(
                           decoration: BoxDecoration(
@@ -474,9 +463,7 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onPressed: () {
-                        Navigator.of(sheetContext).pop();
-                        _showMessage("Marked as not available");
-                        _restartScanner();
+                        Navigator.of(sheetContext).pop('not_available');
                       },
                       child: const Text("Not available"),
                     ),
@@ -491,9 +478,7 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
                         padding: const EdgeInsets.symmetric(vertical: 14),
                       ),
                       onPressed: () {
-                        Navigator.of(sheetContext).pop();
-                        _showMessage("Collect later");
-                        _restartScanner();
+                        Navigator.of(sheetContext).pop('collect_later');
                       },
                       child: const Text("Collect later"),
                     ),
@@ -505,6 +490,276 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
         );
       },
     );
+
+    if (!mounted) return;
+    switch (action) {
+      case 'collect':
+        await Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (_) => OperatorDataScreen(
+              customerId: customerId,
+              customerName: customerName,
+              contactNo: contactNo,
+              latitude: latitude,
+              longitude: longitude,
+              skipBluetoothInit: false,
+              assignmentId:
+                  (assignmentId != null && assignmentId.trim().isNotEmpty)
+                      ? assignmentId
+                      : null,
+            ),
+          ),
+        );
+        if (!mounted) return;
+        Navigator.of(context).pop(widget.returnToAssignments ? true : null);
+        break;
+      case 'not_available':
+        await _showStatusReasonSheet(
+          customerId: customerId,
+          customerName: customerName,
+          status: 'Missed',
+          title: 'Why is this household not available?',
+          successMessage: 'Marked as not available.',
+          quickReasons: const [
+            'Door locked',
+            'Customer not home',
+            'Refused collection',
+            'QR not accessible',
+          ],
+        );
+        break;
+      case 'collect_later':
+        await _showStatusReasonSheet(
+          customerId: customerId,
+          customerName: customerName,
+          status: 'Skipped',
+          title: 'Why collect this household later?',
+          successMessage: 'Marked for collection later.',
+          quickReasons: const [
+            'Asked to return later',
+            'Waste not ready',
+            'Street blocked',
+            'Vehicle capacity issue',
+          ],
+        );
+        break;
+      default:
+        Navigator.of(context).pop(widget.returnToAssignments ? false : null);
+    }
+  }
+
+  Future<void> _showStatusReasonSheet({
+    required String customerId,
+    required String customerName,
+    required String status,
+    required String title,
+    required String successMessage,
+    required List<String> quickReasons,
+  }) async {
+    final controller = TextEditingController();
+    String? selectedReason;
+    String? errorText;
+    var submitting = false;
+    final scannerNavigator = Navigator.of(context);
+
+    final saved = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      backgroundColor: CaptainTheme.surface,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (sheetContext) {
+        return StatefulBuilder(
+          builder: (context, setSheetState) {
+            Future<void> submit() async {
+              final reason = controller.text.trim();
+              if (reason.isEmpty) {
+                setSheetState(() {
+                  errorText = 'Enter a reason before saving.';
+                });
+                return;
+              }
+
+              setSheetState(() {
+                submitting = true;
+                errorText = null;
+              });
+
+              try {
+                await _markHouseholdStatus(
+                  customerId: customerId,
+                  status: status,
+                  reason: reason,
+                );
+                if (!sheetContext.mounted) return;
+                Navigator.of(sheetContext).pop(true);
+              } catch (e) {
+                if (!sheetContext.mounted) return;
+                setSheetState(() {
+                  submitting = false;
+                  errorText = e.toString().replaceFirst('Exception: ', '');
+                });
+              }
+            }
+
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                12,
+                20,
+                MediaQuery.of(context).viewInsets.bottom + 24,
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.w800,
+                      color: CaptainTheme.strongText,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    '$customerName • $customerId',
+                    style: TextStyle(color: CaptainTheme.mutedText),
+                  ),
+                  const SizedBox(height: 16),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: quickReasons.map((reason) {
+                      final selected = selectedReason == reason;
+                      return ChoiceChip(
+                        label: Text(reason),
+                        selected: selected,
+                        selectedColor: CaptainTheme.accentSoft,
+                        backgroundColor: CaptainTheme.surface,
+                        disabledColor: CaptainTheme.surfaceMuted,
+                        checkmarkColor: CaptainTheme.accentDeep,
+                        labelStyle: TextStyle(
+                          color: selected
+                              ? CaptainTheme.accentDeep
+                              : CaptainTheme.strongText,
+                          fontWeight: FontWeight.w700,
+                        ),
+                        side: BorderSide(
+                          color: selected
+                              ? CaptainTheme.accent
+                              : CaptainTheme.hairline,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        onSelected: submitting
+                            ? null
+                            : (_) {
+                                setSheetState(() {
+                                  selectedReason = reason;
+                                  controller.text = reason;
+                                  errorText = null;
+                                });
+                              },
+                      );
+                    }).toList(),
+                  ),
+                  const SizedBox(height: 14),
+                  TextField(
+                    controller: controller,
+                    enabled: !submitting,
+                    cursorColor: CaptainTheme.accent,
+                    style: TextStyle(
+                      color: CaptainTheme.strongText,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    minLines: 2,
+                    maxLines: 4,
+                    textInputAction: TextInputAction.done,
+                    decoration: InputDecoration(
+                      labelText: 'Reason',
+                      labelStyle: TextStyle(color: CaptainTheme.mutedText),
+                      hintStyle: TextStyle(color: CaptainTheme.mutedText),
+                      hintText: 'Enter what happened at this household',
+                      errorText: errorText,
+                      filled: true,
+                      fillColor: CaptainTheme.surfaceMuted,
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: CaptainTheme.hairline),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: CaptainTheme.accent,
+                          width: 1.4,
+                        ),
+                      ),
+                      errorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(color: CaptainTheme.danger),
+                      ),
+                      focusedErrorBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(14),
+                        borderSide: BorderSide(
+                          color: CaptainTheme.danger,
+                          width: 1.4,
+                        ),
+                      ),
+                    ),
+                    onChanged: (_) {
+                      if (errorText != null) {
+                        setSheetState(() => errorText = null);
+                      }
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 50,
+                    child: ElevatedButton.icon(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: CaptainTheme.accentDeep,
+                        foregroundColor: Colors.white,
+                        disabledBackgroundColor: CaptainTheme.surfaceMuted,
+                        disabledForegroundColor: CaptainTheme.mutedText,
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                      ),
+                      onPressed: submitting ? null : submit,
+                      icon: submitting
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.save_outlined),
+                      label: Text(submitting ? 'Saving...' : 'Save status'),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    controller.dispose();
+
+    if (!mounted) return;
+    if (saved == true) {
+      _showMessage(successMessage);
+    }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !scannerNavigator.canPop()) return;
+      scannerNavigator.pop(widget.returnToAssignments ? saved == true : null);
+    });
   }
 
   /// ---------------------------------------------------------
@@ -545,11 +800,8 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
               icon: const Icon(Icons.cancel, size: 32, color: Colors.white),
               onPressed: () {
                 _camera.stop();
-                if (widget.returnToAssignments) {
-                  Navigator.of(context).pop(false);
-                } else {
-                  context.go(AppRoutePaths.operatorHome);
-                }
+                Navigator.of(context)
+                    .pop(widget.returnToAssignments ? false : null);
               },
             ),
           ),

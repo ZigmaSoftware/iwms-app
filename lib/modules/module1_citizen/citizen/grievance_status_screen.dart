@@ -4,7 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import 'package:iwms_citizen_app/core/di.dart';
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
 import 'package:iwms_citizen_app/data/models/grievance_ticket_model.dart';
 import 'package:iwms_citizen_app/data/repositories/citizen_grievance_repository.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/notifications/controllers/notification_controller.dart';
@@ -140,22 +141,24 @@ class _GrievanceStatusScreenState extends State<GrievanceStatusScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
+        backgroundColor: CitizenColors.primary,
         foregroundColor: Colors.white,
         title: const Text('My Grievances'),
       ),
-      body: RefreshIndicator(
-        onRefresh: _load,
-        child: _loading
-            ? const Center(child: CircularProgressIndicator())
-            : _tickets.isEmpty
-                ? _empty()
-                : ListView.separated(
-                    padding: const EdgeInsets.all(16),
-                    itemCount: _tickets.length,
-                    separatorBuilder: (_, __) => const SizedBox(height: 12),
-                    itemBuilder: (_, i) => _card(_tickets[i]),
-                  ),
+      body: CitizenPatternBackground(
+        child: RefreshIndicator(
+          onRefresh: _load,
+          child: _loading
+              ? const Center(child: CircularProgressIndicator())
+              : _tickets.isEmpty
+                  ? _empty()
+                  : ListView.separated(
+                      padding: const EdgeInsets.all(16),
+                      itemCount: _tickets.length,
+                      separatorBuilder: (_, __) => const SizedBox(height: 12),
+                      itemBuilder: (_, i) => _card(_tickets[i]),
+                    ),
+        ),
       ),
     );
   }

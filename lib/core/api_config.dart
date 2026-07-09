@@ -84,6 +84,8 @@ class ApiConfig {
       '${desktopBase}operator-mobile/scan-bin/';
   static const String operatorTripHistory =
       '${desktopBase}operator-mobile/trip-history/';
+  static const String householdCollectionMarkStatus =
+      '${desktopBase}waste/mark-household-status/';
 
   // ORS key is sourced from build-time env (`VITE_ORS_API_KEY`).
   static const String orsApiKey = kOrsApiKey;

@@ -240,11 +240,20 @@ class OperatorTripToday {
   String get areaName =>
       panchayat?.name ?? ward?.name ?? '—';
 
+  /// Total weight collected so far, summed from the per-collection-point
+  /// weights in today's payload. `my-trip-today` doesn't ship an aggregate
+  /// total, but each collected CP carries `collected_weight_kg`, so we derive
+  /// it here to match the history summary shape.
+  double get totalCollectedWeightKg => collectionPoints.fold<double>(
+        0.0,
+        (sum, cp) => sum + (cp.collectedWeightKg ?? 0.0),
+      );
+
   /// Adapt today's single-trip payload into the history *summary* shape the
   /// driver/operator screens already render. `my-trip-today` and trip-history
   /// describe the same DailyTripAssignment, so the overlapping fields map
-  /// directly; history-only fields (staff block, plan, total weight, remarks)
-  /// aren't part of this endpoint and stay null/zero.
+  /// directly; history-only fields (staff block, plan, remarks) aren't part of
+  /// this endpoint and stay null. Total weight is derived from the CPs.
   OperatorTripHistorySummary toHistorySummary() {
     return OperatorTripHistorySummary(
       assignmentUniqueId: assignmentUniqueId,
@@ -259,7 +268,7 @@ class OperatorTripToday {
       vehicle: vehicle,
       tripPlan: tripPlan,
       progress: progress,
-      totalWeightKg: 0.0,
+      totalWeightKg: totalCollectedWeightKg,
     );
   }
 

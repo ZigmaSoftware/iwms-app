@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
+
+import 'package:iwms_citizen_app/router/app_router.dart';
 
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/common/theme_tokens.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/common/widgets/section_card.dart';
@@ -184,25 +187,29 @@ class _Header extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
-          Container(
-            width: 40,
-            height: 40,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(
-                color: isDarkMode
-                    ? Colors.white.withValues(alpha: 0.35)
-                    : Colors.black.withValues(alpha: 0.15),
-                width: 2,
+          GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: () => context.push(AppRoutePaths.citizenProfile),
+            child: Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: isDarkMode
+                      ? Colors.white.withValues(alpha: 0.35)
+                      : Colors.black.withValues(alpha: 0.15),
+                  width: 2,
+                ),
               ),
-            ),
-            clipBehavior: Clip.antiAlias,
-            child: Transform.scale(
-              scale: 1.12,
-              child: Image.asset(
-                'assets/gif/profile.gif',
-                fit: BoxFit.cover,
-                gaplessPlayback: true,
+              clipBehavior: Clip.antiAlias,
+              child: Transform.scale(
+                scale: 1.12,
+                child: Image.asset(
+                  'assets/gif/profile.gif',
+                  fit: BoxFit.cover,
+                  gaplessPlayback: true,
+                ),
               ),
             ),
           ),

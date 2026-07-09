@@ -166,7 +166,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                     onForgotPassword: () {
                                       _showSnack(
                                         'Password resets will arrive shortly!',
-                                        const Color(0xFF173F21),
+                                        const Color(0xFF1B2F72),
                                       );
                                     },
                                     onLogin: () => _handleLogin(context),
@@ -435,7 +435,7 @@ class _LoginGlassCard extends StatelessWidget {
   }) inputDecorationBuilder;
 
   static const Color _buttonCream = Color(0xFFF4F2E7);
-  static const Color _textGreen = Color(0xFF173F21);
+  static const Color _textAccent = Color(0xFF1B2F72);
 
   @override
   Widget build(BuildContext context) {
@@ -571,7 +571,7 @@ class _LoginGlassCard extends StatelessWidget {
                         child: Checkbox.adaptive(
                           value: rememberMe,
                           activeColor: _buttonCream,
-                          checkColor: _textGreen,
+                          checkColor: _textAccent,
                           side: BorderSide(
                             color: Colors.white.withValues(alpha: 0.7),
                             width: 1.4,
@@ -610,11 +610,11 @@ class _LoginGlassCard extends StatelessWidget {
                       onPressed: isSubmitting ? null : onLogin,
                       style: ElevatedButton.styleFrom(
                         backgroundColor: _buttonCream,
-                        foregroundColor: _textGreen,
+                        foregroundColor: _textAccent,
                         disabledBackgroundColor:
                             _buttonCream.withValues(alpha: 0.7),
                         disabledForegroundColor:
-                            _textGreen.withValues(alpha: 0.6),
+                            _textAccent.withValues(alpha: 0.6),
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(999),
@@ -626,7 +626,7 @@ class _LoginGlassCard extends StatelessWidget {
                               height: 22,
                               child: CircularProgressIndicator(
                                 strokeWidth: 2.4,
-                                color: _textGreen,
+                                color: _textAccent,
                               ),
                             )
                           : Row(

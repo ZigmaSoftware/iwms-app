@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
-import 'package:iwms_citizen_app/core/theme/app_colors.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
 import 'package:iwms_citizen_app/router/app_router.dart';
 import 'package:iwms_citizen_app/data/models/grievance_ticket_model.dart';
 import 'package:iwms_citizen_app/data/repositories/citizen_grievance_repository.dart';
@@ -250,7 +251,7 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        backgroundColor: AppColors.primary,
+        backgroundColor: CitizenColors.primary,
         foregroundColor: Colors.white,
         title: const Text('Grievance Assistant'),
         actions: [
@@ -261,23 +262,25 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
           ),
         ],
       ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: ListView(
-                controller: _scroll,
-                padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
-                children: [
-                  for (final m in _messages) _bubble(theme, m),
-                  if (_typing) _typingBubble(theme),
-                  if (_replies.isNotEmpty) _replyChips(),
-                ],
+      body: CitizenPatternBackground(
+        child: SafeArea(
+          child: Column(
+            children: [
+              Expanded(
+                child: ListView(
+                  controller: _scroll,
+                  padding: const EdgeInsets.fromLTRB(16, 20, 16, 12),
+                  children: [
+                    for (final m in _messages) _bubble(theme, m),
+                    if (_typing) _typingBubble(theme),
+                    if (_replies.isNotEmpty) _replyChips(),
+                  ],
+                ),
               ),
-            ),
-            const Divider(height: 1),
-            _composer(theme),
-          ],
+              const Divider(height: 1),
+              _composer(theme),
+            ],
+          ),
         ),
       ),
     );
@@ -285,7 +288,7 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
 
   Widget _bubble(ThemeData theme, _Msg m) {
     final bg = m.isUser
-        ? AppColors.primary.withValues(alpha: 0.14)
+        ? CitizenColors.primary.withValues(alpha: 0.14)
         : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6);
     return Align(
       alignment: m.isUser ? Alignment.centerRight : Alignment.centerLeft,
@@ -339,9 +342,9 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
               label: Text(r.label),
               onPressed: r.onTap,
               backgroundColor: Colors.white,
-              side: BorderSide(color: AppColors.primary.withValues(alpha: 0.4)),
+              side: BorderSide(color: CitizenColors.primary.withValues(alpha: 0.4)),
               labelStyle: TextStyle(
-                color: AppColors.primary,
+                color: CitizenColors.primary,
                 fontWeight: FontWeight.w600,
               ),
             ),
@@ -383,7 +386,7 @@ class _GrievanceChatScreenState extends State<GrievanceChatScreen> {
           FilledButton(
             onPressed: _inputEnabled ? _handleSend : null,
             style: FilledButton.styleFrom(
-              backgroundColor: AppColors.primary,
+              backgroundColor: CitizenColors.primary,
               padding: const EdgeInsets.all(14),
               shape: const CircleBorder(),
             ),

@@ -25,6 +25,7 @@ import 'package:iwms_citizen_app/modules/module1_citizen/citizen/map.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/profile.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/personal_map.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/alloted_vehicle_map.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
 
 // Operator Modules
 import 'package:iwms_citizen_app/modules/module3_operator/presentation/screens/main_operator_tabbar.dart';
@@ -112,11 +113,13 @@ class AppRouter {
         // Citizen Public
         GoRoute(
           path: AppRoutePaths.citizenIntroSlides,
-          builder: (context, state) => const CitizenIntroSlidesScreen(),
+          builder: (context, state) =>
+              CitizenTheme.wrap(context, const CitizenIntroSlidesScreen()),
         ),
         GoRoute(
           path: AppRoutePaths.citizenLogin,
-          builder: (context, state) => const LoginScreen(),
+          builder: (context, state) =>
+              CitizenTheme.wrap(context, const LoginScreen()),
         ),
 
         // Citizen Authenticated
@@ -126,58 +129,77 @@ class AppRouter {
             final s = authBloc.state;
             final username =
                 (s is AuthStateAuthenticated) ? s.userName : "Citizen";
-            return BlocProvider(
-              create: (_) => getIt<VehicleBloc>(),
-              child: CitizenDashboard(userName: username),
+            return CitizenTheme.wrap(
+              context,
+              BlocProvider(
+                create: (_) => getIt<VehicleBloc>(),
+                child: CitizenDashboard(userName: username),
+              ),
             );
           },
         ),
         GoRoute(
           path: AppRoutePaths.citizenHistory,
-          builder: (context, state) => const CalendarScreen(),
+          builder: (context, state) =>
+              CitizenTheme.wrap(context, const CalendarScreen()),
         ),
         GoRoute(
           path: AppRoutePaths.citizenTrack,
-          builder: (context, state) => TrackWasteScreen(),
+          builder: (context, state) =>
+              CitizenTheme.wrap(context, TrackWasteScreen()),
         ),
         GoRoute(
           path: AppRoutePaths.citizenDriverDetails,
-          builder: (context, state) => const DriverDetailsScreen(
-              driverName: 'Rajesh Kumar', vehicleNumber: 'TN 01 AB 1234'),
+          builder: (context, state) => CitizenTheme.wrap(
+            context,
+            const DriverDetailsScreen(
+                driverName: 'Rajesh Kumar', vehicleNumber: 'TN 01 AB 1234'),
+          ),
         ),
         GoRoute(
           path: AppRoutePaths.citizenMap,
           builder: (context, state) {
             final extra = state.extra as Map<String, dynamic>? ?? {};
-            return MapScreen(
-              driverName: extra['driverName'],
-              vehicleNumber: extra['vehicleNumber'],
+            return CitizenTheme.wrap(
+              context,
+              MapScreen(
+                driverName: extra['driverName'],
+                vehicleNumber: extra['vehicleNumber'],
+              ),
             );
           },
         ),
         GoRoute(
           path: AppRoutePaths.citizenAllotedVehicleMap,
-          builder: (context, state) => const CitizenAllotedVehicleMapScreen(),
+          builder: (context, state) => CitizenTheme.wrap(
+              context, const CitizenAllotedVehicleMapScreen()),
         ),
         GoRoute(
           path: AppRoutePaths.citizenPersonalMap,
           builder: (context, state) {
             final data = state.extra as Map<String, dynamic>? ?? {};
-            return CitizenPersonalMapScreen(
-              vehicleId: data['vehicleId'],
-              vehicleNumber: data['vehicleNumber'],
-              siteName: data['siteName'],
+            return CitizenTheme.wrap(
+              context,
+              CitizenPersonalMapScreen(
+                vehicleId: data['vehicleId'],
+                vehicleNumber: data['vehicleNumber'],
+                siteName: data['siteName'],
+              ),
             );
           },
         ),
         GoRoute(
           path: AppRoutePaths.citizenGrievanceChat,
-          builder: (context, state) => const GrievanceChatScreen(),
+          builder: (context, state) =>
+              CitizenTheme.wrap(context, const GrievanceChatScreen()),
         ),
         GoRoute(
           path: AppRoutePaths.citizenGrievanceStatus,
-          builder: (context, state) => GrievanceStatusScreen(
-            initialTicketId: state.uri.queryParameters['ticket'],
+          builder: (context, state) => CitizenTheme.wrap(
+            context,
+            GrievanceStatusScreen(
+              initialTicketId: state.uri.queryParameters['ticket'],
+            ),
           ),
         ),
         GoRoute(
@@ -186,7 +208,7 @@ class AppRouter {
             final s = authBloc.state;
             final username =
                 (s is AuthStateAuthenticated) ? s.userName : "Citizen";
-            return ProfileScreen(userName: username);
+            return CitizenTheme.wrap(context, ProfileScreen(userName: username));
           },
         ),
 

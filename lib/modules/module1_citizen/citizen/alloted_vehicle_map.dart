@@ -918,7 +918,7 @@ class _CitizenAllotedVehicleMapScreenState
             shape: BoxShape.circle,
             color: Colors.white.withValues(alpha: 0.85),
             border: Border.all(
-              color: const Color(0xFF0B5721).withValues(alpha: 0.7),
+              color: const Color(0xFF1E3A85).withValues(alpha: 0.7),
               width: 1,
             ),
           ),

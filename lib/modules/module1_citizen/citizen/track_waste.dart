@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/controllers/track_controller.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/widgets/track_tab.dart';
 import 'package:iwms_citizen_app/modules/module1_citizen/citizen/dashboard/track/services/track_service.dart';
@@ -44,7 +45,8 @@ class _TrackWasteScreenState extends State<TrackWasteScreen> {
         ),
         backgroundColor: highlightColor,
       ),
-      body: AnimatedBuilder(
+      body: CitizenPatternBackground(
+        child: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
           return TrackTab(
@@ -77,6 +79,7 @@ class _TrackWasteScreenState extends State<TrackWasteScreen> {
             },
           );
         },
+        ),
       ),
     );
   }

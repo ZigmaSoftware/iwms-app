@@ -5,7 +5,8 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 import 'package:iwms_citizen_app/localization/app_localizations.dart';
-import '../../../core/constants.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_theme.dart';
 import '../../../core/di.dart';
 import '../../../logic/auth/auth_bloc.dart';
 import '../../../logic/auth/auth_state.dart';
@@ -40,9 +41,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
         return Theme(
           data: ThemeData.light().copyWith(
             colorScheme: ColorScheme.light(
-              primary: kPrimaryColor,
+              primary: CitizenColors.primary,
               onPrimary: Colors.white,
-              onSurface: kTextColor,
+              onSurface: CitizenColors.textPrimary,
             ),
            dialogTheme: DialogThemeData(
   backgroundColor: Colors.white,
@@ -68,7 +69,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       case 'mixed':
         return Colors.deepOrange;
       default:
-        return kPrimaryColor;
+        return CitizenColors.primary;
     }
   }
 
@@ -102,7 +103,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(localizations.collectionHistoryPageTitle),
-        backgroundColor: kPrimaryColor,
+        backgroundColor: CitizenColors.primary,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back, color: Colors.white),
@@ -115,7 +116,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
           },
         ),
       ),
-      body: ValueListenableBuilder<List<CollectionHistoryEntry>>(
+      body: CitizenPatternBackground(
+        child: ValueListenableBuilder<List<CollectionHistoryEntry>>(
         valueListenable: _historyService.entriesNotifier,
         builder: (context, entries, _) {
           final filtered = _entriesForSelectedDate(
@@ -143,7 +145,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       child: Row(
                         children: [
                           const Icon(Icons.calendar_today,
-                              size: 28, color: kPrimaryColor),
+                              size: 28, color: CitizenColors.primary),
                           const SizedBox(width: 16),
                           Expanded(
                             child: Column(
@@ -155,7 +157,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                   overflow: TextOverflow.ellipsis,
                                   style: TextStyle(
                                     fontSize: 14,
-                                    color: kPlaceholderColor,
+                                    color: CitizenColors.textSecondary,
                                   ),
                                 ),
                                 const SizedBox(height: 4),
@@ -166,7 +168,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                   style: const TextStyle(
                                     fontSize: 18,
                                     fontWeight: FontWeight.bold,
-                                    color: kTextColor,
+                                    color: CitizenColors.textPrimary,
                                   ),
                                 ),
                               ],
@@ -174,7 +176,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           ),
                           const SizedBox(width: 8),
                           const Icon(Icons.arrow_forward_ios,
-                              size: 18, color: kPlaceholderColor),
+                              size: 18, color: CitizenColors.textSecondary),
                         ],
                       ),
                     ),
@@ -188,13 +190,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   style: Theme.of(context).textTheme.titleLarge!.copyWith(
                         fontSize: 24,
                         fontWeight: FontWeight.w800,
-                        color: kTextColor,
+                        color: CitizenColors.textPrimary,
                       ),
                 ),
                 const Divider(height: 20),
                 if (totalWeightForDate > 0)
                   Card(
-                    color: kPrimaryColor.withValues(alpha: 0.1),
+                    color: CitizenColors.primary.withValues(alpha: 0.1),
                     elevation: 0,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
@@ -208,7 +210,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         style: const TextStyle(
                           fontSize: 18,
                           fontWeight: FontWeight.bold,
-                          color: kPrimaryColor,
+                          color: CitizenColors.primary,
                         ),
                       ),
                     ),
@@ -221,12 +223,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
                       child: Column(
                         children: [
                           const Icon(Icons.inbox_outlined,
-                              size: 64, color: kPlaceholderColor),
+                              size: 64, color: CitizenColors.textSecondary),
                           const SizedBox(height: 12),
                           Text(
                             localizations.noCollectionData,
                             style:
-                                const TextStyle(fontSize: 16, color: kPlaceholderColor),
+                                const TextStyle(fontSize: 16, color: CitizenColors.textSecondary),
                           ),
                         ],
                       ),
@@ -239,6 +241,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             ),
           );
         },
+        ),
       ),
     );
   }
@@ -270,7 +273,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
               style: const TextStyle(
                 fontSize: 18,
                 fontWeight: FontWeight.w700,
-                color: kTextColor,
+                color: CitizenColors.textPrimary,
               ),
             ),
             const SizedBox(height: 4),
@@ -278,14 +281,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
               localizations.customerIdLabel(entry.customerId),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: const TextStyle(color: kPlaceholderColor),
+              style: const TextStyle(color: CitizenColors.textSecondary),
             ),
             if (entry.customerName.trim().isNotEmpty)
               Text(
                 'Citizen: ${entry.customerName}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: const TextStyle(color: kPlaceholderColor),
+                style: const TextStyle(color: CitizenColors.textSecondary),
               ),
             const SizedBox(height: 4),
             Text(
@@ -295,14 +298,14 @@ class _CalendarScreenState extends State<CalendarScreen> {
               style: const TextStyle(
                 fontSize: 16,
                 fontWeight: FontWeight.bold,
-                color: kPrimaryColor,
+                color: CitizenColors.primary,
               ),
             ),
             const Divider(height: 24),
             if (sectionsWithData.isEmpty)
               Text(
                 localizations.noDetailedCollectionData,
-                style: const TextStyle(color: kPlaceholderColor),
+                style: const TextStyle(color: CitizenColors.textSecondary),
               )
             else
               for (final section in sectionsWithData)
@@ -342,7 +345,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           style: const TextStyle(
             fontSize: 18,
             fontWeight: FontWeight.bold,
-            color: kTextColor,
+            color: CitizenColors.textPrimary,
           ),
         ),
         const SizedBox(height: 4),
@@ -380,8 +383,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
               overflow: TextOverflow.ellipsis,
             ),
             style: OutlinedButton.styleFrom(
-              foregroundColor: kPrimaryColor,
-              side: const BorderSide(color: kPrimaryColor),
+              foregroundColor: CitizenColors.primary,
+              side: const BorderSide(color: CitizenColors.primary),
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(8),
               ),
@@ -435,7 +438,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       return Container(
         width: 100,
         height: 100,
-        color: kPlaceholderColor.withValues(alpha: 0.2),
+        color: CitizenColors.textSecondary.withValues(alpha: 0.2),
         child: const Center(
           child: Icon(Icons.image, color: Colors.grey),
         ),
@@ -446,7 +449,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
       return Container(
         width: 100,
         height: 100,
-        color: kPlaceholderColor.withValues(alpha: 0.2),
+        color: CitizenColors.textSecondary.withValues(alpha: 0.2),
         child: const Center(
           child: Icon(Icons.broken_image, color: Colors.grey),
         ),

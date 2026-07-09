@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:iwms_citizen_app/modules/module1_citizen/citizen/theme/citizen_pattern_background.dart';
 // Note: Relative imports now work since you moved this file into presentation/citizen/
 import '../../../router/app_router.dart';
 import 'package:go_router/go_router.dart'; // Import GoRouter
@@ -53,7 +54,8 @@ class DriverDetailsScreen extends StatelessWidget {
         ),
         backgroundColor: primaryColor,
       ),
-      body: SingleChildScrollView(
+      body: CitizenPatternBackground(
+        child: SingleChildScrollView(
         padding: const EdgeInsets.all(24.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -184,6 +186,7 @@ class DriverDetailsScreen extends StatelessWidget {
               ),
             ),
           ],
+        ),
         ),
       ),
     );

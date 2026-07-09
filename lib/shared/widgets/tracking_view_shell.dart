@@ -11,7 +11,7 @@ class TrackingHeroHeader extends StatelessWidget {
     this.onRefresh,
     this.onShare,
     this.statusContent,
-    this.gradientColors = const [Color(0xFF0F742B), Color(0xFF0B5721)],
+    this.gradientColors = const [Color(0xFF2F51AD), Color(0xFF1E3A85)],
   });
 
   final String headline;
@@ -154,7 +154,7 @@ class TrackingSpeechBubble extends StatelessWidget {
     super.key,
     required this.message,
     this.icon = Icons.eco_rounded,
-    this.iconColor = const Color(0xFF1B5E20),
+    this.iconColor = const Color(0xFF25408F),
   });
 
   final String message;
