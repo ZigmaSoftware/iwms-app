@@ -672,10 +672,15 @@ class _DriverHomePageState extends State<DriverHomePage> {
       if (!mounted) return;
       if (result != null) await _loadAssignmentsForDriver();
     } else if (choice == 'household') {
-      await Navigator.of(context).push(
+      final result = await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const OperatorQRScanner()),
       );
       if (!mounted) return;
+      if (result == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Household status saved')),
+        );
+      }
       await _loadAssignmentsForDriver();
     }
   }

@@ -116,8 +116,8 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
         );
         final status = statuses[canonicalId]?.toLowerCase() ??
             statuses[uid]?.toLowerCase();
-        if (status == 'collected') {
-          _showMessage('Already collected for this assignment.');
+        if (status == 'collected' || status == 'skipped') {
+          _showMessage('Already completed for this assignment.');
           _restartScanner();
           return;
         }
@@ -492,6 +492,8 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
     );
 
     if (!mounted) return;
+    await _waitForModalTeardown();
+    if (!mounted) return;
     switch (action) {
       case 'collect':
         await Navigator.of(context).push(
@@ -514,12 +516,13 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
         Navigator.of(context).pop(widget.returnToAssignments ? true : null);
         break;
       case 'not_available':
-        await _showStatusReasonSheet(
+        final saved = await _showStatusReasonSheet(
           customerId: customerId,
           customerName: customerName,
+          assignmentId: assignmentId,
+          localStatus: 'skipped',
           status: 'Missed',
           title: 'Why is this household not available?',
-          successMessage: 'Marked as not available.',
           quickReasons: const [
             'Door locked',
             'Customer not home',
@@ -527,14 +530,21 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
             'QR not accessible',
           ],
         );
+        if (!mounted) return;
+        if (saved) {
+          await _finishScanner(true);
+        } else {
+          await _restartScanner(waitForModalTeardown: true);
+        }
         break;
       case 'collect_later':
-        await _showStatusReasonSheet(
+        final saved = await _showStatusReasonSheet(
           customerId: customerId,
           customerName: customerName,
+          assignmentId: assignmentId,
+          localStatus: 'later',
           status: 'Skipped',
           title: 'Why collect this household later?',
-          successMessage: 'Marked for collection later.',
           quickReasons: const [
             'Asked to return later',
             'Waste not ready',
@@ -542,25 +552,31 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
             'Vehicle capacity issue',
           ],
         );
+        if (!mounted) return;
+        if (saved) {
+          await _finishScanner(true);
+        } else {
+          await _restartScanner(waitForModalTeardown: true);
+        }
         break;
       default:
-        Navigator.of(context).pop(widget.returnToAssignments ? false : null);
+        await _finishScanner(widget.returnToAssignments ? false : null);
     }
   }
 
-  Future<void> _showStatusReasonSheet({
+  Future<bool> _showStatusReasonSheet({
     required String customerId,
     required String customerName,
+    required String? assignmentId,
+    required String localStatus,
     required String status,
     required String title,
-    required String successMessage,
     required List<String> quickReasons,
   }) async {
     final controller = TextEditingController();
     String? selectedReason;
     String? errorText;
     var submitting = false;
-    final scannerNavigator = Navigator.of(context);
 
     final saved = await showModalBottomSheet<bool>(
       context: context,
@@ -593,6 +609,9 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
                   status: status,
                   reason: reason,
                 );
+                if (!sheetContext.mounted) return;
+                FocusScope.of(sheetContext).unfocus();
+                await Future<void>.delayed(const Duration(milliseconds: 80));
                 if (!sheetContext.mounted) return;
                 Navigator.of(sheetContext).pop(true);
               } catch (e) {
@@ -752,14 +771,21 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
 
     controller.dispose();
 
-    if (!mounted) return;
     if (saved == true) {
-      _showMessage(successMessage);
+      final trimmedAssignmentId = assignmentId?.trim();
+      if (trimmedAssignmentId != null && trimmedAssignmentId.isNotEmpty) {
+        try {
+          await AssignmentStatusStore.setStatusForAssignment(
+            trimmedAssignmentId,
+            customerId,
+            localStatus,
+          );
+        } catch (e) {
+          debugPrint('Failed to cache household status: $e');
+        }
+      }
     }
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (!mounted || !scannerNavigator.canPop()) return;
-      scannerNavigator.pop(widget.returnToAssignments ? saved == true : null);
-    });
+    return saved == true;
   }
 
   /// ---------------------------------------------------------
@@ -771,7 +797,23 @@ class _OperatorQRScannerState extends State<OperatorQRScanner> {
         .showSnackBar(SnackBar(content: Text(message)));
   }
 
-  Future<void> _restartScanner() async {
+  Future<void> _finishScanner(Object? result) async {
+    await _waitForModalTeardown();
+    if (!mounted) return;
+    Navigator.of(context).pop(result);
+  }
+
+  Future<void> _waitForModalTeardown() async {
+    FocusManager.instance.primaryFocus?.unfocus();
+    await WidgetsBinding.instance.endOfFrame;
+    await Future<void>.delayed(const Duration(milliseconds: 350));
+  }
+
+  Future<void> _restartScanner({bool waitForModalTeardown = false}) async {
+    if (waitForModalTeardown) {
+      await _waitForModalTeardown();
+      if (!mounted) return;
+    }
     setState(() {
       _scanned = false;
     });

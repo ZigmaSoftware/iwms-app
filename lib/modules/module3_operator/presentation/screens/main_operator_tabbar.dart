@@ -170,12 +170,17 @@ class _MainOperatorTabBarState extends State<MainOperatorTabBar> {
     //     via OperatorDataScreen.
     //   • Household OFF → OperatorTripScanScreen: the default bin/trip flow.
     if (HouseholdModeStore.isEnabled) {
-      await Navigator.of(context).push(
+      final result = await Navigator.of(context).push(
         MaterialPageRoute(builder: (_) => const OperatorQRScanner()),
       );
       // The household flow manages its own submission/navigation; just
       // refresh the trip view in case shared collection points changed.
       if (!mounted) return;
+      if (result == true) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Household status saved')),
+        );
+      }
       setState(() {
         _tripRefreshVersion++;
       });
